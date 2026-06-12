@@ -198,6 +198,18 @@ PHASE 3 MILESTONE — p3-post-gate2 (v2.9.1 B.2):
 - On success, HANDOVER.md is written with resume_phase=4.
 - After push: run \`advance-phase --completed 3 --project .\`
 ` : ''}
+${n === 5 ? `
+PHASE 5 MILESTONE — P5-baseline (PUSH ⑦):
+- After BASELINE.md + VERIFICATION_REPORT.md are generated:
+  \`${VENV_PY} harness_cli.py push-milestone --type p5-baseline --project .\`
+- The plan requires spec-coverage ≥ 90% gap check before advancing.
+` : ''}
+${n === 8 ? `
+PHASE 8 ARCHIVE + MILESTONE — P8 exit (PUSH ⑩):
+- BEFORE push: create \`.methodology-archive/\` directory and copy \`.sessi-work/\` into it (required for CI p8-archive-check).
+- Verify HANDOVER.md has no Phase 9 references.
+- Then: \`${VENV_PY} harness_cli.py push-milestone --type p8 --project .\`
+` : ''}
 ${n === 4 ? `
 PHASE 4 EXTRA — Adversarial Bug Hunt (before Gate 3, per plan Step 4b):
 - \`${VENV_PY} harness_cli.py bug-hunt-targets --project .\`
@@ -216,7 +228,10 @@ const gateScore = (rel) => { const g = readJson(rel); return g.overall_score ?? 
 
 const POSTCONDITIONS = {
   1: () => {
-    if (!exists('01-requirements/SRS.md') && !exists('SRS.md')) throw new Error('P1: SRS.md missing')
+    for (const f of ['SRS.md', 'SPEC_TRACKING.md', 'TRACEABILITY_MATRIX.md']) {
+      if (!exists(`01-requirements/${f}`) && !exists(f)) throw new Error(`P1: ${f} missing`)
+    }
+    if (!exists('TEST_INVENTORY.yaml')) throw new Error('P1: TEST_INVENTORY.yaml missing')
     if (readJson('.methodology/state.json').current_phase < 2) throw new Error('P1: state not advanced')
   },
   2: () => {
@@ -224,6 +239,7 @@ const POSTCONDITIONS = {
       if (!exists(`02-architecture/${f}`) && !exists(f) && !exists(`02-architecture/adr/${f}`)) throw new Error(`P2: ${f} missing`)
     }
     if (!exists('.methodology/quality_manifest.json')) throw new Error('P2: quality_manifest missing')
+    if (!exists('.methodology/SAB.json')) throw new Error('P2: SAB.json missing')
     // B.3: TEST_SPEC.md must have parseable table rows (not prose-only)
     const tsp = testSpecHasTableRows()
     if (!tsp.ok) throw new Error(`P2: TEST_SPEC.md invalid — ${tsp.reason}`)
@@ -244,24 +260,34 @@ const POSTCONDITIONS = {
       (f) => f.confirmed && ['critical', 'high'].includes(f.severity) && f.resolution.status === 'open')
     if (open.length) throw new Error(`P4: ${open.length} open critical/high finding(s)`)
     if (gateScore('.methodology/gate3_result.json') < 80) throw new Error('P4: Gate 3 < 80')
+    for (const f of ['TEST_PLAN.md', 'TEST_RESULTS.md', 'COVERAGE_REPORT.md']) {
+      if (!exists(`04-testing/${f}`) && !exists(f)) throw new Error(`P4: ${f} missing`)
+    }
     if (readJson('.methodology/state.json').current_phase < 5) throw new Error('P4: state not advanced')
   },
   5: () => {
     if (!exists('05-verification/BASELINE.md') && !exists('BASELINE.md')) throw new Error('P5: BASELINE.md missing')
+    if (!exists('05-verification/VERIFICATION_REPORT.md') && !exists('VERIFICATION_REPORT.md')) throw new Error('P5: VERIFICATION_REPORT.md missing')
     if (readJson('.methodology/state.json').current_phase < 6) throw new Error('P5: state not advanced')
   },
   6: () => {
     if (gateScore('.methodology/gate4_result.json') < 85) throw new Error('P6: Gate 4 < 85')
     if (!exists('06-quality/QUALITY_REPORT.md') && !exists('QUALITY_REPORT.md')) throw new Error('P6: QUALITY_REPORT missing')
+    if (!exists('RELEASE_NOTES.md')) throw new Error('P6: RELEASE_NOTES.md missing')
+    if (!exists('FINAL_SIGN_OFF.md')) throw new Error('P6: FINAL_SIGN_OFF.md missing')
     if (readJson('.methodology/state.json').current_phase < 7) throw new Error('P6: state not advanced')
   },
   7: () => {
-    if (!exists('07-risk/RISK_REGISTER.md') && !exists('RISK_REGISTER.md')) throw new Error('P7: RISK_REGISTER missing')
+    for (const f of ['RISK_REGISTER.md', 'RISK_MITIGATION_PLANS.md', 'RISK_STATUS_REPORT.md']) {
+      if (!exists(`07-risk/${f}`) && !exists(f)) throw new Error(`P7: ${f} missing`)
+    }
     if (readJson('.methodology/state.json').current_phase < 8) throw new Error('P7: state not advanced')
   },
   8: () => {
     if (!exists('08-config/CONFIG_RECORDS.md') && !exists('CONFIG_RECORDS.md')) throw new Error('P8: CONFIG_RECORDS missing')
+    if (!exists('08-config/RELEASE_CHECKLIST.md') && !exists('RELEASE_CHECKLIST.md')) throw new Error('P8: RELEASE_CHECKLIST missing')
     if (!exists('FINAL_SIGN_OFF.md')) throw new Error('P8: FINAL_SIGN_OFF missing')
+    if (!exists('.methodology-archive')) throw new Error('P8: .methodology-archive/ missing (p8-archive-check)')
     const st = readJson('.methodology/state.json')
     if (!(st.pipeline_complete === true || st.state === 'COMPLETE')) throw new Error('P8: pipeline not COMPLETE')
   },
