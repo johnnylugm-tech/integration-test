@@ -16,7 +16,12 @@
 // Usage:
 //   Workflow({ scriptPath: 'harness-e2e.js',
 //              args: { repo: '/Users/johnny/projects/integration-test',
-//                      startPhase: 0 } })   // startPhase: resume point (0 = bootstrap)
+//                      startPhase: 0,       // resume point (0 = bootstrap)
+//                      model: 'claude-haiku-4-5-20251001' } })
+//
+// MODEL POLICY (boss decision 2026-06-12): ALL e2e executions — phase
+// orchestrators AND their nested dispatch/hunter children — run on Haiku 4.5
+// (default of args.model). Children inherit it via ANTHROPIC_MODEL env.
 //
 // Equivalent manual driving (no Workflow runtime): for each phase, spawn the
 // orchestrator prompt below via headless `claude -p` with flags
@@ -43,6 +48,8 @@ export const meta = {
 
 const REPO = (args && args.repo) || process.cwd()
 const START = (args && args.startPhase) || 0
+const MODEL = (args && args.model) || 'claude-haiku-4-5-20251001'
+process.env.ANTHROPIC_MODEL = MODEL // nested dispatch/hunter children inherit
 const HARNESS_REMOTE = 'https://github.com/johnnylugm-tech/harness-methodology'
 const PY = '/opt/homebrew/bin/python3.11'
 const VENV_PY = `${REPO}/.venv/bin/python`
@@ -114,6 +121,10 @@ If a harness CLI command crashes (traceback inside harness/*), a gate/preflight 
 - Print on its own line: ===FRAMEWORK_BUG===
   then a JSON object: {"phase": ${n}, "step": "<plan step id>", "symptom": "<1-2 sentences>", "repro_cmd": "<exact command>", "traceback_head": "<first 5 lines>", "suspected_file": "harness/<path>"}
 - Then exit. The supervisor fixes the framework and resumes this phase.
+
+MODEL POLICY (boss decision): every sub-agent you spawn (harness dispatch, claude -p hunters/verifiers) must run with env ANTHROPIC_MODEL=${MODEL} — it is already exported in your environment; do not unset or override it.
+
+AUTONOMY: you run headless — no human can answer you in this session. The project owner has ALREADY confirmed execution of the full plan (SKILL.md §0.1 step 3 is satisfied for every phase). All plan-internal work is pre-authorized: gap fixes from Agent B reviews, constitution checks, commits, checkpoint/milestone pushes, advance-phase. NEVER pause to ask for authorization and NEVER end your session with a question — ending without ===PHASE_DONE=== or ===FRAMEWORK_BUG=== is a failure. The ONLY reason to stop early is the FRAMEWORK BUG PROTOCOL above.
 
 PROJECT-SIDE issues (taskq code/test bugs, failing gates due to real quality gaps) are YOURS to fix normally — they are not framework bugs.
 ${n === 4 ? `
@@ -218,6 +229,7 @@ for (let n = 1; n <= 8; n++) {
     label: `phase-${n}-orchestrator`,
     phase: meta.phases[n].title,
     agentType: 'general-purpose',
+    model: MODEL,
   })
 
   if (String(out).includes('===FRAMEWORK_BUG===')) {
