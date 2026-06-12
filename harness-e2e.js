@@ -59,6 +59,68 @@ const { execSync } = await import('node:child_process')
 const sh = (cmd, opts) =>
   execSync(cmd, { cwd: REPO, encoding: 'utf-8', stdio: 'pipe', ...opts }).trim()
 
+// === Pre-phase handoff validation (B.1 enforcement) ===
+// Called BEFORE spawning an orchestrator to catch cross-deliverable breaks
+// early (node-level, deterministic — no agent variability).
+const validateHandoff = (n) => {
+  if (n < 2 || n > 6) return // P1 has no upstream; P7/P8 are P6-dependent
+  const fromPhase = n - 1
+  try {
+    sh(`${VENV_PY} harness_cli.py validate-handoff --from-phase ${fromPhase} --project .`)
+    log(`Handoff P${fromPhase}→P${n}: PASS`)
+  } catch (e) {
+    const stderr = e.stderr || ''
+    const stdout = e.stdout || ''
+    throw new Error(`BLOCKED: handoff P${fromPhase}→P${n} failed (B.1). Fix upstream P${fromPhase} deliverables first:\n${stderr}\n${stdout}`)
+  }
+}
+
+// === Checkpoint save/resume (HTTP 429 / session recovery) ===
+const checkpointPath = `${REPO}/.sessi-work/e2e_checkpoint.json`
+const saveCheckpoint = (n, detail) => {
+  fs.mkdirSync(`${REPO}/.sessi-work`, { recursive: true })
+  fs.writeFileSync(checkpointPath, JSON.stringify({ phase: n, detail, ts: new Date().toISOString() }, null, 2))
+}
+const loadCheckpoint = () => {
+  if (!fs.existsSync(checkpointPath)) return null
+  return JSON.parse(fs.readFileSync(checkpointPath, 'utf-8'))
+}
+
+// === HTTP 429 / session-quota detection ===
+const detect429 = (out) => {
+  if (!out) return true // null = terminal API error, likely 429
+  const s = String(out)
+  return /rate.limit|429|session.*quota|usage.*exceeded|too many requests/i.test(s)
+}
+
+// === B.3: verify TEST_SPEC.md has parseable table rows (not prose-only) ===
+const testSpecHasTableRows = () => {
+  try {
+    const content = fs.readFileSync(`${REPO}/02-architecture/TEST_SPEC.md`, 'utf-8')
+    // Must have at least one FR header and one table row
+    if (!/###\s+FR-\d+/.test(content)) return { ok: false, reason: 'no FR sections found (### FR-XX: ...)' }
+    if (!/^\|.*\|.*\|/m.test(content)) return { ok: false, reason: 'no table rows found — looks like prose, not derive_test_cases.md output' }
+    // Count parseable test cases
+    const testCases = content.match(/^\|\s*\d+\s*\|/gm)
+    if (!testCases || testCases.length === 0) return { ok: false, reason: '0 parseable test cases — B.3 vacuous pass risk' }
+    return { ok: true, cases: testCases.length }
+  } catch (e) {
+    return { ok: false, reason: `cannot read TEST_SPEC.md: ${e.message}` }
+  }
+}
+
+// === P3 exit: verify p3-post-gate2 milestone was pushed (B.2) ===
+const verifyP3PostGate2 = () => {
+  try {
+    const ho = fs.readFileSync(`${REPO}/HANDOVER.md`, 'utf-8')
+    if (!/resume_phase.*[:=]\s*4/i.test(ho)) return { ok: false, reason: 'HANDOVER.md missing resume_phase=4' }
+    if (!/P3-post-gate2|p3-post-gate2/.test(ho)) return { ok: false, reason: 'HANDOVER.md missing p3-post-gate2 marker' }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, reason: `HANDOVER.md not found or unreadable: ${e.message}` }
+  }
+}
+
 // === PROJECT_BRIEF.md — seed input for Phase 1 (derived from SPEC.md §1-§5).
 // canonical_spec marker → P1 Agent A runs in INGESTION mode (100% transcription).
 const PROJECT_BRIEF = `# PROJECT_BRIEF — taskq
@@ -127,6 +189,15 @@ MODEL POLICY (boss decision): every sub-agent you spawn (harness dispatch, claud
 AUTONOMY: you run headless — no human can answer you in this session. The project owner has ALREADY confirmed execution of the full plan (SKILL.md §0.1 step 3 is satisfied for every phase). All plan-internal work is pre-authorized: gap fixes from Agent B reviews, constitution checks, commits, checkpoint/milestone pushes, advance-phase. NEVER pause to ask for authorization and NEVER end your session with a question — ending without ===PHASE_DONE=== or ===FRAMEWORK_BUG=== is a failure. The ONLY reason to stop early is the FRAMEWORK BUG PROTOCOL above.
 
 PROJECT-SIDE issues (taskq code/test bugs, failing gates due to real quality gaps) are YOURS to fix normally — they are not framework bugs.
+${n === 3 ? `
+PHASE 3 MILESTONE — p3-post-gate2 (v2.9.1 B.2):
+- After Gate 2 PASSes and ALL FRs have per-FR Gate 1 sentinels, run:
+  \`${VENV_PY} harness_cli.py push-milestone --type p3-post-gate2 --project . --fr-ids <comma-separated list>\`
+- This is the FORMAL P3 exit (PUSH ⑤). Do NOT use a label-only chore commit.
+- The push validates: gate2_result.json composite ≥ 75 + every FR has .sessi-work/sentinels/g1_<fr>.flag.
+- On success, HANDOVER.md is written with resume_phase=4.
+- After push: run \`advance-phase --completed 3 --project .\`
+` : ''}
 ${n === 4 ? `
 PHASE 4 EXTRA — Adversarial Bug Hunt (before Gate 3, per plan Step 4b):
 - \`${VENV_PY} harness_cli.py bug-hunt-targets --project .\`
@@ -153,10 +224,18 @@ const POSTCONDITIONS = {
       if (!exists(`02-architecture/${f}`) && !exists(f) && !exists(`02-architecture/adr/${f}`)) throw new Error(`P2: ${f} missing`)
     }
     if (!exists('.methodology/quality_manifest.json')) throw new Error('P2: quality_manifest missing')
+    // B.3: TEST_SPEC.md must have parseable table rows (not prose-only)
+    const tsp = testSpecHasTableRows()
+    if (!tsp.ok) throw new Error(`P2: TEST_SPEC.md invalid — ${tsp.reason}`)
+    log(`P2: TEST_SPEC.md has ${tsp.cases} parseable test case(s)`)
     if (readJson('.methodology/state.json').current_phase < 3) throw new Error('P2: state not advanced')
   },
   3: () => {
     if (gateScore('.methodology/gate2_result.json') < 75) throw new Error('P3: Gate 2 < 75')
+    // B.2: verify p3-post-gate2 milestone was properly pushed
+    const p3exit = verifyP3PostGate2()
+    if (!p3exit.ok) throw new Error(`P3: p3-post-gate2 milestone missing — ${p3exit.reason}`)
+    log('P3: p3-post-gate2 milestone verified in HANDOVER.md')
     if (readJson('.methodology/state.json').current_phase < 4) throw new Error('P3: state not advanced')
   },
   4: () => {
@@ -225,19 +304,53 @@ for (let n = 1; n <= 8; n++) {
   if (n < START) continue
   phase(meta.phases[n].title)
 
-  const out = await agent(orchestratorPrompt(n), {
-    label: `phase-${n}-orchestrator`,
-    phase: meta.phases[n].title,
-    agentType: 'general-purpose',
-    model: MODEL,
-  })
+  // B.1: Pre-launch cross-deliverable handoff validation (workflow-level gate).
+  // Catches upstream deliverable breaks BEFORE wasting an agent session.
+  try {
+    validateHandoff(n)
+  } catch (e) {
+    log(`BLOCKED: ${e.message}`)
+    saveCheckpoint(n, `handoff P${n-1}→P${n} failed`)
+    return { stoppedAt: n, handoffBlocked: true, reason: e.message }
+  }
+  saveCheckpoint(n, 'orchestrator launching')
+
+  // Spawn orchestrator with retry for HTTP 429 / session quota exhaustion.
+  const MAX_RETRIES = 3
+  const BACKOFF_MS = [30_000, 60_000, 120_000]
+  let out = null
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = BACKOFF_MS[attempt - 1] || 120_000
+      log(`Retry ${attempt}/${MAX_RETRIES} after ${delay/1000}s backoff (HTTP 429 / session quota)…`)
+      await new Promise(r => setTimeout(r, delay))
+      saveCheckpoint(n, `retry ${attempt}`)
+    }
+    out = await agent(orchestratorPrompt(n), {
+      label: `phase-${n}-orchestrator`,
+      phase: meta.phases[n].title,
+      agentType: 'general-purpose',
+      model: MODEL,
+    })
+    if (!detect429(out)) break
+    log(`Phase ${n}: HTTP 429 / session quota detected — will retry`)
+  }
+
+  if (detect429(out)) {
+    log(`Phase ${n}: exhausted ${MAX_RETRIES} retries for HTTP 429. Save checkpoint and stop.`)
+    saveCheckpoint(n, 'exhausted 429 retries')
+    return { stoppedAt: n, quotaExhausted: true, lastOutput: String(out || '') }
+  }
 
   if (String(out).includes('===FRAMEWORK_BUG===')) {
     log(`FRAMEWORK BUG reported in Phase ${n} — stopping for supervisor fix. Resume with args.startPhase=${n}.`)
+    saveCheckpoint(n, 'framework bug')
     return { stoppedAt: n, frameworkBug: true, report: String(out) }
   }
   if (!String(out).includes('===PHASE_DONE===')) {
-    throw new Error(`Phase ${n}: orchestrator ended without PHASE_DONE or FRAMEWORK_BUG marker`)
+    // Orchestrator ended without a valid terminal marker — non-429 failure.
+    saveCheckpoint(n, 'orchestrator ended without PHASE_DONE')
+    throw new Error(`Phase ${n}: orchestrator ended without PHASE_DONE or FRAMEWORK_BUG marker. Output tail: ${String(out).slice(-500)}`)
   }
   POSTCONDITIONS[n]()
   log(`Phase ${n} postconditions OK`)
