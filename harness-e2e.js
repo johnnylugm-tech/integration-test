@@ -184,6 +184,50 @@ const verifyP3PostGate2Structural = () => {
   }
 }
 
+// === Guard #7 (audit fix): per-FR Gate 1 sentinel check (B.2 contract) ===
+// Plan §B.2 requires every FR to have `.sessi-work/sentinels/g1_<fr>.flag`
+// before p3-post-gate2 push. Workflow-level check catches orchestrator that
+// skips the sentinel write (postcondition passes, push-milestone fails later).
+const verifyP3Sentinels = () => {
+  // FR count from SPEC.md `### FR-XX` headers
+  const spec = fs.readFileSync(`${REPO}/SPEC.md`, 'utf-8')
+  const frIds = [...spec.matchAll(/^###\s+FR-(\d+)/gm)].map((m) => `FR-${m[1]}`)
+  if (frIds.length === 0) return { ok: false, reason: 'SPEC.md has no FR headers — cannot count sentinels' }
+  const sentDir = `${REPO}/.sessi-work/sentinels`
+  const missing = []
+  for (const fr of frIds) {
+    const flag = `${sentDir}/g1_${fr.toLowerCase()}.flag`
+    if (!fs.existsSync(flag)) missing.push(fr)
+  }
+  if (missing.length) return { ok: false, reason: `missing Gate 1 sentinels for: ${missing.join(', ')}` }
+  return { ok: true, count: frIds.length }
+}
+
+// === Guard #8 (audit fix): bug_hunt_report resolution schema validation ===
+// Plan §[HUNT-RESOLVE] requires resolved findings carry fix_commit OR repro_test,
+// and refuted findings carry refute_evidence. Catches orchestrator that writes
+// `{status: "resolved"}` with no evidence — push-milestone would block later,
+// but workflow postcondition currently passes silently.
+const verifyBugHuntResolutionSchema = () => {
+  const p = `${REPO}/.methodology/bug_hunt_report.json`
+  const report = JSON.parse(fs.readFileSync(p, 'utf-8'))
+  const findings = report.findings || []
+  const confirmed = findings.filter((f) => f.confirmed && ['critical', 'high'].includes(f.severity))
+  const bad = []
+  for (const f of confirmed) {
+    const r = f.resolution || {}
+    if (r.status === 'open') continue // already blocked by other postcondition
+    if (r.status === 'resolved' && !r.fix_commit && !r.repro_test)
+      bad.push(`${f.id || f.title || '?'}: resolved but no fix_commit/repro_test`)
+    if (r.status === 'refuted' && !r.refute_evidence)
+      bad.push(`${f.id || f.title || '?'}: refuted but no refute_evidence`)
+    if (!['open', 'resolved', 'refuted'].includes(r.status))
+      bad.push(`${f.id || f.title || '?'}: invalid status ${r.status}`)
+  }
+  if (bad.length) return { ok: false, reason: `bug_hunt_report resolution schema invalid: ${bad.join('; ')}` }
+  return { ok: true, count: confirmed.length }
+}
+
 // === PROJECT_BRIEF.md — seed input for Phase 1 (derived from SPEC.md §1-§5).
 // canonical_spec marker → P1 Agent A runs in INGESTION mode (100% transcription).
 const PROJECT_BRIEF = `# PROJECT_BRIEF — taskq
@@ -255,13 +299,17 @@ HOOK BYPASS HINT: the integration-test pre-commit hook runs a quality gate that 
 
 PROJECT-SIDE issues (taskq code/test bugs, failing gates due to real quality gaps) are YOURS to fix normally — they are not framework bugs.
 ${n === 3 ? `
-PHASE 3 MILESTONE — p3-post-gate2 (v2.9.1 B.2):
-- After Gate 2 PASSes and ALL FRs have per-FR Gate 1 sentinels, run:
-  \`${VENV_PY} harness_cli.py push-milestone --type p3-post-gate2 --project . --fr-ids <comma-separated list>\`
-- This is the FORMAL P3 exit (PUSH ⑤). Do NOT use a label-only chore commit.
-- The push validates: gate2_result.json composite ≥ 75 + every FR has .sessi-work/sentinels/g1_<fr>.flag.
-- On success, HANDOVER.md is written with resume_phase=4.
-- After push: run \`advance-phase --completed 3 --project .\`
+PHASE 3 MILESTONES (10-Push Strategy ③④⑤):
+- **PUSH ③ — p3-mid** (trigger: ≥50% FRs have Gate 1 PASS):
+  \`${VENV_PY} harness_cli.py push-milestone --type p3-mid --project . --fr-done <N> --fr-total <total> --fr-ids <comma-separated>\`
+- **PUSH ④ — p3-pre-gate2** (trigger: ALL FRs Gate 1 PASS, before Gate 2):
+  \`${VENV_PY} harness_cli.py push-milestone --type p3-pre-gate2 --project . --fr-ids <comma-separated>\`
+  > Last stable snapshot before Gate 2 evaluation.
+- **PUSH ⑤ — p3-post-gate2** (FORMAL P3 exit, v2.9.1 B.2):
+  \`${VENV_PY} harness_cli.py push-milestone --type p3-post-gate2 --project . --fr-ids <comma-separated>\`
+  > The push validates: gate2_result.json composite ≥ 75 + every FR has .sessi-work/sentinels/g1_<fr>.flag.
+  > On success, HANDOVER.md is written with resume_phase=4.
+  > After push: run \`advance-phase --completed 3 --project .\`
 ` : ''}
 ${n === 5 ? `
 PHASE 5 MILESTONE — P5-baseline (PUSH ⑦):
@@ -276,11 +324,19 @@ PHASE 8 ARCHIVE + MILESTONE — P8 exit (PUSH ⑩):
 - Then: \`${VENV_PY} harness_cli.py push-milestone --type p8 --project .\`
 ` : ''}
 ${n === 4 ? `
+PHASE 4 MILESTONES (10-Push Strategy ⑤⑥):
+- **PUSH ⑤ — p4-mid** (trigger: ≥50% FRs have Gate 1 PASS):
+  \`${VENV_PY} harness_cli.py push-milestone --type p4-mid --project . --fr-done <N> --fr-total <total> --fr-ids <comma-separated>\`
+- **PUSH ⑥ — p4-pre-gate3** (trigger: ALL FRs Gate 1 PASS, before Gate 3):
+  \`${VENV_PY} harness_cli.py push-milestone --type p4-pre-gate3 --project . --fr-ids <comma-separated>\`
+  > Last stable snapshot before Gate 3 evaluation.
+
 PHASE 4 EXTRA — Adversarial Bug Hunt (before Gate 3, per plan Step 4b):
 - \`${VENV_PY} harness_cli.py bug-hunt-targets --project .\`
 - Execute the hunt per ${REPO}/harness/harness/ssi/prompts/hunt_bugs.md (4 phases: scout → lens hunters → adversarial verify → synthesize). Spawn hunters/verifiers as headless sub-agents (claude -p) or dispatch; do not hunt single-handedly.
 - Write .methodology/bug_hunt_report.json (schema: harness/schemas/bug_hunt_report.schema.json) + human markdown under 03-development/.audit/.
 - Every confirmed critical/high finding: resolution.status = resolved (RED repro test → fix → GREEN, with fix_commit/repro_test) or refuted (with refute_evidence). Only then run Gate 3.
+- **traceability fallback**: if Gate 3 blocks on traceability, run \`build-trace-attestation --project . --write\` then commit `.methodology/trace/attestation.json` (see plan §G2b / §G3b).
 ` : ''}
 WHEN THE PHASE IS FULLY DONE, print on its own line: ===PHASE_DONE===
 then JSON: {"phase": ${n}, "gates": {...}, "artifacts": [...], "notes": "<anything the supervisor should know>"}.
@@ -322,10 +378,18 @@ const POSTCONDITIONS = {
     const p3exit = verifyP3PostGate2Structural()
     if (!p3exit.ok) throw new Error(`P3: p3-post-gate2 milestone structurally missing — ${p3exit.reason}`)
     log('P3: p3-post-gate2 milestone structurally verified in HANDOVER.md')
+    // Guard #7 (audit fix): per-FR Gate 1 sentinel check
+    const sents = verifyP3Sentinels()
+    if (!sents.ok) throw new Error(`P3: per-FR Gate 1 sentinels missing — ${sents.reason}`)
+    log(`P3: ${sents.count} per-FR Gate 1 sentinel(s) present`)
     if (readJson('.methodology/state.json').current_phase < 4) throw new Error('P3: state not advanced')
   },
   4: () => {
     if (!exists('.methodology/bug_hunt_report.json')) throw new Error('P4: bug_hunt_report missing')
+    // Guard #8 (audit fix): schema validation on resolution fields
+    const bhr = verifyBugHuntResolutionSchema()
+    if (!bhr.ok) throw new Error(`P4: bug_hunt_report invalid — ${bhr.reason}`)
+    log(`P4: bug_hunt_report resolution schema OK (${bhr.count} confirmed critical/high finding(s) processed)`)
     const open = readJson('.methodology/bug_hunt_report.json').findings.filter(
       (f) => f.confirmed && ['critical', 'high'].includes(f.severity) && f.resolution.status === 'open')
     if (open.length) throw new Error(`P4: ${open.length} open critical/high finding(s)`)
@@ -338,6 +402,16 @@ const POSTCONDITIONS = {
   5: () => {
     if (!exists('05-verification/BASELINE.md') && !exists('BASELINE.md')) throw new Error('P5: BASELINE.md missing')
     if (!exists('05-verification/VERIFICATION_REPORT.md') && !exists('VERIFICATION_REPORT.md')) throw new Error('P5: VERIFICATION_REPORT.md missing')
+    // Audit fix: confirm push-milestone --type p5-baseline actually ran.
+    // Catches orchestrator that writes the docs but forgets the PUSH ⑦ milestone.
+    try {
+      const log = sh('git log --oneline --grep="p5-baseline" -n 5')
+      if (!log) throw new Error('P5: no p5-baseline commit in git log — push-milestone PUSH ⑦ missing')
+      log(`P5: PUSH ⑦ commit found: ${log.split('\n')[0]}`)
+    } catch (e) {
+      if (e.stderr) throw new Error(`P5: ${e.message}\n${e.stderr}`)
+      throw e
+    }
     if (readJson('.methodology/state.json').current_phase < 6) throw new Error('P5: state not advanced')
   },
   6: () => {
@@ -439,6 +513,7 @@ for (let n = 1; n <= 8; n++) {
   const MAX_RETRIES = 3
   const BACKOFF_MS = [30_000, 60_000, 120_000]
   let out = null
+  let agentThrew = null
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       const delay = BACKOFF_MS[attempt - 1] || 120_000
@@ -446,14 +521,30 @@ for (let n = 1; n <= 8; n++) {
       await new Promise(r => setTimeout(r, delay))
       saveCheckpoint(n, `retry ${attempt}`)
     }
-    out = await agent(orchestratorPrompt(n), {
-      label: `phase-${n}-orchestrator`,
-      phase: meta.phases[n].title,
-      agentType: 'general-purpose',
-      model: MODEL,
-    })
-    if (!detect429(out)) break
-    log(`Phase ${n}: HTTP 429 / session quota detected — will retry`)
+    try {
+      out = await agent(orchestratorPrompt(n), {
+        label: `phase-${n}-orchestrator`,
+        phase: meta.phases[n].title,
+        agentType: 'general-purpose',
+        model: MODEL,
+      })
+      agentThrew = null
+    } catch (e) {
+      // Audit fix: distinguish API death (terminal) from 429 (retryable).
+      // If the error message matches 429/quota pattern, treat as 429 and retry.
+      agentThrew = e
+      out = String(e?.message || e)
+      log(`Phase ${n}: agent() threw — ${out.slice(0, 200)}`)
+    }
+    if (agentThrew && !detect429(out)) {
+      // Non-retryable terminal error (e.g. auth, model not found, network).
+      // Save checkpoint + stop — not 429, not framework bug from orchestrator.
+      log(`Phase ${n}: non-retryable agent error — stopping.`)
+      saveCheckpoint(n, 'agent threw non-429')
+      return { stoppedAt: n, agentError: true, error: out }
+    }
+    if (agentThrew) log(`Phase ${n}: HTTP 429 / session quota detected — will retry`)
+    if (!agentThrew) break
   }
 
   if (detect429(out)) {
