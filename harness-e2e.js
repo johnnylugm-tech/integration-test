@@ -240,7 +240,7 @@ canonical_spec: SPEC.md
 ## 1. Project name & purpose
 
 - **Project name**: \`taskq\` (project root: ${REPO})
-- **Purpose**: 本地任務佇列 CLI — 提交 shell 命令為任務,受控執行(timeout/重試/斷路器/快取),狀態可查詢。
+- **Purpose**: 本地任務佇列 CLI — 提交 shell 命令為任務,受控執行(timeout/重試),狀態可查詢。
 - **Language**: Python 3.11, runtime 零外部依賴(stdlib only)
 - **Experiment role**: harness-methodology v2.9 整合驗證標的 — 框架在本專案完整行使 P1-P8;框架本身的修改 out of scope(框架 bug 由 e2e 監督者處理,不在本專案內 workaround)。
 
@@ -252,21 +252,21 @@ canonical_spec: SPEC.md
 
 ## 3. Business goals
 
-- 任務提交驗證(注入字元拒絕,FR-01)、受控 subprocess 執行(timeout,FR-02)
-- 失敗自動重試 + 全域斷路器(FR-03)、結果 TTL 快取(FR-04)、完整 CLI(FR-05)
-- 可靠性:原子寫存儲、執行緒安全並發(NFR-03);安全:禁 shell=True、secret redaction(NFR-02/04)
-- 部署:全參數 env-var 化 + .env.example 宣告(NFR-06)
+- 任務提交驗證(注入字元拒絕,FR-01)、受控 subprocess 執行(timeout/重試,FR-02)
+- 完整 CLI 與查詢(FR-03)
+- 可靠性:原子寫存儲、secret redaction(NFR-03);安全:禁 shell=True(NFR-02)
+- 效能:submit+status 100 次 p95 < 50ms(NFR-01)
 
 ## 4. Key constraints
 
-- **5 functional requirements are pre-defined and immutable** (FR-01..FR-05, SPEC.md §3). Do not invent new FRs.
+- **3 functional requirements are pre-defined and immutable** (FR-01..FR-03, SPEC.md §3). Do not invent new FRs.
 - **Tech stack locked**: Python 3.11 stdlib only(runtime)。No external runtime deps.
-- **Configuration values fixed** (SPEC.md §5.1): 8 個 TASKQ_* 環境變數與預設值。
+- **Configuration values fixed** (SPEC.md §5): 3 個 TASKQ_* 環境變數與預設值(TASKQ_HOME / TASKQ_TASK_TIMEOUT / TASKQ_RETRY_LIMIT)。
 - **Single source of truth**: SPEC.md is canonical. No overlay document may amend it.
 
 ## 5. Out of scope
 
-- Daemon/服務化、遠端執行、非 JSON 持久化後端
+- Daemon/服務化、遠端執行、非 JSON 持久化後端、斷路器、快取(本版精簡,聚焦主流程)、並發
 - 修改 harness-methodology 框架(submodule 唯讀,HR-17)
 `
 
