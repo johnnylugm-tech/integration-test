@@ -295,7 +295,7 @@ MODEL POLICY (boss decision): every sub-agent you spawn (harness dispatch, claud
 
 AUTONOMY: you run headless — no human can answer you in this session. The project owner has ALREADY confirmed execution of the full plan (SKILL.md §0.1 step 3 is satisfied for every phase). All plan-internal work is pre-authorized: gap fixes from Agent B reviews, constitution checks, commits, checkpoint/milestone pushes, advance-phase. NEVER pause to ask for authorization and NEVER end your session with a question — ending without ===PHASE_DONE=== or ===FRAMEWORK_BUG=== is a failure. The ONLY reason to stop early is the FRAMEWORK BUG PROTOCOL above.
 
-HOOK BYPASS HINT: the integration-test pre-commit hook runs a quality gate that occasionally rejects commits on Friday-evening / before-tag state. If `git commit` fails with a hook error, reword the message to start with \`chore(harness):\` (this is the documented bypass pattern in harness/SKILL.md). Do NOT use --no-verify — that masks real failures.
+HOOK BYPASS HINT: the integration-test pre-commit hook runs a quality gate that occasionally rejects commits on Friday-evening / before-tag state. If 'git commit' fails with a hook error, reword the message to start with \`chore(harness):\` (this is the documented bypass pattern in harness/SKILL.md). Do NOT use --no-verify — that masks real failures.
 
 PROJECT-SIDE issues (taskq code/test bugs, failing gates due to real quality gaps) are YOURS to fix normally — they are not framework bugs.
 ${n === 3 ? `
