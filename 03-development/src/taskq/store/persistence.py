@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Optional
 
 from taskq.config import load_config
+from taskq.store.ids import generate_task_id
 from taskq.store.models import StoreCorrupted, Task
+from taskq.store.validation import validate_command
 
 TASKS_FILENAME = "tasks.json"
 
@@ -98,9 +100,6 @@ def submit_task(command: str) -> str:
     - 03-development/tests/test_fr01.py:175-180 (status=pending round-trip)
     - SRS.md:1-22 (原子寫入,id 8 hex)
     """
-    from taskq.store.ids import generate_task_id
-    from taskq.store.validation import validate_command
-
     validate_command(command)
 
     # 為了降低碰撞機率,即使本測試只用 in-process 也保持重試。

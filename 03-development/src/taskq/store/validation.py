@@ -8,9 +8,8 @@ Citations:
 from __future__ import annotations
 
 # 6 個注入字元:NFR-02 黑名單
-INJECTION_CHARS = ";|&$><`"
 # 03-development/tests/test_fr01.py:166 鎖定 ==  "; | & $ > < `"
-assert INJECTION_CHARS == ";|&$><`", "INJECTION_CHARS contract must be exactly 6 chars"
+INJECTION_CHARS = ";|&$><`"
 
 MAX_COMMAND_LENGTH = 1000
 # 03-development/tests/test_fr01.py:140-149 邊界:1000 接受、1001 拒絕

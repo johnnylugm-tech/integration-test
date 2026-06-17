@@ -15,6 +15,7 @@ from typing import Optional, Sequence
 
 from taskq.store import (
     StoreCorrupted,
+    clear_store,
     get_task,
     load_store,
     submit_task,
@@ -89,7 +90,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return EXIT_OK
 
     if args.command == "clear":
-        from taskq.store import clear_store
         clear_store()
         return EXIT_OK
 
