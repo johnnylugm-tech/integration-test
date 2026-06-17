@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "7efe068ca3f1bb5b779369934f242bb4c909a878",
-  "content_sha256": "d7f077cffd6ade215f3e2bcea0e98e7972c8a013ef06186874988e5ec489c6d2",
+  "git_sha": "46eae9e7d1a6544cdb2beafc23e7dc4d8e0412ea",
+  "content_sha256": "c5dfe1563ca3f2c39fa1b32f8174f9239bd73a1cdb88f59f356350cb87ea6bb4",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -9,39 +9,65 @@
     "schema_version": "harness/traceability/overlay/v1",
     "project_id": "integration-test",
     "completeness": {
-      "total_requirements": 1,
+      "total_requirements": 3,
       "srs_coverage": "100.0%",
       "code_coverage": "0.0%",
-      "test_coverage": "0.0%",
+      "test_coverage": "33.3%",
       "verification_rate": "0.0%",
-      "total_links": 1,
+      "total_links": 4,
       "missing_mappings": {
         "fr_without_srs": [],
         "fr_without_code": [
-          "FR-01"
+          "FR-01",
+          "FR-02",
+          "FR-03"
         ],
         "fr_without_test": [
-          "FR-01"
+          "FR-02",
+          "FR-03"
         ]
       }
     },
     "missing": {
       "fr_without_srs": [],
       "fr_without_code": [
-        "FR-01"
+        "FR-01",
+        "FR-02",
+        "FR-03"
       ],
       "fr_without_test": [
-        "FR-01"
+        "FR-02",
+        "FR-03"
       ]
     },
     "requirements": {
       "FR-01": {
         "fr_id": "FR-01",
-        "status": "pending",
+        "status": "in_progress",
+        "srs_section": "SAD.md",
+        "code_files": [],
+        "test_files": [
+          "tests/test_fr01.py"
+        ],
+        "sad_module": "tests/benchmarks/test_nfr01_p95.py",
+        "priority": "HIGH"
+      },
+      "FR-02": {
+        "fr_id": "FR-02",
+        "status": "in_progress",
         "srs_section": "SAD.md",
         "code_files": [],
         "test_files": [],
-        "sad_module": "—",
+        "sad_module": "tests/security/test_no_shell_true.py",
+        "priority": "HIGH"
+      },
+      "FR-03": {
+        "fr_id": "FR-03",
+        "status": "in_progress",
+        "srs_section": "SAD.md",
+        "code_files": [],
+        "test_files": [],
+        "sad_module": "tests/integration/test_fr03_subcommands.py",
         "priority": "HIGH"
       }
     },
