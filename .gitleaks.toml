@@ -1,0 +1,15 @@
+# gitleaks config — allowlist test fixtures that look like secrets.
+# 03-development/tests/test_fr03.py:406,429,514 use literal "sk-abcdef1234567890"
+# as the secret string the NFR-03 redaction logic must scrub. It is a fixture,
+# not a credential. Same for the placeholder in 02-architecture/adr/ADR.md:143.
+
+[allowlist]
+  description = "Test fixture secrets — not real credentials"
+  paths = [
+    '''03-development/tests/test_fr03\.py''',
+    '''02-architecture/adr/ADR\.md''',
+  ]
+  regexes = [
+    '''sk-abcdef1234567890''',
+  ]
+  stopwords = []

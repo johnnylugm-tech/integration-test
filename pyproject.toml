@@ -16,3 +16,6 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["03-development/tests"]
 pythonpath = ["03-development/src"]
+
+[mutmut]
+paths_to_mutate = "03-development/src/taskq/"
