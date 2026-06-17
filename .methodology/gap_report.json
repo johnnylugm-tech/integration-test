@@ -1,12 +1,139 @@
 {
   "summary": {
-    "total": 0,
+    "total": 21,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 0,
+    "orphaned": 21,
     "critical": 0,
     "major": 0,
-    "minor": 0
+    "minor": 21
   },
-  "gaps": []
+  "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'main' has no corresponding specification in SPEC.md",
+      "action": "Add spec for main or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'Config' has no corresponding specification in SPEC.md",
+      "action": "Add spec for Config or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'load_config' has no corresponding specification in SPEC.md",
+      "action": "Add spec for load_config or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'InvalidTransition' has no corresponding specification in SPEC.md",
+      "action": "Add spec for InvalidTransition or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'apply_transition' has no corresponding specification in SPEC.md",
+      "action": "Add spec for apply_transition or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'RunResult' has no corresponding specification in SPEC.md",
+      "action": "Add spec for RunResult or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'run_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for run_task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'run_subprocess' has no corresponding specification in SPEC.md",
+      "action": "Add spec for run_subprocess or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'redact' has no corresponding specification in SPEC.md",
+      "action": "Add spec for redact or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'generate_task_id' has no corresponding specification in SPEC.md",
+      "action": "Add spec for generate_task_id or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'Task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for Task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'to_dict' has no corresponding specification in SPEC.md",
+      "action": "Add spec for to_dict or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'from_dict' has no corresponding specification in SPEC.md",
+      "action": "Add spec for from_dict or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'StoreCorrupted' has no corresponding specification in SPEC.md",
+      "action": "Add spec for StoreCorrupted or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'load_store' has no corresponding specification in SPEC.md",
+      "action": "Add spec for load_store or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'get_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for get_task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'submit_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for submit_task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'clear_store' has no corresponding specification in SPEC.md",
+      "action": "Add spec for clear_store or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'save_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for save_task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'ValidationError' has no corresponding specification in SPEC.md",
+      "action": "Add spec for ValidationError or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'validate_command' has no corresponding specification in SPEC.md",
+      "action": "Add spec for validate_command or remove if unnecessary"
+    }
+  ]
 }
