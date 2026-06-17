@@ -30,19 +30,10 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from taskq.cli import main as cli_main
-from taskq.config import load_config
 from taskq.store import clear_store, get_task, load_store, submit_task
-from taskq.store.ids import generate_task_id
-from taskq.store.models import StoreCorrupted, Task
-from taskq.store.validation import (
-    INJECTION_CHARS,
-    MAX_COMMAND_LENGTH,
-    ValidationError,
-    validate_command,
-)
-
+from taskq.store.models import StoreCorrupted
+from taskq.store.validation import INJECTION_CHARS
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -255,3 +246,112 @@ def test_fr01_must_not_silently_rebuild_on_corruption(
     assert "store corrupted" in stderr
     # File must remain on disk byte-for-byte as written — no silent reset.
     assert (taskq_home / "tasks.json").read_text() == corrupted_content
+
+
+# ---------------------------------------------------------------------------
+# Additional unit tests (cli.main direct + store edge cases) for coverage.
+# ---------------------------------------------------------------------------
+
+
+def test_fr01_load_store_when_file_absent(taskq_home: Path) -> None:
+    """load_store on a non-existent tasks.json returns an empty dict (no error)."""
+    assert not (taskq_home / "tasks.json").exists()
+    store = load_store()
+    assert store == {}
+
+
+def test_fr01_load_store_rejects_non_dict_root(taskq_home: Path) -> None:
+    """load_store on a valid JSON whose root is not a dict raises StoreCorrupted."""
+    (taskq_home / "tasks.json").write_text("[]")
+    with pytest.raises(StoreCorrupted):
+        load_store()
+
+
+def test_fr01_get_task_returns_none_when_absent(taskq_home: Path) -> None:
+    """get_task for a never-submitted id returns None (not an error)."""
+    assert get_task("deadbeef") is None
+
+
+def test_fr01_clear_store_writes_empty(taskq_home: Path) -> None:
+    """clear_store replaces the file with an empty {} JSON object."""
+    submit_task("echo hi")
+    assert (taskq_home / "tasks.json").exists()
+    clear_store()
+    data = json.loads((taskq_home / "tasks.json").read_text())
+    assert data == {}
+
+
+def test_fr01_cli_submit_direct(taskq_home: Path) -> None:
+    """cli.main(['submit', 'echo', 'hi']) returns 0 and prints the task id."""
+    exit_code = cli_main(["submit", "echo", "hi"])
+    assert exit_code == 0
+    store = load_store()
+    assert len(store) == 1
+
+
+def test_fr01_cli_submit_validation_error_direct(taskq_home: Path) -> None:
+    """cli.main(['submit', '']) returns 2 and emits an error to stderr."""
+    exit_code = cli_main(["submit", ""])
+    assert exit_code == 2
+    assert not (taskq_home / "tasks.json").exists()
+
+
+def test_fr01_cli_status_known_task_direct(taskq_home: Path) -> None:
+    """cli.main(['status', <id>]) returns 0 and prints the task JSON."""
+    tid = submit_task("echo direct")
+    exit_code = cli_main(["status", tid])
+    assert exit_code == 0
+
+
+def test_fr01_cli_status_unknown_task_direct(taskq_home: Path) -> None:
+    """cli.main(['status', 'deadbeef']) returns 2 with unknown task message."""
+    exit_code = cli_main(["status", "deadbeef"])
+    assert exit_code == 2
+
+
+def test_fr01_cli_list_direct(taskq_home: Path) -> None:
+    """cli.main(['list']) returns 0 and lists submitted tasks."""
+    submit_task("echo a")
+    submit_task("echo b")
+    exit_code = cli_main(["list"])
+    assert exit_code == 0
+
+
+def test_fr01_cli_clear_direct(taskq_home: Path) -> None:
+    """cli.main(['clear']) returns 0 and empties the store."""
+    submit_task("echo a")
+    exit_code = cli_main(["clear"])
+    assert exit_code == 0
+    assert load_store() == {}
+
+
+def test_fr01_cli_corruption_direct(taskq_home: Path) -> None:
+    """cli.main(['list']) on a corrupt file returns 1 with 'store corrupted' message."""
+    (taskq_home / "tasks.json").write_text('{"a1b2c3d4"')
+    exit_code = cli_main(["list"])
+    assert exit_code == 1
+
+
+def test_fr01_cli_no_args_prints_help(taskq_home: Path) -> None:
+    """cli.main([]) prints help to stderr and returns 2 (validation-like)."""
+    exit_code = cli_main([])
+    assert exit_code == 2
+
+
+def test_fr01_atomic_write_no_tmp_leftover(taskq_home: Path) -> None:
+    """submit_task leaves no .tasks.json.*.tmp file behind on success."""
+    submit_task("echo atomic")
+    leftovers = [p for p in taskq_home.iterdir() if p.name.startswith(".tasks.json.") and p.name.endswith(".tmp")]
+    assert leftovers == []
+
+
+def test_fr01_atomic_write_handles_unlink_failure(taskq_home: Path, monkeypatch) -> None:
+    """_atomic_write swallows OSError on tmp cleanup (path still raises original error)."""
+    from taskq.store import persistence
+
+    def failing_replace(_src, _dst):
+        raise RuntimeError("simulated replace failure")
+
+    monkeypatch.setattr(persistence.os, "replace", failing_replace)
+    with pytest.raises(RuntimeError, match="simulated replace failure"):
+        persistence._atomic_write({"x": {"command": "echo a"}})

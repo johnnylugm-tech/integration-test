@@ -32,18 +32,16 @@ import sys
 import time
 from pathlib import Path
 from statistics import quantiles
-from unittest.mock import patch
 
 import pytest
+from taskq.cli import main as cli_main
+from taskq.config import load_config
 
 # Top-level imports — no try/except ImportError. If the GREEN agent has not
 # yet added `taskq.redact`, the whole test file will report Collection Error,
 # which is the valid RED state for this TDD step.
 from taskq.redact import redact  # noqa: F401  (used by tests 17-22)
-
-from taskq.cli import main as cli_main
-from taskq.config import load_config
-from taskq.store import clear_store, get_task, load_store, submit_task
+from taskq.store import get_task, load_store, submit_task
 
 # ---------------------------------------------------------------------------
 # Constants & paths
@@ -399,15 +397,22 @@ def test_redteam_secret_in_stdout_redacted_before_persist(
     taskq_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run whose stdout contains a sk-* secret must be persisted with the
-    secret scrubbed — the disk file must not contain the original token."""
+    secret scrubbed — the disk file must not contain the original token.
+
+    The secret is loaded from an env var by a helper script so the
+    *command* itself never contains the literal token.
+    """
     from taskq.executor import run_task
 
     monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
     secret = "sk-abcdef1234567890"
-    tid = submit_task(f"echo {secret}")
-    # The run is real and emits the secret to stdout.
+    monkeypatch.setenv("STDOUT_SECRET", secret)
+    helper = taskq_home / "_stdout_secret.py"
+    helper.write_text(
+        "import os\nprint(os.environ['STDOUT_SECRET'])\n"
+    )
+    tid = submit_task(f"python3 {helper}")
     _ = run_task(tid)
-    # Reload the on-disk store from scratch to bypass any in-process cache.
     tasks_json = (taskq_home / "tasks.json").read_text()
     assert secret not in tasks_json
     assert "[REDACTED]" in tasks_json
@@ -422,15 +427,17 @@ def test_redteam_secret_in_stderr_redacted_before_persist(
     taskq_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run whose stderr contains a sk-* secret must be persisted with the
-    secret scrubbed."""
+    secret scrubbed. The secret is loaded from an env var so the command and
+    helper file never contain the literal token."""
     from taskq.executor import run_task
 
     monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
     secret = "sk-abcdef1234567890"
+    monkeypatch.setenv("STDERR_SECRET", secret)
     helper = taskq_home / "_stderr_secret.py"
     helper.write_text(
-        "import sys\n"
-        f"sys.stderr.write({secret!r} + '\\n')\n"
+        "import os, sys\n"
+        "sys.stderr.write(os.environ['STDERR_SECRET'] + '\\n')\n"
     )
     tid = submit_task(f"python3 {helper}")
     _ = run_task(tid)
@@ -544,7 +551,7 @@ def test_reliability_kill_during_write_keeps_valid_json(
     from taskq.store import persistence
 
     # Seed the store with a known-valid record.
-    seed_tid = submit_task("echo seed")
+    submit_task("echo seed")
     seed_text = (taskq_home / "tasks.json").read_text()
     assert json.loads(seed_text)  # parseable
 

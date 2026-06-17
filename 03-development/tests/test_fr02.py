@@ -19,7 +19,6 @@ GREEN TODO — these symbols MUST be implemented in `core/taskq/`:
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -119,7 +118,6 @@ def test_fr02_run_nonzero_yields_failed(taskq_home: Path) -> None:
 def test_fr02_initial_status_pending_to_running_valid(taskq_home: Path) -> None:
     """apply_transition(task, "RUN") on a pending task → status=running."""
     from taskq.store import get_task, submit_task
-    from taskq.store.models import Task
 
     tid = submit_task("echo pending")
     task = get_task(tid)
@@ -239,7 +237,7 @@ def test_fr02_run_timeout_yields_timeout_and_exit_four(
 
 
 def test_fr02_cli_run_timeout_returns_four(
-    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch, run_cli
 ) -> None:
     """Running `python -m taskq run <id>` on a sleep-30 command with
     timeout=0.5s must return exit code 4."""
@@ -342,7 +340,9 @@ def test_fr02_run_captures_stderr_tail_under_2000_chars(taskq_home: Path) -> Non
     """A command emitting 5000 chars of stderr must be tail-truncated to <= 2000."""
     from taskq.store import submit_task
 
-    tid = submit_task("python3 -c 'import sys; sys.stderr.write(\"y\"*5000)'")
+    helper = taskq_home / "_stderr_helper.py"
+    helper.write_text("import sys\nsys.stderr.write('y' * 5000)\n")
+    tid = submit_task(f"python3 {helper}")
     result = run_task(tid)
     assert len(result.stderr_tail) <= 2000
 
@@ -370,14 +370,15 @@ def test_fr02_run_records_duration_ms_and_finished_at(taskq_home: Path) -> None:
 
 
 def test_fr02_run_unexpected_exception_returns_one(
-    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
-    """If run_subprocess raises an unexpected exception (e.g. OSError), the CLI
+    """If run_subprocess raises an unexpected exception (e.g. OSError), cli.main
     must return exit code 1 and stderr must mention 'internal error'.
 
-    GREEN TODO: cli.run / run_task must catch unexpected exceptions and return
-    exit code 1 with an 'internal error' message, NOT swallow as done/failed.
+    Uses cli.main in-process so the patch on run_subprocess actually takes effect
+    (a subprocess-launched CLI would not see the parent test's patch).
     """
+    from taskq.cli import main as cli_main
     from taskq.store import submit_task
 
     tid = submit_task("true")
@@ -386,9 +387,10 @@ def test_fr02_run_unexpected_exception_returns_one(
         raise OSError("disk gone")
 
     with patch.object(sys.modules["taskq.executor.runner"], "run_subprocess", boom):
-        exit_code, _stdout, stderr = run_cli(["run", tid])
+        exit_code = cli_main(["run", tid])
+    captured = capsys.readouterr()
     assert exit_code == 1
-    assert "internal error" in stderr.lower()
+    assert "internal error" in captured.err.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +414,9 @@ def test_fr02_subprocess_timeout_enforced_orphan_cleaned(
     monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
     from taskq.store import submit_task
 
-    tid = submit_task("python3 -c 'import time; time.sleep(60)'")
+    helper = taskq_home / "_sleep_helper.py"
+    helper.write_text("import time\ntime.sleep(60)\n")
+    tid = submit_task(f"python3 {helper}")
     our_pid = os.getpid()
     result = run_task(tid)
     assert result.status == "timeout"
@@ -422,8 +426,12 @@ def test_fr02_subprocess_timeout_enforced_orphan_cleaned(
     time.sleep(0.5)
     children = psutil.Process(our_pid).children(recursive=True)
     assert children == [], f"orphan children remain: {[c.pid for c in children]}"
-    # No zombie under our process group either.
-    reaped, _ = os.waitpid(-1, os.WNOHANG)
+    # No zombie under our process group either (waitpid raises ChildProcessError
+    # when there are no children, which is the desired "cleaned up" state).
+    try:
+        reaped, _ = os.waitpid(-1, os.WNOHANG)
+    except ChildProcessError:
+        reaped = 0
     assert reaped == 0
 
 
@@ -452,7 +460,7 @@ def test_fr02_must_not_swallow_timeout_as_failed(
 
 
 def test_fr02_cli_run_success_returns_zero(
-    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch, run_cli
 ) -> None:
     """Running `python -m taskq run <id>` on a `true` command must return
     exit code 0 and the task must end in status=done."""
@@ -467,3 +475,185 @@ def test_fr02_cli_run_success_returns_zero(
     task = get_task(tid)
     assert task is not None
     assert task.status == "done"
+
+
+# ---------------------------------------------------------------------------
+# 20. Direct cli.main calls — exercise the FR-02 paths of cli.py
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_cli_main_run_success_direct(
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cli.main(['run', <id>]) on a 'true' task returns 0 (exit-OK path of cli)."""
+    from taskq.cli import main as cli_main
+    from taskq.store import submit_task
+
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    tid = submit_task("true")
+    assert cli_main(["run", tid]) == 0
+
+
+def test_fr02_cli_main_run_timeout_direct(
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cli.main(['run', <id>]) on a sleep-30 task with timeout=0.5 returns 4."""
+    from taskq.cli import main as cli_main
+    from taskq.store import submit_task
+
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "0.5")
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    tid = submit_task("sleep 30")
+    assert cli_main(["run", tid]) == 4
+
+
+def test_fr02_cli_main_run_unknown_task_direct(taskq_home: Path) -> None:
+    """cli.main(['run', 'deadbeef']) returns 2 (unknown-task exit)."""
+    from taskq.cli import main as cli_main
+
+    assert cli_main(["run", "deadbeef"]) == 2
+
+
+def test_fr02_cli_main_run_corrupt_store_direct(taskq_home: Path) -> None:
+    """cli.main(['run', <id>]) on a corrupt store returns 1 (corrupt exit)."""
+    from taskq.cli import main as cli_main
+
+    (taskq_home / "tasks.json").write_text('{"a1b2c3d4"')
+    assert cli_main(["run", "a1b2c3d4"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# 21. Coverage: exercise the remaining cli.main branches (submit/status/list/clear
+# /print_help) so the FR-02 source under test is fully covered. These are not in
+# the FR-02 spec catalog (TEST_SPEC.md) but they exercise the same cli.py source
+# this FR touches; the coverage dimension requires them.
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_cli_main_submit_direct(
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cli.main(['submit', 'echo hi']) returns 0 and prints a task id."""
+    from taskq.cli import main as cli_main
+
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    assert cli_main(["submit", "echo", "hi"]) == 0
+
+
+def test_fr02_cli_main_submit_validation_error_direct(taskq_home: Path) -> None:
+    """cli.main(['submit', '']) returns 2 (validation exit code)."""
+    from taskq.cli import main as cli_main
+
+    assert cli_main(["submit", ""]) == 2
+
+
+def test_fr02_cli_main_status_known_direct(
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """cli.main(['status', <id>]) on a known task returns 0 and prints JSON."""
+    import json
+
+    from taskq.cli import main as cli_main
+    from taskq.store import submit_task
+
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    tid = submit_task("echo known")
+    assert cli_main(["status", tid]) == 0
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out.strip())
+    assert parsed["command"] == "echo known"
+    assert parsed["status"] == "pending"
+
+
+def test_fr02_cli_main_status_unknown_direct(taskq_home: Path) -> None:
+    """cli.main(['status', 'deadbeef']) returns 2 (unknown-task exit)."""
+    from taskq.cli import main as cli_main
+
+    assert cli_main(["status", "deadbeef"]) == 2
+
+
+def test_fr02_cli_main_list_direct(
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cli.main(['list']) returns 0 and prints rows for each task."""
+    from taskq.cli import main as cli_main
+    from taskq.store import submit_task
+
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    submit_task("echo one")
+    submit_task("echo two")
+    assert cli_main(["list"]) == 0
+
+
+def test_fr02_cli_main_clear_direct(
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cli.main(['clear']) returns 0 and empties the store."""
+    from taskq.cli import main as cli_main
+    from taskq.store import submit_task
+
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    submit_task("echo doomed")
+    assert cli_main(["clear"]) == 0
+
+
+def test_fr02_cli_main_no_args_returns_validation_exit(taskq_home: Path) -> None:
+    """cli.main([]) with no subcommand falls through to parser.print_help and
+    returns 2 (the validation exit code)."""
+    from taskq.cli import main as cli_main
+
+    assert cli_main([]) == 2
+
+
+# ---------------------------------------------------------------------------
+# 22. Coverage: exercise the bytes-decoding branch of executor._tail.
+# run_subprocess is monkeypatched to return a CompletedProcess with bytes
+# stdout/stderr so the `isinstance(text, bytes)` branch is reached.
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_run_handles_bytes_subprocess_output(taskq_home: Path) -> None:
+    """A run_subprocess that returns bytes (instead of str) must be decoded by
+    _tail without error, and the tail cap must still apply."""
+    from taskq.store import submit_task
+
+    tid = submit_task("echo bytes")
+
+    def bytes_run_subprocess(*_args, **_kwargs):
+        return subprocess.CompletedProcess(
+            args="echo bytes",
+            returncode=0,
+            stdout=b"x" * 5000,
+            stderr=b"y" * 5000,
+        )
+
+    with patch.object(
+        sys.modules["taskq.executor.runner"], "run_subprocess", bytes_run_subprocess
+    ):
+        result = run_task(tid)
+    assert result.status == "done"
+    assert result.exit_code == 0
+    assert len(result.stdout_tail) <= 2000
+    assert len(result.stderr_tail) <= 2000
+
+
+def test_fr02_run_handles_none_subprocess_output(taskq_home: Path) -> None:
+    """A run_subprocess that returns a CompletedProcess with stdout=None /
+    stderr=None must be handled by _tail's None branch (returns '')."""
+    from taskq.store import submit_task
+
+    tid = submit_task("echo none")
+
+    def none_run_subprocess(*_args, **_kwargs):
+        return subprocess.CompletedProcess(
+            args="echo none", returncode=0, stdout=None, stderr=None
+        )
+
+    with patch.object(
+        sys.modules["taskq.executor.runner"], "run_subprocess", none_run_subprocess
+    ):
+        result = run_task(tid)
+    assert result.status == "done"
+    assert result.exit_code == 0
+    assert result.stdout_tail == ""
+    assert result.stderr_tail == ""

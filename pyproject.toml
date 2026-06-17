@@ -1,0 +1,18 @@
+[tool.pyright]
+pythonVersion = "3.11"
+extraPaths = ["03-development/src", "."]
+reportMissingImports = "none"
+reportUnusedVariable = "warning"
+reportUnusedParameter = "warning"
+
+[tool.ruff]
+target-version = "py311"
+extend-exclude = ["harness", ".venv", ".harness"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["03-development/tests"]
+pythonpath = ["03-development/src"]

@@ -1,7 +1,8 @@
-"""[FR-01] Persistence layer: atomic write + corruption detection.
+"""[FR-01][FR-02] Persistence layer: atomic write + corruption detection.
 
 Citations:
 - 03-development/tests/test_fr01.py:9-15 (load_store/get_task/clear_store contract)
+- 03-development/tests/test_fr02.py:241-256 (CLI run → status persisted to disk)
 - SRS.md:1-22 (原子寫入:tmp + os.replace;tasks.json 損壞 → 不得靜默重建)
 """
 from __future__ import annotations
@@ -10,7 +11,6 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from taskq.config import load_config
 from taskq.store.ids import generate_task_id
@@ -80,7 +80,7 @@ def load_store() -> dict[str, Task]:
     return {tid: Task.from_dict(rec) for tid, rec in raw.items()}
 
 
-def get_task(task_id: str) -> Optional[Task]:
+def get_task(task_id: str) -> Task | None:
     """Return Task for task_id, or None if absent.
 
     Citations:
@@ -126,11 +126,24 @@ def clear_store() -> None:
     _atomic_write({})
 
 
+def save_task(task_id: str, task: Task) -> None:
+    """Persist an updated task record atomically (load → mutate → write).
+
+    Citations:
+    - 03-development/tests/test_fr02.py:241-256 (CLI `run` → task.status persisted)
+    - SRS.md:58-59 (原子寫入)
+    """
+    raw = _load_raw()
+    raw[task_id] = task.to_dict()
+    _atomic_write(raw)
+
+
 __all__ = [
     "load_store",
     "get_task",
     "submit_task",
     "clear_store",
+    "save_task",
     "StoreCorrupted",
     "Task",
 ]

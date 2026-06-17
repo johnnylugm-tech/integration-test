@@ -9,5 +9,5 @@ import sys
 
 from taskq.cli import main
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover — CLI entry point, invoked via `python -m taskq`
     sys.exit(main())
