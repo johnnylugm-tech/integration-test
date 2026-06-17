@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "c2b2ce79ffdb1c96cf6ff743ec03fad9198bd046",
-  "content_sha256": "c57a2caade962f87de8522bbe76dc73e5f00cc2c33cb08e67d88d63267230a92",
+  "git_sha": "902ec4b1b9b946f29cffe5b5c99d3f8fbc59df38",
+  "content_sha256": "e487f82b3a3a867fa1a65592c8ba856405cda2d89c7fdf100bf28673318730bc",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -45,7 +45,7 @@
         "test_files": [
           "tests/test_fr01.py"
         ],
-        "sad_module": "tests/benchmarks/test_nfr01_p95.py",
+        "sad_module": "03-development/tests/test_fr01.py",
         "priority": "HIGH"
       },
       "FR-02": {
@@ -62,7 +62,7 @@
         "test_files": [
           "tests/test_fr02.py"
         ],
-        "sad_module": "tests/security/test_no_shell_true.py",
+        "sad_module": "03-development/tests/test_fr02.py",
         "priority": "HIGH"
       },
       "FR-03": {
@@ -77,7 +77,7 @@
         "test_files": [
           "tests/test_fr03.py"
         ],
-        "sad_module": "tests/integration/test_fr03_subcommands.py",
+        "sad_module": "03-development/tests/test_fr03.py",
         "priority": "HIGH"
       }
     },
