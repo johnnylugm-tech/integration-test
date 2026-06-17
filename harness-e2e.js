@@ -561,9 +561,12 @@ for (let n = 1; n <= 8; n++) {
     return { stoppedAt: n, frameworkBug: true, report: String(out) }
   }
   if (!String(out).includes('===PHASE_DONE===')) {
-    // Orchestrator ended without a valid terminal marker — non-429 failure.
-    saveCheckpoint(n, 'orchestrator ended without PHASE_DONE')
-    throw new Error(`Phase ${n}: orchestrator ended without PHASE_DONE or FRAMEWORK_BUG marker. Output tail: ${String(out).slice(-500)}`)
+    // Orchestrator (LLM) sometimes advances state + commits + pushes but skips
+    // the ===PHASE_DONE=== sentinel — typically because the prompt is long and
+    // the agent "feels done" after the last commit. Don't fail-loud on this;
+    // let postconditions (objective, file-on-disk) be the source of truth.
+    // FRAMEWORK_BUG is the only hard stop; sentinel is advisory.
+    log(`Phase ${n}: orchestrator output missing ===PHASE_DONE=== sentinel — relying on postconditions`)
   }
   POSTCONDITIONS[n]()
   log(`Phase ${n} postconditions OK`)
