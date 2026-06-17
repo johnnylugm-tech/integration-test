@@ -131,11 +131,13 @@ const verifySubmoduleSource = () => {
 const verifyHarnessBundle = () => {
   try {
     const harnessHead = sh('git -C harness rev-parse HEAD')
-    // Probe for each B-bundle deliverable's key marker
+    // Probe for each B-bundle deliverable's key marker. Scope is the
+    // whole tree (B-bundle features live in harness_cli.py + scripts/,
+    // not core/ — discovered 2026-06-17, harness HEAD ffff0ea).
     const probes = [
-      { name: 'B.1 validate-handoff', cmd: 'git -C harness grep -l "validate-handoff" -- core/ 2>/dev/null' },
-      { name: 'B.2 p3-post-gate2',    cmd: 'git -C harness grep -l "p3-post-gate2" -- core/ 2>/dev/null' },
-      { name: 'B.3 TEST_SPEC table',  cmd: 'git -C harness grep -l "TEST_SPEC" -- core/ 2>/dev/null' },
+      { name: 'B.1 validate-handoff', cmd: 'git -C harness grep -q "validate-handoff"' },
+      { name: 'B.2 p3-post-gate2',    cmd: 'git -C harness grep -q "p3-post-gate2"' },
+      { name: 'B.3 TEST_SPEC table',  cmd: 'git -C harness grep -q "TEST_SPEC"' },
     ]
     const missing = []
     for (const p of probes) {
