@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "generated_at_phase": 2,
+  "fr_ids": [
+    "FR-01",
+    "FR-02",
+    "FR-03"
+  ],
+  "nfr_dimension_mapping": {
+    "NFR-01": "performance",
+    "NFR-02": "security",
+    "NFR-03": "error_handling"
+  },
+  "nfr_fr_mapping": {},
+  "nfr_traceability": {
+    "NFR-01": {
+      "type": "performance",
+      "target": "p95 < 50ms",
+      "module": "taskq.store"
+    },
+    "NFR-02": {
+      "type": "security",
+      "target": ">=95",
+      "module": "taskq.store"
+    },
+    "NFR-03": {
+      "type": "reliability",
+      "target": ">=95",
+      "module": "taskq.store"
+    }
+  },
+  "quality_targets": {
+    "max_complexity": 15,
+    "min_coverage": 80,
+    "max_coupling": 0.3
+  },
+  "fr_module_traceability": {
+    "FR-01": "taskq.store",
+    "FR-02": "taskq.executor",
+    "FR-03": "taskq.cli"
+  },
+  "architecture_constraints": [
+    "no_circular_dependencies",
+    "stdlib_only",
+    "shell_false_enforced",
+    "atomic_writes_only"
+  ],
+  "high_risk_modules": [
+    "taskq.executor",
+    "taskq.store"
+  ],
+  "gate_score_overrides": {
+    "performance": 75.0,
+    "security": 95.0,
+    "error_handling": 95.0,
+    "test_coverage": 80.0
+  },
+  "gate_results": {
+    "gate1": {},
+    "gate2": null,
+    "gate3": null,
+    "gate4": null
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "version": "1.0",
+  "created_at": "2026-06-17",
+  "phase": 2,
+  "project": "integration-test",
+  "layers": [
+    {
+      "name": "cli",
+      "modules": [
+        "taskq.cli"
+      ],
+      "allowed_dependencies": [
+        "store",
+        "executor",
+        "config"
+      ]
+    },
+    {
+      "name": "store",
+      "modules": [
+        "taskq.store"
+      ],
+      "allowed_dependencies": [
+        "config"
+      ]
+    },
+    {
+      "name": "executor",
+      "modules": [
+        "taskq.executor"
+      ],
+      "allowed_dependencies": [
+        "store",
+        "config"
+      ]
+    },
+    {
+      "name": "config",
+      "modules": [
+        "taskq.config"
+      ],
+      "allowed_dependencies": []
+    }
+  ],
+  "dependencies": {
+    "cli": [
+      "store",
+      "executor",
+      "config"
+    ],
+    "executor": [
+      "store",
+      "config"
+    ],
+    "store": [
+      "config"
+    ]
+  },
+  "quality_targets": {
+    "max_complexity": 15,
+    "min_coverage": 80,
+    "max_coupling": 0.3
+  },
+  "nfr_dimension_mapping": {
+    "NFR-01": "performance",
+    "NFR-02": "security",
+    "NFR-03": "error_handling"
+  },
+  "nfr_traceability": {
+    "NFR-01": {
+      "type": "performance",
+      "target": "p95 < 50ms",
+      "module": "taskq.store"
+    },
+    "NFR-02": {
+      "type": "security",
+      "target": ">=95",
+      "module": "taskq.store"
+    },
+    "NFR-03": {
+      "type": "reliability",
+      "target": ">=95",
+      "module": "taskq.store"
+    }
+  },
+  "advisory_only": [],
+  "gate_score_overrides": {
+    "performance": 75.0,
+    "security": 95.0,
+    "error_handling": 95.0
+  },
+  "fr_module_traceability": {
+    "FR-01": "taskq.store",
+    "FR-02": "taskq.executor",
+    "FR-03": "taskq.cli"
+  },
+  "architecture_constraints": [
+    "no_circular_dependencies",
+    "stdlib_only",
+    "shell_false_enforced",
+    "atomic_writes_only"
+  ],
+  "high_risk_modules": [
+    "taskq.executor",
+    "taskq.store"
+  ]
+}

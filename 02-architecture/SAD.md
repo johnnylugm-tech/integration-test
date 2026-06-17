@@ -1,13 +1,28 @@
-# SAD - {Project Name}
+# SAD - taskq (Software Architecture Document)
 
-<!-- harness:template-stub -->
-<!-- Remove the sentinel line above once you start filling this SAD.
-     While present, harness load-context emits a stub warning. -->
+> Project: taskq (本地任務佇列 CLI)
+> Version: v1.0
+> Date: 2026-06-17
+> Phase: 2 — Architecture & Design
+> Source of truth: SRS.md v2.0.0 (P1 APPROVED 2026-06-17) + TEST_INVENTORY.yaml v1.1
+> Authoring mode: INGESTION (architecture derived strictly from P1 FRs/NFRs, no invention)
 
-> On-demand Lazy Load template.
+---
 
 ## 1. Architecture Overview
-{High-level architecture description}
+
+`taskq` is a local task-queue CLI implemented in Python 3.11 standard library only (zero runtime external dependencies). It accepts a shell command as a job, persists it to a JSON store under `$TASKQ_HOME/tasks.json`, and executes it later under a controlled `subprocess.run` call with a timeout and a bounded auto-retry policy. The tool exists to lift batch/retry-style local command execution out of ad-hoc shell scripts, exposing it instead as a uniform command-line surface with consistent exit codes (0/2/4/1), atomic persistence, and secret redaction of subprocess output. The product surface is intentionally narrow — three functional requirements covering model+persistence, controlled execution+retry, and CLI/query integration — and explicitly excludes daemonization, remote execution, and any non-JSON persistence backend.
+
+The architecture is decomposed into **four source modules**, each occupying its own directory under `core/taskq/`:
+
+1. **`taskq.cli/`** — entry point (`python -m taskq`), argparse subcommand dispatch, per-subcommand handlers, and human/JSON output formatting. CLI is the only module that reads `sys.argv` and writes to `sys.stdout`/`sys.stderr`; it is the single import point for `argparse` and is the *only* place that maps domain outcomes to the four exit codes.
+2. **`taskq.store/`** — JSON file persistence with atomic-write semantics (tmp + `os.replace`), task-record validation, uuid4 8-hex id generation, and corruption detection. Store is the sole module that reads or writes `tasks.json`; nothing else in the codebase may touch the path.
+3. **`taskq.executor/`** — `subprocess.run` wrapper that enforces `shell=False` and `shlex.split`, drives the `pending → running → done | failed | timeout` state machine, applies the retry policy, redacts secret-bearing lines from `stdout_tail` / `stderr_tail`, and records `duration_ms` and `finished_at`.
+4. **`taskq.config/`** — `TASKQ_HOME` / `TASKQ_TASK_TIMEOUT` / `TASKQ_RETRY_LIMIT` env-var reader with defaults and per-process snapshot. Config is a pure value layer; it has no I/O of its own and is read once at process start.
+
+The core data flow is a subprocess-orchestrated, JSON-file-mediated pipeline. On `submit`, CLI parses argv, hands the command to `store.submit_task` which validates, generates a uuid4 8-hex id, attaches `created_at`, and writes the store via the atomic-write helper. On `run`, CLI loads the task by id, transitions it to `running` via the store, and delegates to `executor.run_task` which spawns the subprocess, captures output, redacts secrets, transitions the state to `done`/`failed`/`timeout`, and persists the result record. The store is therefore the single point of truth across the whole pipeline; executor and CLI are stateless with respect to long-lived data. The **store is the spine** of the architecture — it owns persistence, ids, validation, and corruption detection — and the **executor is the riskiest module** (subprocess + redaction), with **store a close second** (atomic-write + corruption detection).
+
+---
 
 ## 2. Module Design
 
@@ -85,29 +100,234 @@ Critically, **module-level calls alone are insufficient**. A module-level `_ = v
 ✅ src/infrastructure/{circuit,health,config,models}.py → shared domain layer
 ```
 
-### 2.2 {Module Name}
+**Mapping to taskq's 4 source directories.** `taskq` adopts the 4-directory decomposition with one hub per directory:
+
+- `core/taskq/cli/` — entry point + dispatch + per-subcommand handlers + format helpers
+- `core/taskq/store/` — JSON persistence + atomic write + validation
+- `core/taskq/executor/` — subprocess.run wrapper + state machine + retry
+- `core/taskq/config/` — env var reader + defaults
+
+The 4-directory design satisfies Principle 1 (4 source dirs in the 3-6 sweet spot), Principle 3 (entry point lives in `cli/` alongside the format hub, not at project root), and is sized well under the 50-node cap (Principle 6). Hub function coverage per directory is specified in §2.2 to satisfy Principle 2 / 4.
+
+**Per-function-body hub-call coverage (Principle 4 enforcement plan).** Each sibling file in a 2+ file directory calls its directory's hub from every non-trivial function body, not just at module level. This enumeration satisfies CRG Principle 4 — auditors can verify hub coverage by reading the code without re-deriving the rule.
+
+| Directory | Hub (≥2 fns) | Sibling files (must call hub from every fn body) |
+|-----------|-------------|--------------------------------------------------|
+| `core/taskq/cli/` | `format.py::render_json`, `format.py::render_human` | `handlers.py` (every `cmd_*` fn body calls `render_*` once for output + once for errors via `render_error`) |
+| `core/taskq/store/` | `persistence.py::atomic_write`, `persistence.py::load_store` | `tasks.py` (`submit_task`, `update_task`, `clear_store` all call `atomic_write`; `get_task`, `clear_store`, `load_store` paths call `load_store`) |
+| `core/taskq/executor/` | `runner.py::run_subprocess`, `runner.py::transition` | `state_machine.py` (`apply_transition` calls `transition`); `retry.py` (`run_with_retry` calls `run_subprocess` per attempt + `transition` for each attempt's status update) |
+| `core/taskq/config/` | `env.py::read_env`, `env.py::coerce` | `paths.py` (`resolve_home` and `tasks_json_path` both call `read_env` to resolve `TASKQ_HOME`; coercion of `TASKQ_TASK_TIMEOUT`/`TASKQ_RETRY_LIMIT` calls `coerce` once per process) |
+
+For directories with <4 siblings, **one hub function is sufficient** — `config/` has only 2 sibling files (`env.py`, `paths.py`) so the 2-fn minimum is comfortably met without artificial splitting.
+
+---
+
+### 2.2 Module Specifications
+
+#### 2.2.1 `core/taskq/cli/` — CLI entry + dispatch
 
 | Attribute | Value |
 |-----------|-------|
-| Responsibility | {responsibility} |
-| External Interface | {API} |
-| Dependencies | {dependency modules} |
+| Responsibility | argparse subcommand dispatch; parse argv; delegate to store/executor; map domain outcomes to exit codes 0/2/4/1; render human and `--json` output |
+| External Interface | `main(argv: list[str] \| None = None) -> int` (returns exit code); per-subcommand handlers `cmd_submit`, `cmd_run`, `cmd_status`, `cmd_list`, `cmd_clear` |
+| Dependencies | `taskq.store` (submit / load / save), `taskq.executor` (run_task), `taskq.config` (TASKQ_HOME for store path resolution) — must NOT be called by store or executor |
+| Hub module | `format.py` (≥2 hub functions: `render_json`, `render_human` — called from every handler body to satisfy Principle 4) |
 
-#### Logical Constraints
-- {constraint 1}
-- {constraint 2}
+**File layout:**
+- `__init__.py` — re-exports `main` for `python -m taskq`
+- `main.py` — `argparse` setup, global `--json` flag, dispatch to per-subcommand handler, exit-code mapping
+- `handlers.py` — `cmd_submit`, `cmd_run`, `cmd_status`, `cmd_list`, `cmd_clear`
+- `format.py` — `render_json(payload)`, `render_human(subcommand, payload)`, `render_error(exit_code, msg)` — hub
+- `exitcodes.py` — module-level constants `EXIT_OK=0`, `EXIT_VALIDATION=2`, `EXIT_TIMEOUT=4`, `EXIT_INTERNAL=1`
 
-## 3. Error Handling
-| Level | Handling Strategy |
-|-------|------------------|
-| Level 1 | Immediate return |
-| Level 2 | Retry 3 times |
-| Level 3 | Graceful degradation |
+**Logical Constraints:**
+- `cli` is the **only** module that imports `argparse` and `sys` (per Principle 3 entry-point pattern).
+- `cli` is the **only** module that writes to `sys.stdout` / `sys.stderr`.
+- `cli` MUST NOT use `try/except` to swallow `StoreCorrupted`; the corruption path must propagate to `sys.exit(EXIT_INTERNAL)` with a stderr line `store corrupted` (FR-01 / NFR-03 contract).
+- `cli` MUST map `executor.TimeoutExpired`-equivalent results to exit 4 only when running in single-task mode (`run`); for `submit`/`status`/`list`/`clear` the timeout classification is unreachable.
+- `--json` output MUST be a single line of valid JSON written to `stdout`, with human messages suppressed.
 
-## 4. Technology Choices
-| Technology | Rationale |
-|------------|----------|
-| {technology} | {reason} |
+---
+
+#### 2.2.2 `core/taskq/store/` — JSON persistence + atomic write + validation
+
+| Attribute | Value |
+|-----------|-------|
+| Responsibility | Validate command input (non-empty / length ≤ 1000 / injection char blacklist); generate uuid4 8-hex task id; atomic write of `tasks.json` via tmp + `os.replace`; corruption detection; CRUD over the task record |
+| External Interface | `submit_task(command: str) -> str` (returns task id), `load_store() -> dict[str, Task]`, `save_store(store: dict) -> None` (atomic), `get_task(task_id: str) -> Task \| None`, `update_task(task_id: str, **fields) -> Task`, `clear_store() -> None` |
+| Dependencies | `taskq.config` (read `TASKQ_HOME` to resolve `tasks.json` path) — must NOT import cli or executor |
+| Hub module | `persistence.py` (≥2 hub functions: `atomic_write`, `load_store` — both called from `submit_task`, `update_task`, `clear_store`, and the corruption-detection entry point) |
+
+**File layout:**
+- `__init__.py` — re-exports public API
+- `models.py` — `Task` dataclass, `StoreCorrupted` exception
+- `validation.py` — `validate_command(command: str) -> None` (raises `ValidationError` on rule violation), `INJECTION_CHARS = ";|&$><`"`, `MAX_COMMAND_LENGTH = 1000`
+- `persistence.py` — `atomic_write(path, payload)`, `load_store()`, `save_store(store)` — hub
+- `tasks.py` — `submit_task`, `get_task`, `update_task`, `clear_store` (thin orchestration over hub)
+- `ids.py` — `generate_task_id() -> str` (uuid4 hex prefix 8)
+
+**Logical Constraints:**
+- `store` is the **only** module that imports `json`, `os.replace`, and writes to `tasks.json`.
+- Atomic write contract: write to `tasks.json.tmp` first, then `os.replace(tmp, final)`; on partial write the original remains valid (NFR-03 / R1).
+- `load_store()` MUST raise `StoreCorrupted` on `json.JSONDecodeError` — **no silent rebuild** (FR-01 / NFR-03). The CLI maps `StoreCorrupted` to exit 1.
+- `validate_command` MUST be called *before* id generation; a validation failure MUST NOT mutate the store.
+- The injection char set is exactly `;`, `|`, `&`, `$`, `>`, `<`, `` ` `` — six characters, no more, no fewer (NFR-02 contract; parametrized test must cover all six).
+- `Task.id` format constraint: 8 lowercase hex characters (uuid4 `hex[:8]`).
+
+---
+
+#### 2.2.3 `core/taskq/executor/` — subprocess.run wrapper + state machine + retry
+
+| Attribute | Value |
+|-----------|-------|
+| Responsibility | Drive the `pending → running → done | failed | timeout` state machine; invoke `subprocess.run(shlex.split(command), shell=False, capture_output=True, text=True, timeout=...)`; redact `stdout_tail` / `stderr_tail` before persist; auto-retry up to `TASKQ_RETRY_LIMIT` on `failed`/`timeout`; record `duration_ms` and `finished_at` |
+| External Interface | `run_task(task: Task) -> RunResult` (mutates store via `taskq.store.update_task`), `RunResult` dataclass: `{status: Literal['done','failed','timeout'], exit_code: int, stdout_tail: str, stderr_tail: str, duration_ms: int, finished_at: str}` |
+| Dependencies | `taskq.store` (load task by id, persist result fields), `taskq.config` (read `TASKQ_TASK_TIMEOUT`, `TASKQ_RETRY_LIMIT`) — must NOT import cli |
+| Hub module | `runner.py` (≥2 hub functions: `run_subprocess`, `transition` — both called from every retry/state-machine path to satisfy Principle 4) |
+
+**File layout:**
+- `__init__.py` — re-exports `run_task`
+- `runner.py` — `run_subprocess(command, timeout) -> CompletedProcess` wrapper (enforces `shell=False`, `shlex.split`); `transition(task_id, **fields)` — hub
+- `state_machine.py` — `apply_transition(task, event) -> Task`; transitions: `pending → running → {done, failed, timeout}`; rejects illegal transitions
+- `retry.py` — `run_with_retry(task, max_attempts) -> RunResult`; calls `runner.run_subprocess` up to `1 + TASKQ_RETRY_LIMIT` times on `failed`/`timeout`
+- `redaction.py` — `redact(text: str) -> str`; replaces any line matching `sk-[A-Za-z0-9_-]{8,}` or `token=\S+` with `[REDACTED]`; preserves non-matching lines — hub for NFR-03 secret redaction
+- `result.py` — `RunResult` dataclass; `tail(text, n=2000) -> str` helper for stdout/stderr cap
+
+**Logical Constraints:**
+- `executor` is the **only** module that imports `subprocess` and `shlex`.
+- `shell=False` is a hard invariant. Any use of `shell=True` in `core/taskq/` violates NFR-02 and fails the codebase-wide static scan (`test_redteam_shell_true_absent_in_codebase`).
+- State machine MUST reject `running → pending` (regression) and any direct `pending → done` (must go through `running`).
+- `run_with_retry` MUST bound total attempts at `1 + TASKQ_RETRY_LIMIT` (FR-02 contract; `test_fr02_run_retry_limit_respected`).
+- `redact` MUST be called on `stdout_tail` and `stderr_tail` *before* `store.update_task` persists them — the on-disk store MUST NEVER contain an unredacted secret line (NFR-03 / R3).
+- `tail` MUST cap each side at 2000 characters (`test_fr02_run_captures_stdout_tail_under_2000_chars` / `..._stderr_tail_under_2000_chars`).
+- `TimeoutExpired` MUST be classified as `status='timeout'` and surfaced to caller as a `Timeout` result type that CLI maps to exit 4 in single-task mode (FR-02 / `test_fr02_run_timeout_yields_timeout_and_exit_four`).
+
+---
+
+#### 2.2.4 `core/taskq/config/` — env var reader + defaults
+
+| Attribute | Value |
+|-----------|-------|
+| Responsibility | Read three `TASKQ_*` env vars with their declared defaults; resolve `$TASKQ_HOME` to an absolute path; produce a per-process immutable snapshot consumed by store and executor |
+| External Interface | `Config` dataclass with fields `taskq_home: Path`, `task_timeout: float`, `retry_limit: int`; factory `load_config() -> Config`; `tasks_json_path() -> Path` helper |
+| Dependencies | None (must remain a leaf module with zero internal edges) |
+| Hub module | `env.py` (≥2 hub functions: `read_env`, `coerce` — both called from `paths.py` and from any caller-side snapshot) |
+
+**File layout:**
+- `__init__.py` — re-exports `Config`, `load_config`
+- `env.py` — `read_env(name: str, default: str) -> str`; `coerce(name: str, raw: str, kind: type, default)` — hub
+- `paths.py` — `resolve_home(raw: str) -> Path` (handles relative `.taskq`); `tasks_json_path(cfg: Config) -> Path`
+
+**Logical Constraints:**
+- `config` is the **only** module that imports `os.environ` and `pathlib`.
+- `load_config()` MUST be called exactly once per process; the snapshot is passed to store/executor as a parameter (no global mutable state).
+- Default values are fixed: `TASKQ_HOME='.taskq'`, `TASKQ_TASK_TIMEOUT=10.0`, `TASKQ_RETRY_LIMIT=2` (SPEC §5 / SRS §6).
+- `TASKQ_TASK_TIMEOUT` MUST be coerced to `float`; `TASKQ_RETRY_LIMIT` to `int`. Invalid coercions raise `ConfigError` → CLI maps to exit 1.
+- The three env var names MUST be declared in `.env.example` (config liveness — `test_config_env_keys_declared_in_env_example`).
+
+---
+
+## 3. Data Flow
+
+The store is the single point of truth. CLI parses argv and dispatches; store owns the JSON file; executor owns subprocess lifecycle; config owns the env snapshot. All four flows below begin at `python -m taskq ...` and end at `sys.exit(<code>)`.
+
+### 3.1 Successful `submit` flow (exit 0)
+
+```
+user → cli.main(["submit", "echo hi"])
+  → argparse parses → cmd_submit("echo hi")
+  → store.submit_task("echo hi")
+      → validation.validate_command("echo hi")   # non-empty, len<=1000, no injection chars
+      → ids.generate_task_id()                    # uuid4 hex[:8] → e.g. "a1b2c3d4"
+      → Task(id, command="echo hi", status="pending", created_at=<iso8601>)
+      → persistence.atomic_write(tasks.json, {id: task})
+          → write tasks.json.tmp
+          → os.replace(tasks.json.tmp, tasks.json)
+  → format.render_human("submit", {"id": "a1b2c3d4", "status": "pending"})
+  → sys.exit(0)
+```
+
+Key invariants: validation runs *before* id generation; atomic write succeeds before any return; `tasks.json` is never in a partial state.
+
+### 3.2 Successful `run` flow (exit 0, status='done')
+
+```
+user → cli.main(["run", "a1b2c3d4"])
+  → cmd_run("a1b2c3d4")
+  → store.get_task("a1b2c3d4")            # exists; status=pending
+  → store.update_task(id, status="running")
+  → executor.run_task(task)
+      → state_machine.apply_transition(task, RUN)
+      → runner.run_subprocess("echo hi", timeout=10.0)
+          → subprocess.run(shlex.split("echo hi"), shell=False, capture_output=True, text=True, timeout=10.0)
+          → returns CompletedProcess(returncode=0, stdout="hi\n", stderr="")
+      → redaction.redact(stdout_tail)     # "hi\n" → "hi\n" (no secret)
+      → redaction.redact(stderr_tail)     # "" → ""
+      → result.RunResult(status="done", exit_code=0, stdout_tail="hi\n", stderr_tail="", duration_ms=N, finished_at=<iso8601>)
+      → state_machine.apply_transition(task, DONE)
+  → store.update_task(id, status="done", exit_code=0, stdout_tail=..., stderr_tail=..., duration_ms=N, finished_at=...)  # atomic_write #2
+  → format.render_human("run", {...})    # or render_json if --json
+  → sys.exit(0)
+```
+
+Key invariants: `pending → running` write happens *before* subprocess spawn; `running → done` write happens *after* redaction; secrets are scrubbed *before* persistence (NFR-03 / R3).
+
+### 3.3 `run` timeout + retry flow (exit 0 if all attempts fail in retry budget, exit 4 if final attempt is timeout in single-task mode)
+
+```
+user → cli.main(["run", "deadbeef"])
+  → cmd_run → store.get_task → status=pending
+  → store.update_task(id, status="running")
+  → executor.run_task(task)
+      → retry.run_with_retry(task, max_attempts=1+TASKQ_RETRY_LIMIT=3)
+          attempt 1: runner.run_subprocess(...)  # sleeps 12s, hits timeout=10.0
+                     → subprocess.TimeoutExpired
+                     → state_machine → status=timeout
+          attempt 2: runner.run_subprocess(...)  # same
+                     → status=timeout
+          attempt 3 (final): runner.run_subprocess(...) # same
+                     → status=timeout
+      → final RunResult(status="timeout", exit_code=-1, stdout_tail="", stderr_tail="[REDACTED] some stderr", duration_ms=10000, finished_at=...)
+  → store.update_task(id, status="timeout", exit_code=-1, ..., finished_at=...)
+  → if final status == "timeout" and single-task mode: cli maps → sys.exit(4)
+  → else (e.g. background, future): sys.exit(0)
+```
+
+Key invariants: retry budget is `1 + TASKQ_RETRY_LIMIT` attempts; each attempt's result is captured independently; only the final result is persisted. `test_fr02_run_retry_limit_respected` asserts no attempt is made beyond the cap.
+
+### 3.4 Corruption detection flow (exit 1)
+
+```
+user → cli.main(["list"])     # or any subcommand
+  → handler → store.load_store()
+      → open(tasks.json).read() → '{"a1b2c3d4": {"id": ...'   # truncated / malformed
+      → json.loads(...)  →  raises json.JSONDecodeError
+      → store wraps and raises StoreCorrupted("invalid JSON in tasks.json")
+  → cli catches StoreCorrupted at the top level
+      → writes "store corrupted" to sys.stderr
+      → sys.exit(1)   # EXIT_INTERNAL
+```
+
+Key invariants: NO silent rebuild (FR-01 / NFR-03); the corrupted file is left on disk for forensic recovery; the process exits with code 1; subsequent runs MUST re-detect corruption and not auto-recover.
+
+---
+
+## 4. Error Handling
+
+| Exit code | Symbol | Cause | Handler location | User-visible message | Recovery |
+|-----------|--------|-------|------------------|----------------------|----------|
+| **0** | `EXIT_OK` | Success — submit / run / status / list / clear all completed without validation or timeout | `cli.main` after handler returns normally | normal output (human or `--json`) | n/a |
+| **2** | `EXIT_VALIDATION` | (a) FR-01 validation rule violated: empty command, whitespace-only command, `len(cmd)>1000`, or any of `;\|&$><\`` present; (b) unknown task id in `status` or `run` | `validation.validate_command` raises `ValidationError` → `cli.cmd_submit` exits 2; `store.get_task` returns `None` → `cli.cmd_status` / `cmd_run` exit 2 | `error: <rule>` to stderr (e.g. `error: command contains forbidden character ';'`) or `unknown task: <id>` | user fixes input; no store mutation |
+| **4** | `EXIT_TIMEOUT` | Final `run` attempt in single-task mode produced `status='timeout'` (subprocess exceeded `TASKQ_TASK_TIMEOUT`) | `executor.retry.run_with_retry` returns final `RunResult(status='timeout')`; `cli.cmd_run` checks the result and exits 4 only in single-task mode | `error: task timed out after 10.0s` to stderr | user raises `TASKQ_TASK_TIMEOUT` or fixes the hung command; no store rebuild (timeout records remain) |
+| **1** | `EXIT_INTERNAL` | (a) `tasks.json` corrupted (non-JSON); (b) unexpected exception (e.g. `OSError` on atomic write); (c) env-var coercion failure | `store.load_store` raises `StoreCorrupted` → `cli.main` top-level catch exits 1; uncaught exceptions caught at `cli.main` top level; `ConfigError` from `config.load_config` exits 1 | `store corrupted` to stderr (corruption path); `internal error: <type>` to stderr (unexpected exception path) | corruption: file is left on disk for manual recovery; user inspects + deletes `.taskq/tasks.json` to reset (intentional, NOT automatic) |
+
+**Anti-silencing rule (binding, no exceptions).** No `try/except` block in `core/taskq/` may use a bare `except:` or a broad `except Exception:` to swallow an error without re-raising or mapping it to a documented exit code. Specifically:
+- `StoreCorrupted` MUST propagate to `cli.main` and exit 1 — never rebuild silently.
+- `ValidationError` MUST propagate to `cli.cmd_submit` and exit 2 — never partially mutate the store.
+- `TimeoutExpired` (subprocess) MUST be caught and classified as `status='timeout'` — never mapped to `failed` and never suppressed.
+- Unexpected exceptions MUST surface as exit 1 with the exception class name in stderr (no `except: pass`).
+
+This rule is enforced by `test_redteam_shell_true_absent_in_codebase` (static scan for `shell=True` only) and by inspection in code review for the four patterns above.
 
 ---
 
@@ -123,18 +343,38 @@ Critically, **module-level calls alone are insufficient**. A module-level `_ = v
 ```yaml
 sab:
   version: "1.0"
-  created_at: "{YYYY-MM-DD}"
+  created_at: "2026-06-17"
   phase: 2  # MUST be int, NOT a string — parser raises on 'phase: "2"'
-  project: "{project_name}"
+  project: "integration-test"
 
-  layers:  # EXAMPLE — replace with your project's layers
-    - name: api
-      modules: ["app.api.webhooks"]
-      allowed_dependencies: ["service"]
+  layers:  # 4 source modules, each one CRG community
+    - name: cli
+      modules: ["taskq.cli"]
+      allowed_dependencies: ["store", "executor", "config"]
+    - name: store
+      modules: ["taskq.store"]
+      allowed_dependencies: ["config"]
+    - name: executor
+      modules: ["taskq.executor"]
+      allowed_dependencies: ["store", "config"]
+    - name: config
+      modules: ["taskq.config"]
+      allowed_dependencies: []   # leaf; reads os.environ only
 
   allowed_dependencies:
-    - from: api
-      to: service
+    - from: cli
+      to: store
+    - from: cli
+      to: executor
+    - from: cli
+      to: config
+    - from: executor
+      to: store
+    - from: store
+      to: config
+    - from: executor
+      to: config
+    # NO circular deps; config is the sink (no outgoing edges to other taskq modules)
 
   quality_targets:
     max_complexity: 15
@@ -145,29 +385,108 @@ sab:
 
   nfr_traceability:
     NFR-01:
-      # type MUST be one of 8 legal values listed below:
-      # Enforceable (mapped to gate dim):
-      #   performance, security, maintainability, reliability, testability
-      # Advisory (no scoring tool, auto-added to advisory_only):
-      #   deployability, scalability, usability
       type: performance
-      target: "p95 < 200ms"  # use ">=N" or "≥N" to raise the gate floor
-      module: app.processing.pipeline
+      target: "p95 < 50ms"  # submit+status 100 cycles, excluding subprocess (SRS §3)
+      module: taskq.store   # latency-critical path: validate_command + atomic_write + load_store live here (Agent B round-2 fix)
+    NFR-02:
+      type: security
+      target: ">=95"  # raise gate floor: codebase shell=True absence (hard zero) + 6/6 injection chars covered
+      module: taskq.store  # primary enforcement surface (validation.py blacklist); executor shares shell=False contract
+    NFR-03:
+      type: reliability
+      target: ">=95"  # raise gate floor: atomic write (tmp+os.replace) + redaction (sk-/token=) both must pass
+      module: taskq.store  # PRIMARY contract enforcement surface (atomic write lives in store/persistence.py; redaction is *called by* executor but enforced via the store.update_task contract that no RunResult with unredacted secrets is accepted). The redaction IMPLEMENTATION lives in taskq.executor.redaction (see ADR-006); the store is the boundary that guarantees the invariant.
 
   advisory_only: []  # AUTO-FILLED by parser — omit or leave []
 
   gate_score_overrides: {}  # AUTO-DERIVED by parser — omit or leave {}
 
-  fr_module_traceability:  # EXAMPLE — one entry per FR
-    FR-01: "app.api.webhooks"
+  fr_module_traceability:  # FR-01..FR-03 pre-defined, immutable
+    FR-01: "taskq.store"     # model + persistence + corruption detection
+    FR-02: "taskq.executor"  # subprocess + state machine + retry
+    FR-03: "taskq.cli"       # argparse dispatch + --json + exit codes
 
   architecture_constraints:
     - "no_circular_dependencies"
+    - "stdlib_only"
+    - "shell_false_enforced"
+    - "atomic_writes_only"
 
   high_risk_modules:
-    - "app.api.webhooks"
+    - "taskq.executor"   # subprocess lifecycle + redaction (NFR-02 + NFR-03 surface)
+    - "taskq.store"      # atomic write + corruption detection (NFR-03 + FR-01 corruption path)
 ```
 <!-- SAB:END -->
 
 Note: Fill in the YAML above — it is used for Drift Detection and gate scoring.
 Generate: `python3 scripts/generate_sab.py --project . [--overwrite]`
+
+---
+
+## 6. Technology Choices
+
+| Technology | Rationale |
+|------------|-----------|
+| **Python 3.11** | Required by SPEC §1 / SRS §1 / PROJECT_BRIEF §1. Provides `subprocess.run(..., text=True, timeout=...)`, `shlex.split`, `pathlib.Path`, `datetime` (timezone-aware ISO 8601), and `match` statements used in the state machine. |
+| **stdlib `subprocess`** | Required by FR-02; `shell=False` enforced to satisfy NFR-02; `capture_output=True` + `text=True` + `timeout=` provide the three required behaviors in a single call. |
+| **stdlib `shlex`** | Required by FR-02 to safely split the user-supplied command into argv (no shell parsing) before `subprocess.run`. |
+| **stdlib `json`** | Required by NFR-03 (atomic write target is JSON); `json.loads` raises `json.JSONDecodeError` on corruption (the trigger for `StoreCorrupted` → exit 1). |
+| **stdlib `os.replace`** | Required by NFR-03 for atomic rename within the same filesystem; tmp + `os.replace` is the canonical POSIX atomic-write pattern. |
+| **stdlib `uuid`** | Required by FR-01 (uuid4 → hex[:8] → 8-char task id). |
+| **stdlib `argparse`** | Required by FR-03 (subcommand dispatch + `--json` global flag). |
+| **stdlib `pathlib`** | Used by `config.paths.resolve_home` and `tasks_json_path`. |
+| **stdlib `re`** | Used by `executor.redaction.redact` to match `sk-[A-Za-z0-9_-]{8,}` and `token=\S+` line patterns. |
+| **stdlib `datetime`** | Used to produce `created_at` / `finished_at` ISO 8601 timestamps on Task records. |
+| **stdlib `time`** | Used by `executor.runner` to measure `duration_ms` via `time.perf_counter()`. |
+| **stdlib `dataclasses`** | Used for `Task`, `RunResult`, `Config` records (immutable, type-hinted, equality for testing). |
+| **stdlib `sys`** | Used by `cli.main` to read `argv` and write exit codes; restricted to `cli/` (no other module may import it). |
+| **No third-party runtime deps** | SPEC §1 / PROJECT_BRIEF §4 hard constraint. The codebase is 100% stdlib at runtime. Test tools (pytest, etc.) are provided by the dev environment and are NOT runtime dependencies. |
+| **pytest (dev-only, not runtime)** | Used by `tests/` for the 25-test inventory. Not imported by `core/taskq/`; not present in any wheel/sdist dependency declaration. |
+
+---
+
+## 7. Cross-Reference: 25-Test Inventory → Modules
+
+> Source: SRS.md v2.0.0 §8 (the 25-test inventory) and TEST_INVENTORY.yaml v1.1 (the 45-test authoritative expansion). This SAD uses the 25 from §8 as the primary cross-reference; the 45 in TEST_INVENTORY.yaml are the function-level decomposition used by `harness/build_trace.py` (P3) to map actual `def test_*` to FRs. The 25 below are sufficient to demonstrate FR/NFR coverage; the full 45 are catalogued in TRACEABILITY_MATRIX.md Backward Mapping (P1) and `tests/` (P3 actual).
+
+| # | Test function (SRS §8 authoritative) | FR / NFR | Primary module | Secondary module(s) | Test file (P3 est.) |
+|---|----------------------------------------|----------|----------------|----------------------|---------------------|
+| 1 | `test_fr01_submit_valid_command_returns_zero` | FR-01 | `taskq.cli` | `taskq.store` | `tests/integration/test_fr01_submit.py` |
+| 2 | `test_fr01_submit_empty_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `tests/unit/test_fr01_validation.py` |
+| 3 | `test_fr01_submit_whitespace_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `tests/unit/test_fr01_validation.py` |
+| 4 | `test_fr01_submit_long_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `tests/unit/test_fr01_validation.py` |
+| 5 | `test_fr01_submit_injection_chars_returns_two` (parametrized: `;` `|` `&` `$` `>` `<` `` ` ``) | FR-01, NFR-02 | `taskq.cli` | `taskq.store.validation` | `tests/unit/test_fr01_validation.py` |
+| 6 | `test_fr01_submit_produces_uuid4_id_format` | FR-01 | `taskq.store` | — | `tests/unit/test_fr01_ids.py` |
+| 7 | `test_fr01_store_corruption_returns_one` | FR-01, NFR-03 | `taskq.store` | `taskq.cli` | `tests/integration/test_fr01_store_corruption.py` |
+| 8 | `test_fr02_run_executes_subprocess_with_shell_false` | FR-02, NFR-02 | `taskq.executor` | `taskq.cli` | `tests/unit/test_fr02_runner.py` |
+| 9 | `test_fr02_run_exit_zero_yields_done` | FR-02 | `taskq.executor` | `taskq.store` | `tests/unit/test_fr02_state_machine.py` |
+| 10 | `test_fr02_run_nonzero_yields_failed` | FR-02 | `taskq.executor` | `taskq.store` | `tests/unit/test_fr02_state_machine.py` |
+| 11 | `test_fr02_run_timeout_yields_timeout_and_exit_four` | FR-02 | `taskq.executor` | `taskq.cli` | `tests/unit/test_fr02_state_machine.py` |
+| 12 | `test_fr02_run_failed_retries_up_to_limit` | FR-02 | `taskq.executor` | `taskq.config` | `tests/unit/test_fr02_retry.py` |
+| 13 | `test_fr02_run_retry_limit_respected` | FR-02 | `taskq.executor` | `taskq.config` | `tests/unit/test_fr02_retry.py` |
+| 14 | `test_fr03_status_unknown_id_returns_two` | FR-03 | `taskq.cli` | `taskq.store` | `tests/integration/test_fr03_subcommands.py` |
+| 15 | `test_fr03_list_returns_all_tasks` | FR-03 | `taskq.cli` | `taskq.store` | `tests/integration/test_fr03_subcommands.py` |
+| 16 | `test_fr03_clear_empties_store` | FR-03 | `taskq.cli` | `taskq.store` | `tests/integration/test_fr03_subcommands.py` |
+| 17 | `test_fr03_json_flag_emits_single_line_json` | FR-03 | `taskq.cli` | `taskq.cli.format` | `tests/integration/test_fr03_subcommands.py` |
+| 18 | `test_redteam_prompt_injection_via_submit_blocked` (parametrized: 6 chars) | FR-01, NFR-02 | `taskq.cli` | `taskq.store.validation` | `tests/security/test_redteam_injection.py` |
+| 19 | `test_redteam_secret_in_stdout_redacted_before_persist` | NFR-03 | `taskq.executor` | `taskq.store` | `tests/security/test_nfr03_redaction.py` |
+| 20 | `test_redteam_secret_in_stderr_redacted_before_persist` | NFR-03 | `taskq.executor` | `taskq.store` | `tests/security/test_nfr03_redaction.py` |
+| 21 | `test_redteam_shell_true_absent_in_codebase` (static scan) | NFR-02 | `taskq.cli` (entry surface) | `taskq.executor` (subprocess surface) | `tests/security/test_no_shell_true.py` |
+| 22 | `test_kpi_p95_submit_status_under_50ms` | NFR-01 | `taskq.cli` | `taskq.store` | `tests/benchmarks/test_nfr01_p95.py` |
+| 23 | `test_reliability_kill_during_write_keeps_valid_json` | NFR-03 | `taskq.store` | — | `tests/integration/test_nfr03_atomic_write.py` |
+| 24 | `test_reliability_concurrent_writes_do_not_corrupt` | NFR-03 | `taskq.store` | — | `tests/integration/test_nfr03_atomic_write.py` |
+| 25 | `test_config_env_keys_declared_in_env_example` | (config liveness) | `taskq.config` | — | `tests/unit/test_config_env_keys.py` |
+
+**Module coverage roll-up (25 tests, primary-module attribution):**
+- `taskq.cli` (entry / dispatch / format / static scan entry surface): 11 tests (#1–5, 8, 11, 14–18, 21 partial, 22)
+- `taskq.store` (persistence / validation / corruption): 4 tests (#6, 7, 23, 24) — plus secondary on most others
+- `taskq.executor` (subprocess / state machine / redaction / retry): 6 tests (#9, 10, 12, 13, 19, 20) — plus secondary on #8, 11, 21
+- `taskq.config` (env liveness / retry-limit input): 1 test (#25) — plus secondary on #12, 13
+
+Every FR has ≥ 5 primary-or-secondary tests; every NFR has ≥ 1 primary test. NFR-02 has two reinforcing surfaces: parametrized unit (#5) and codebase-wide static scan (#21). NFR-03 has four reinforcing surfaces: redaction unit (#19, #20), atomic write integration (#23, #24), and the implicit "store never silently rebuilds" contract exercised by #7.
+
+**Note on the 25 vs 45 reconciliation.** SRS.md §8 lists 25 tests; the P1 round-2 patch in TEST_INVENTORY.yaml v1.1 expanded the inventory to 45 function-level names (e.g. decomposing FR-02's state-machine row into 10 discrete assertions: `test_fr02_run_captures_stdout_tail_under_2000_chars`, `test_fr02_run_captures_stderr_tail_under_2000_chars`, `test_fr02_run_records_duration_ms_and_finished_at`, `test_fr02_run_unexpected_exception_returns_one`, etc.). The 25 above are the §8 baseline; the additional 20 in TEST_INVENTORY are absorbed by the same primary modules (cli, store, executor, config) and do not change the architecture or SAB. P3 `harness/build_trace.py` reconciles by reading the actual `def test_*` definitions.
+
+---
+
+*End of SAD v1.0 — taskq | 2026-06-17 | Phase 2 Architecture & Design*
