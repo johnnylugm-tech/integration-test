@@ -18,5 +18,10 @@
     "low_case_18_overlap",
     "low_tmp_first_tautology"
   ],
-  "gaps": []
+  "gaps": [],
+  "docs_embedded": [
+    "SRS.md",
+    "SAD.md",
+    "TEST_SPEC.md"
+  ]
 }

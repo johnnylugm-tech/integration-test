@@ -1,16 +1,16 @@
 {
   "review_status": "APPROVE",
-  "reason": "All round-1 gaps resolved. SAB block correctly moved to §5 with visible <!-- SAB:START -->/<!-- SAB:END --> markers. NFR-01.module and NFR-02.module both now correctly point to taskq.store (NFR-01 hot path = validate+atomic_write+load_store in store; NFR-02 injection-char blacklist primary in store with executor's shell=False as shared contract). §2.1 hub coverage table enumerates 4 directories with concrete per-function-body call patterns (render_*, atomic_write/load_store, transition/run_subprocess, read_env/coerce). Renumbering (§5/§6/§7) is internally consistent — no stale references to old section numbers detected. nfr_dimension_mapping remains {} which matches canonical template's OPTIONAL 'auto-derived from nfr_traceability.type' contract (round-1 LOW #4 correctly left unfixed per template semantics). SAB YAML is well-formed; fr_module_traceability aligns with FR-01/02/03; architecture_constraints include shell_false_enforced + atomic_writes_only; high_risk_modules correctly names executor+store. No new gaps introduced.",
+  "reason": "All round-1 gaps resolved. SAB block correctly moved to \u00a75 with visible <!-- SAB:START -->/<!-- SAB:END --> markers. NFR-01.module and NFR-02.module both now correctly point to taskq.store (NFR-01 hot path = validate+atomic_write+load_store in store; NFR-02 injection-char blacklist primary in store with executor's shell=False as shared contract). \u00a72.1 hub coverage table enumerates 4 directories with concrete per-function-body call patterns (render_*, atomic_write/load_store, transition/run_subprocess, read_env/coerce). Renumbering (\u00a75/\u00a76/\u00a77) is internally consistent \u2014 no stale references to old section numbers detected. nfr_dimension_mapping remains {} which matches canonical template's OPTIONAL 'auto-derived from nfr_traceability.type' contract (round-1 LOW #4 correctly left unfixed per template semantics). SAB YAML is well-formed; fr_module_traceability aligns with FR-01/02/03; architecture_constraints include shell_false_enforced + atomic_writes_only; high_risk_modules correctly names executor+store. No new gaps introduced.",
   "citations": [
-    "02-architecture/SAD.md:§5 (SAB block with <!-- SAB:START --> / <!-- SAB:END --> markers, NFR-01.module=taskq.store, NFR-02.module=taskq.store)",
-    "02-architecture/SAD.md:§2.1 (4-row hub coverage table)",
-    "02-architecture/SAD.md:§6 (Technology Choices, renumbered from §5)",
-    "02-architecture/SAD.md:§7 (Cross-Reference 25-Test → Modules, renumbered)"
+    "02-architecture/SAD.md:\u00a75 (SAB block with <!-- SAB:START --> / <!-- SAB:END --> markers, NFR-01.module=taskq.store, NFR-02.module=taskq.store)",
+    "02-architecture/SAD.md:\u00a72.1 (4-row hub coverage table)",
+    "02-architecture/SAD.md:\u00a76 (Technology Choices, renumbered from \u00a75)",
+    "02-architecture/SAD.md:\u00a77 (Cross-Reference 25-Test \u2192 Modules, renumbered)"
   ],
   "docs_embedded": [
-    "SRS.md fragments",
-    "SAD.md round-2",
-    "SAD.md §2.1"
+    "SRS.md",
+    "SAD.md",
+    "SAD.md \u00a72.1"
   ],
   "round1_gaps_resolved": [
     "high_sab_section",
