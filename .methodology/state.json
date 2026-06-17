@@ -1,8 +1,9 @@
 {
   "state": "RUNNING",
-  "current_phase": 1,
+  "current_phase": 2,
   "last_gate": null,
   "last_fr": null,
-  "last_update": "2026-06-17T11:28:55.205006+00:00",
-  "language": "python"
+  "last_update": "2026-06-17T11:59:27.289061+00:00",
+  "phase_truth_passed": false,
+  "last_milestone_command": "advance-phase --completed-phase 1"
 }
