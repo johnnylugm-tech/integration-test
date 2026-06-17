@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "42fae7fcb788d1835c6b2f2adb75a3e78612a867",
-  "content_sha256": "af83ced94c854924404104f058c8a4ed5bdfae14a8b5eb8458d6b0a7b4e1a80e",
+  "git_sha": "2eceebf8d708d82cdeb2ded80c2451852459994b",
+  "content_sha256": "c57a2caade962f87de8522bbe76dc73e5f00cc2c33cb08e67d88d63267230a92",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -11,30 +11,20 @@
     "completeness": {
       "total_requirements": 3,
       "srs_coverage": "100.0%",
-      "code_coverage": "33.3%",
-      "test_coverage": "66.7%",
-      "verification_rate": "33.3%",
-      "total_links": 14,
+      "code_coverage": "100.0%",
+      "test_coverage": "100.0%",
+      "verification_rate": "100.0%",
+      "total_links": 23,
       "missing_mappings": {
         "fr_without_srs": [],
-        "fr_without_code": [
-          "FR-02",
-          "FR-03"
-        ],
-        "fr_without_test": [
-          "FR-03"
-        ]
+        "fr_without_code": [],
+        "fr_without_test": []
       }
     },
     "missing": {
       "fr_without_srs": [],
-      "fr_without_code": [
-        "FR-02",
-        "FR-03"
-      ],
-      "fr_without_test": [
-        "FR-03"
-      ]
+      "fr_without_code": [],
+      "fr_without_test": []
     },
     "requirements": {
       "FR-01": {
@@ -60,9 +50,15 @@
       },
       "FR-02": {
         "fr_id": "FR-02",
-        "status": "in_progress",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
+        "code_files": [
+          "03-development/src/taskq/cli.py",
+          "03-development/src/taskq/executor/__init__.py",
+          "03-development/src/taskq/executor/runner.py",
+          "03-development/src/taskq/store/models.py",
+          "03-development/src/taskq/store/persistence.py"
+        ],
         "test_files": [
           "tests/test_fr02.py"
         ],
@@ -71,10 +67,16 @@
       },
       "FR-03": {
         "fr_id": "FR-03",
-        "status": "in_progress",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
-        "test_files": [],
+        "code_files": [
+          "03-development/src/taskq/cli.py",
+          "03-development/src/taskq/config.py",
+          "03-development/src/taskq/redact.py"
+        ],
+        "test_files": [
+          "tests/test_fr03.py"
+        ],
         "sad_module": "tests/integration/test_fr03_subcommands.py",
         "priority": "HIGH"
       }
