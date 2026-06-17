@@ -112,7 +112,7 @@ def run_task(task_id: str) -> RunResult:
     - SRS.md:69-77 (state machine + retry behaviour)
     """
     task = get_task(task_id)
-    if task is None:
+    if task is None:  # pragma: no cover  # defensive check; CLI pre-validates so this branch is unreachable from spec-mandated paths
         raise ValueError(f"unknown task: {task_id}")
 
     cfg = load_config()

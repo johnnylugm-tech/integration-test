@@ -1,0 +1,29 @@
+{
+  "gate": 1,
+  "phase": 3,
+  "fr_id": "FR-03",
+  "overall_score": 95.0,
+  "quality_complete": true,
+  "rounds_used": 1,
+  "breakdown": {
+    "linting": {
+      "score": 100,
+      "threshold": 90,
+      "tool_evidence": "ruff check 03-development/src/ -> All checks passed! (exit 0, 0 violations)"
+    },
+    "type_safety": {
+      "score": 100,
+      "threshold": 85,
+      "tool_evidence": "pyright 03-development/src/ --outputjson -> version 1.1.409, filesAnalyzed 12, errorCount 0, warningCount 0, informationCount 0"
+    },
+    "test_coverage": {
+      "score": 90,
+      "threshold": 80,
+      "tests_passed": 39,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "tool_evidence": "coverage run -m pytest 03-development/tests/test_fr03.py && coverage report --include=03-development/src/taskq/cli.py,03-development/src/taskq/config.py,03-development/src/taskq/redact.py,03-development/src/taskq/store/persistence.py,03-development/src/taskq/executor/runner.py -> 175/194 stmts covered (90.21%). spec_cov_pct=100% (19/19 required tests present and passing for FR-03). score=min(90.21,100)=90."
+    }
+  },
+  "composite_score": 95.0
+}

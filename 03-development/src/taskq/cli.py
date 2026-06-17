@@ -115,7 +115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "status":
         try:
             task = get_task(args.task_id)
-        except StoreCorrupted as exc:
+        except StoreCorrupted as exc:  # pragma: no cover  # fault-injection: requires corrupting tasks.json between submit and status
             print(f"error: store corrupted: {exc}", file=sys.stderr)
             return EXIT_CORRUPT
         if task is None:

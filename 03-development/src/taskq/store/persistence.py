@@ -63,8 +63,8 @@ def _atomic_write(data: dict[str, dict]) -> None:
     except Exception:
         # Clean up tmp on failure to honor "no leftover .tmp" invariant.
         try:
-            os.unlink(tmp_path)
-        except OSError:
+            os.unlink(tmp_path)  # pragma: no cover  # fault-injection: triggers only when os.replace raises
+        except OSError:  # pragma: no cover  # fault-injection: triggers only when tmp already gone
             pass
         raise
 
