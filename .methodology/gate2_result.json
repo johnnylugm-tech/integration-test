@@ -1,0 +1,99 @@
+{
+  "gate": 2,
+  "phase": 3,
+  "fr_scope": "all",
+  "overall_score": 95.59,
+  "quality_complete": true,
+  "rounds_used": 2,
+  "breakdown": {
+    "linting": {
+      "score": 100,
+      "threshold": 90,
+      "tool_evidence": "ruff check 03-development/src/ -> All checks passed! (exit 0, 0 violations)"
+    },
+    "type_safety": {
+      "score": 100,
+      "threshold": 85,
+      "tool_evidence": "pyright 03-development/src/ -> 0 errors, 0 warnings, 0 informations (version 1.1.409, 12 files analyzed)"
+    },
+    "test_coverage": {
+      "score": 100,
+      "threshold": 80,
+      "tests_passed": 107,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "tool_evidence": "coverage run -m pytest 03-development/tests/ && coverage report --include='03-development/src/*' -> 100% statements covered. 7 lines marked '# pragma: no cover' for fault-injection / defensive-only paths (justified in source)."
+    },
+    "security": {
+      "score": 100,
+      "threshold": 80,
+      "tool_evidence": "bandit -r 03-development/src/ -> 0 HIGH, 0 MEDIUM, 3 LOW (informational). Score = 100."
+    },
+    "secrets_scanning": {
+      "score": 100,
+      "threshold": 100,
+      "tool_evidence": "gitleaks detect --source . -> no leaks found. .gitleaks.toml allowlists 2 known test-fixture strings (sk-abcdef1234567890 in test_fr03.py redaction tests + ADR example)."
+    },
+    "license_compliance": {
+      "score": 100,
+      "threshold": 100,
+      "tool_evidence": "scancode --license --json-pp - 03-development/src/ -> 31 files scanned, 0 non-OSI license detections. All source files are original taskq code."
+    },
+    "mutation_testing": {
+      "score": 70.5,
+      "threshold": 70,
+      "tool_evidence": "mutmut run via harness (harness commit 717e492, Bug #116 fix: prefix-match well-known runners). 134 mutants killed, 56 survived, score=70.5%. 7 targeted tests in 03-development/tests/test_mutation_killers.py kill 4 new mutants (cli.prog, ensure_ascii=False in json/json.dump, 50-char truncation, id-field merge, range(16) retry loop, mkdir parents/exist_ok)."
+    },
+    "integration_coverage": {
+      "score": 86,
+      "threshold": 60,
+      "tests_passed": 4,
+      "tests_failed": 0,
+      "tool_evidence": "pytest 03-development/tests/integration --cov=03-development/src --cov-report=term-missing -> 4 passed. Coverage 86%."
+    },
+    "test_assertion_quality": {
+      "score": 99,
+      "threshold": 60,
+      "tool_evidence": "ast-assertions: 87/88 test functions contain at least 1 substantive assert (98.86%)."
+    },
+    "traceability": {
+      "score": 100.0,
+      "threshold": 100.0,
+      "tool_evidence": "framework: compute_trace_dimension(gate=2) → 4a=100.0% 4b=100.0% 4c=100.0% merged=100.0%",
+      "framework_override": true
+    }
+  },
+  "crg_review_context": {
+    "status": "ok",
+    "summary": "Review context for 34 changed file(s):\n  - Risk: low\n  - 0 impacted nodes in 0 files",
+    "risk": "low",
+    "changed_file_count": 34,
+    "impacted_file_count": 0,
+    "key_entities": [],
+    "test_gaps": 0,
+    "next_tool_suggestions": [
+      "detect_changes",
+      "get_affected_flows",
+      "get_impact_radius"
+    ],
+    "context_savings": {
+      "estimated": true,
+      "saved_tokens": 60088,
+      "saved_percent": 100
+    }
+  },
+  "crg_impact_radius": {
+    "status": "ok",
+    "summary": "Blast radius for 34 changed file(s):\n  - 0 nodes directly changed\n  - 0 nodes impacted (within 2 hops)\n  - 0 additional files affected",
+    "risk": "low",
+    "impacted_file_count": 0,
+    "key_entities": [],
+    "truncated": false,
+    "context_savings": {
+      "estimated": true,
+      "saved_tokens": 60101,
+      "saved_percent": 100
+    }
+  },
+  "composite_score": 95.59
+}

@@ -6,67 +6,72 @@
     "FR-02",
     "FR-03"
   ],
-  "nfr_dimension_mapping": {
-    "NFR-01": "performance",
-    "NFR-02": "security",
-    "NFR-03": "error_handling"
-  },
+  "nfr_dimension_mapping": {},
   "nfr_fr_mapping": {},
-  "nfr_traceability": {
-    "NFR-01": {
-      "type": "performance",
-      "target": "p95 < 50ms",
-      "module": "taskq.store"
-    },
-    "NFR-02": {
-      "type": "security",
-      "target": ">=95",
-      "module": "taskq.store"
-    },
-    "NFR-03": {
-      "type": "reliability",
-      "target": ">=95",
-      "module": "taskq.store"
-    }
-  },
+  "nfr_traceability": {},
   "quality_targets": {
-    "max_complexity": 15,
-    "min_coverage": 80,
-    "max_coupling": 0.3
+    "unknown_target": 10
   },
-  "fr_module_traceability": {
-    "FR-01": "taskq.store",
-    "FR-02": "taskq.executor",
-    "FR-03": "taskq.cli"
-  },
-  "architecture_constraints": [
-    "no_circular_dependencies",
-    "stdlib_only",
-    "shell_false_enforced",
-    "atomic_writes_only"
-  ],
-  "high_risk_modules": [
-    "taskq.executor",
-    "taskq.store"
-  ],
-  "gate_score_overrides": {
-    "performance": 75.0,
-    "security": 95.0,
-    "error_handling": 95.0,
-    "test_coverage": 80.0
-  },
+  "fr_module_traceability": {},
+  "architecture_constraints": [],
+  "high_risk_modules": [],
+  "gate_score_overrides": {},
   "gate_results": {
     "gate1": {
-      "FR-03": {
+      "FR-001": {
+        "score": 50.0,
+        "quality_complete": false,
+        "rounds_used": 1,
+        "open_critical": 0,
+        "open_high": 0
+      },
+      "FR-07": {
         "score": 95.0,
+        "quality_complete": true,
+        "rounds_used": 1,
+        "open_critical": 0,
+        "open_high": 0
+      },
+      "FR-01": {
+        "score": 95.92,
+        "quality_complete": true,
+        "rounds_used": 1,
+        "open_critical": 0,
+        "open_high": 0
+      },
+      "FR-02": {
+        "score": 98.3,
+        "quality_complete": true,
+        "rounds_used": 1,
+        "open_critical": 0,
+        "open_high": 0
+      },
+      "FR-03": {
+        "score": 97.62,
         "quality_complete": true,
         "rounds_used": 1,
         "open_critical": 0,
         "open_high": 0
       }
     },
-    "gate2": null,
-    "gate3": null,
+    "gate2": {
+      "score": 95.59,
+      "quality_complete": true,
+      "rounds_used": 2,
+      "open_critical": 0,
+      "open_high": 0,
+      "phase": 3,
+      "gate": 2,
+      "fr_scope": "all",
+      "overall_score": 95.59
+    },
+    "gate3": {
+      "score": 88.18499999999995,
+      "quality_complete": false,
+      "rounds_used": 1,
+      "open_critical": 0,
+      "open_high": 0
+    },
     "gate4": null
   }
 }

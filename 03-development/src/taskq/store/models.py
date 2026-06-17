@@ -12,7 +12,7 @@ Citations:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -28,7 +28,7 @@ class Task:
     command: str
     status: str = "pending"
     created_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     exit_code: int | None = None
     started_at: str | None = None
@@ -56,7 +56,7 @@ class Task:
             command=data["command"],
             status=data.get("status", "pending"),
             created_at=data.get(
-                "created_at", datetime.now(UTC).isoformat()
+                "created_at", datetime.now(timezone.utc).isoformat()
             ),
             exit_code=data.get("exit_code"),
             started_at=data.get("started_at"),

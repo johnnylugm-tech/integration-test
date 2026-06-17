@@ -328,7 +328,8 @@ def test_fr03_must_not_exit_zero_after_validation_error(
 
 
 def test_kpi_p95_submit_status_under_50ms(taskq_home: Path) -> None:
-    """100 cycles of (submit + status) excluding subprocess invocation — p95 < 50ms."""
+    """NFR-01 (performance): 100 cycles of (submit + status) excluding subprocess
+    invocation must achieve p95 < 50ms (SRS §3 NFR-01 performance target)."""
     n_cycles = 100
     threshold_p95_ms = 50.0
     durations_ms: list[float] = []

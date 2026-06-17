@@ -14,10 +14,8 @@ import json
 from contextlib import redirect_stderr, redirect_stdout
 
 import pytest
-
 from taskq.cli import main as cli_main
-from taskq.executor import run_task
-from taskq.store import clear_store, load_store, submit_task
+from taskq.store import clear_store, load_store
 
 
 @pytest.fixture

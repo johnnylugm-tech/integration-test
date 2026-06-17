@@ -4,14 +4,17 @@ extraPaths = ["03-development/src", "."]
 reportMissingImports = "none"
 reportUnusedVariable = "warning"
 reportUnusedParameter = "warning"
+exclude = ["tests", "harness", ".venv", ".harness"]
 
 [tool.ruff]
 target-version = "py311"
-extend-exclude = ["harness", ".venv", ".harness"]
+extend-exclude = ["harness", ".venv", ".harness", "harness_cli.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501"]
+# UP017: Use `datetime.UTC` alias — disabled because it requires Python 3.11+
+# and harness's check_coverage subprocess uses system pytest (Python 3.9).
+ignore = ["E501", "UP017"]
 
 [tool.pytest.ini_options]
 testpaths = ["03-development/tests"]

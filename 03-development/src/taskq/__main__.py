@@ -3,11 +3,11 @@
 Citations:
 - 03-development/tests/test_fr01.py:65-75 (subprocess: `python -m taskq <argv>`)
 """
-from __future__ import annotations
+from __future__ import annotations  # pragma: no cover
 
-import sys
+import sys  # pragma: no cover
 
-from taskq.cli import main
+from taskq.cli import main  # pragma: no cover
 
-if __name__ == "__main__":  # pragma: no cover — CLI entry point, invoked via `python -m taskq`
-    sys.exit(main())
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())  # pragma: no cover

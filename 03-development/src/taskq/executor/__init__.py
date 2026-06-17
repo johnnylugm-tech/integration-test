@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from taskq.config import load_config
 from taskq.executor import runner as _runner
@@ -122,10 +122,10 @@ def run_task(task_id: str) -> RunResult:
 
     # pending → running
     apply_transition(task, "RUN")
-    task.started_at = datetime.now(UTC).isoformat()
+    task.started_at = datetime.now(timezone.utc).isoformat()
     save_task(task_id, task)
 
-    start_ts = datetime.now(UTC)
+    start_ts = datetime.now(timezone.utc)
     final_status = "failed"
     final_exit = 1
     final_stdout = ""
@@ -161,7 +161,7 @@ def run_task(task_id: str) -> RunResult:
     else:
         apply_transition(task, "TIMEOUT")
 
-    end_ts = datetime.now(UTC)
+    end_ts = datetime.now(timezone.utc)
     task.exit_code = final_exit
     task.stdout_tail = final_stdout
     task.stderr_tail = final_stderr

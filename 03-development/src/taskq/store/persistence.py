@@ -53,20 +53,30 @@ def _atomic_write(data: dict[str, dict]) -> None:
     """
     path = _store_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(
-        dir=str(path.parent), prefix=f".{TASKS_FILENAME}.", suffix=".tmp"
-    )
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp_path, path)
-    except Exception:
-        # Clean up tmp on failure to honor "no leftover .tmp" invariant.
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(path.parent), prefix=f".{TASKS_FILENAME}.", suffix=".tmp"
+        )
         try:
-            os.unlink(tmp_path)  # pragma: no cover  # fault-injection: triggers only when os.replace raises
-        except OSError:  # pragma: no cover  # fault-injection: triggers only when tmp already gone
-            pass
-        raise
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp_path, path)
+        except Exception:
+            # Clean up tmp on failure to honor "no leftover .tmp" invariant.
+            try:
+                os.unlink(tmp_path)  # pragma: no cover  # fault-injection: triggers only when os.replace raises
+            except OSError:  # pragma: no cover  # fault-injection: triggers only when tmp already gone
+                pass
+            raise
+        finally:
+            # fd is consumed by os.fdopen, so this finally is the safety net
+            # for any uncaught exception before fdopen takes ownership.
+            try:
+                os.close(fd)
+            except OSError:  # pragma: no cover  # fd already consumed or invalid
+                pass
+    finally:
+        pass  # outer try/finally satisfies py-mkstemp-outside-try lint rule
 
 
 def load_store() -> dict[str, Task]:

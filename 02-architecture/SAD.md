@@ -451,31 +451,31 @@ Generate: `python3 scripts/generate_sab.py --project . [--overwrite]`
 
 | # | Test function (SRS §8 authoritative) | FR / NFR | Primary module | Secondary module(s) | Test file (P3 est.) |
 |---|----------------------------------------|----------|----------------|----------------------|---------------------|
-| 1 | `test_fr01_submit_valid_command_returns_zero` | FR-01 | `taskq.cli` | `taskq.store` | `tests/integration/test_fr01_submit.py` |
-| 2 | `test_fr01_submit_empty_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `tests/unit/test_fr01_validation.py` |
-| 3 | `test_fr01_submit_whitespace_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `tests/unit/test_fr01_validation.py` |
-| 4 | `test_fr01_submit_long_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `tests/unit/test_fr01_validation.py` |
-| 5 | `test_fr01_submit_injection_chars_returns_two` (parametrized: `;` `|` `&` `$` `>` `<` `` ` ``) | FR-01, NFR-02 | `taskq.cli` | `taskq.store.validation` | `tests/unit/test_fr01_validation.py` |
-| 6 | `test_fr01_submit_produces_uuid4_id_format` | FR-01 | `taskq.store` | — | `tests/unit/test_fr01_ids.py` |
-| 7 | `test_fr01_store_corruption_returns_one` | FR-01, NFR-03 | `taskq.store` | `taskq.cli` | `tests/integration/test_fr01_store_corruption.py` |
-| 8 | `test_fr02_run_executes_subprocess_with_shell_false` | FR-02, NFR-02 | `taskq.executor` | `taskq.cli` | `tests/unit/test_fr02_runner.py` |
-| 9 | `test_fr02_run_exit_zero_yields_done` | FR-02 | `taskq.executor` | `taskq.store` | `tests/unit/test_fr02_state_machine.py` |
-| 10 | `test_fr02_run_nonzero_yields_failed` | FR-02 | `taskq.executor` | `taskq.store` | `tests/unit/test_fr02_state_machine.py` |
-| 11 | `test_fr02_run_timeout_yields_timeout_and_exit_four` | FR-02 | `taskq.executor` | `taskq.cli` | `tests/unit/test_fr02_state_machine.py` |
-| 12 | `test_fr02_run_failed_retries_up_to_limit` | FR-02 | `taskq.executor` | `taskq.config` | `tests/unit/test_fr02_retry.py` |
-| 13 | `test_fr02_run_retry_limit_respected` | FR-02 | `taskq.executor` | `taskq.config` | `tests/unit/test_fr02_retry.py` |
-| 14 | `test_fr03_status_unknown_id_returns_two` | FR-03 | `taskq.cli` | `taskq.store` | `tests/integration/test_fr03_subcommands.py` |
-| 15 | `test_fr03_list_returns_all_tasks` | FR-03 | `taskq.cli` | `taskq.store` | `tests/integration/test_fr03_subcommands.py` |
-| 16 | `test_fr03_clear_empties_store` | FR-03 | `taskq.cli` | `taskq.store` | `tests/integration/test_fr03_subcommands.py` |
-| 17 | `test_fr03_json_flag_emits_single_line_json` | FR-03 | `taskq.cli` | `taskq.cli.format` | `tests/integration/test_fr03_subcommands.py` |
-| 18 | `test_redteam_prompt_injection_via_submit_blocked` (parametrized: 6 chars) | FR-01, NFR-02 | `taskq.cli` | `taskq.store.validation` | `tests/security/test_redteam_injection.py` |
-| 19 | `test_redteam_secret_in_stdout_redacted_before_persist` | NFR-03 | `taskq.executor` | `taskq.store` | `tests/security/test_nfr03_redaction.py` |
-| 20 | `test_redteam_secret_in_stderr_redacted_before_persist` | NFR-03 | `taskq.executor` | `taskq.store` | `tests/security/test_nfr03_redaction.py` |
-| 21 | `test_redteam_shell_true_absent_in_codebase` (static scan) | NFR-02 | `taskq.cli` (entry surface) | `taskq.executor` (subprocess surface) | `tests/security/test_no_shell_true.py` |
-| 22 | `test_kpi_p95_submit_status_under_50ms` | NFR-01 | `taskq.cli` | `taskq.store` | `tests/benchmarks/test_nfr01_p95.py` |
-| 23 | `test_reliability_kill_during_write_keeps_valid_json` | NFR-03 | `taskq.store` | — | `tests/integration/test_nfr03_atomic_write.py` |
-| 24 | `test_reliability_concurrent_writes_do_not_corrupt` | NFR-03 | `taskq.store` | — | `tests/integration/test_nfr03_atomic_write.py` |
-| 25 | `test_config_env_keys_declared_in_env_example` | (config liveness) | `taskq.config` | — | `tests/unit/test_config_env_keys.py` |
+| 1 | `test_fr01_submit_valid_command_returns_zero` | FR-01 | `taskq.cli` | `taskq.store` | `03-development/tests/test_fr01.py` |
+| 2 | `test_fr01_submit_empty_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `03-development/tests/test_fr01.py` |
+| 3 | `test_fr01_submit_whitespace_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `03-development/tests/test_fr01.py` |
+| 4 | `test_fr01_submit_long_command_returns_two` | FR-01 | `taskq.cli` | `taskq.store.validation` | `03-development/tests/test_fr01.py` |
+| 5 | `test_fr01_submit_injection_chars_returns_two` (parametrized: `;` `|` `&` `$` `>` `<` `` ` ``) | FR-01, NFR-02 | `taskq.cli` | `taskq.store.validation` | `03-development/tests/test_fr01.py` |
+| 6 | `test_fr01_submit_produces_uuid4_id_format` | FR-01 | `taskq.store` | — | `03-development/tests/test_fr01.py` |
+| 7 | `test_fr01_store_corruption_returns_one` | FR-01, NFR-03 | `taskq.store` | `taskq.cli` | `03-development/tests/test_fr01.py` |
+| 8 | `test_fr02_run_executes_subprocess_with_shell_false` | FR-02, NFR-02 | `taskq.executor` | `taskq.cli` | `03-development/tests/test_fr02.py` |
+| 9 | `test_fr02_run_exit_zero_yields_done` | FR-02 | `taskq.executor` | `taskq.store` | `03-development/tests/test_fr02.py` |
+| 10 | `test_fr02_run_nonzero_yields_failed` | FR-02 | `taskq.executor` | `taskq.store` | `03-development/tests/test_fr02.py` |
+| 11 | `test_fr02_run_timeout_yields_timeout_and_exit_four` | FR-02 | `taskq.executor` | `taskq.cli` | `03-development/tests/test_fr02.py` |
+| 12 | `test_fr02_run_failed_retries_up_to_limit` | FR-02 | `taskq.executor` | `taskq.config` | `03-development/tests/test_fr02.py` |
+| 13 | `test_fr02_run_retry_limit_respected` | FR-02 | `taskq.executor` | `taskq.config` | `03-development/tests/test_fr02.py` |
+| 14 | `test_fr03_status_unknown_id_returns_two` | FR-03 | `taskq.cli` | `taskq.store` | `03-development/tests/test_fr03.py` |
+| 15 | `test_fr03_list_returns_all_tasks` | FR-03 | `taskq.cli` | `taskq.store` | `03-development/tests/test_fr03.py` |
+| 16 | `test_fr03_clear_empties_store` | FR-03 | `taskq.cli` | `taskq.store` | `03-development/tests/test_fr03.py` |
+| 17 | `test_fr03_json_flag_emits_single_line_json` | FR-03 | `taskq.cli` | `taskq.cli.format` | `03-development/tests/test_fr03.py` |
+| 18 | `test_redteam_prompt_injection_via_submit_blocked` (parametrized: 6 chars) | FR-01, NFR-02 | `taskq.cli` | `taskq.store.validation` | `03-development/tests/test_fr03.py` |
+| 19 | `test_redteam_secret_in_stdout_redacted_before_persist` | NFR-03 | `taskq.executor` | `taskq.store` | `03-development/tests/test_fr03.py` |
+| 20 | `test_redteam_secret_in_stderr_redacted_before_persist` | NFR-03 | `taskq.executor` | `taskq.store` | `03-development/tests/test_fr03.py` |
+| 21 | `test_redteam_shell_true_absent_in_codebase` (static scan) | NFR-02 | `taskq.cli` (entry surface) | `taskq.executor` (subprocess surface) | `03-development/tests/test_fr03.py` |
+| 22 | `test_kpi_p95_submit_status_under_50ms` | NFR-01 | `taskq.cli` | `taskq.store` | `03-development/tests/test_fr03.py` |
+| 23 | `test_reliability_kill_during_write_keeps_valid_json` | NFR-03 | `taskq.store` | — | `03-development/tests/test_fr03.py` |
+| 24 | `test_reliability_concurrent_writes_do_not_corrupt` | NFR-03 | `taskq.store` | — | `03-development/tests/test_fr03.py` |
+| 25 | `test_config_env_keys_declared_in_env_example` | (config liveness) | `taskq.config` | — | `03-development/tests/test_fr03.py` |
 
 **Module coverage roll-up (25 tests, primary-module attribution):**
 - `taskq.cli` (entry / dispatch / format / static scan entry surface): 11 tests (#1–5, 8, 11, 14–18, 21 partial, 22)
@@ -485,7 +485,7 @@ Generate: `python3 scripts/generate_sab.py --project . [--overwrite]`
 
 Every FR has ≥ 5 primary-or-secondary tests; every NFR has ≥ 1 primary test. NFR-02 has two reinforcing surfaces: parametrized unit (#5) and codebase-wide static scan (#21). NFR-03 has four reinforcing surfaces: redaction unit (#19, #20), atomic write integration (#23, #24), and the implicit "store never silently rebuilds" contract exercised by #7.
 
-**Note on the 25 vs 45 reconciliation.** SRS.md §8 lists 25 tests; the P1 round-2 patch in TEST_INVENTORY.yaml v1.1 expanded the inventory to 45 function-level names (e.g. decomposing FR-02's state-machine row into 10 discrete assertions: `test_fr02_run_captures_stdout_tail_under_2000_chars`, `test_fr02_run_captures_stderr_tail_under_2000_chars`, `test_fr02_run_records_duration_ms_and_finished_at`, `test_fr02_run_unexpected_exception_returns_one`, etc.). The 25 above are the §8 baseline; the additional 20 in TEST_INVENTORY are absorbed by the same primary modules (cli, store, executor, config) and do not change the architecture or SAB. P3 `harness/build_trace.py` reconciles by reading the actual `def test_*` definitions.
+**Note on the 25 vs 45 reconciliation.** SRS.md §8 lists 25 tests; the P1 round-2 patch in TEST_INVENTORY.yaml v1.1 expanded the inventory to 45 function-level names (e.g. decomposing FR-02's state-machine row into 10 discrete assertions: `test_fr02_run_captures_stdout_tail_under_2000_chars`, `test_fr02_run_captures_stderr_tail_under_2000_chars`, `test_fr02_run_records_duration_ms_and_finished_at`, `test_fr02_run_unexpected_exception_returns_one`, etc.). The 25 above are the §8 baseline; the additional 20 in TEST_INVENTORY are absorbed by the same primary modules (cli, store, executor, config) and do not change the architecture or SAB. P3 `harness/scripts/build_traceability.py` reconciles by reading the actual `def test_*` definitions.
 
 ---
 
