@@ -461,7 +461,7 @@ PHASE 4 EXTRA — Adversarial Bug Hunt (before Gate 3, per plan Step 4b):
 - Execute the hunt per ${REPO}/harness/harness/ssi/prompts/hunt_bugs.md (4 phases: scout → lens hunters → adversarial verify → synthesize). Spawn hunters/verifiers as headless sub-agents (claude -p) or dispatch; do not hunt single-handedly.
 - Write .methodology/bug_hunt_report.json (schema: harness/schemas/bug_hunt_report.schema.json) + human markdown under 03-development/.audit/.
 - Every confirmed critical/high finding: resolution.status = resolved (RED repro test → fix → GREEN, with fix_commit/repro_test) or refuted (with refute_evidence). Only then run Gate 3.
-- **traceability fallback**: if Gate 3 blocks on traceability, run \`build-trace-attestation --project . --write\` then commit `.methodology/trace/attestation.json` (see plan §G2b / §G3b).
+- **traceability fallback**: if Gate 3 blocks on traceability, run \`build-trace-attestation --project . --write\` then commit \`.methodology/trace/attestation.json\` (see plan §G2b / §G3b).
 ` : ''}
 WHEN THE PHASE IS FULLY DONE, print on its own line: ===PHASE_DONE===
 then JSON: {"phase": ${n}, "gates": {...}, "artifacts": [...], "notes": "<anything the supervisor should know>"}.
