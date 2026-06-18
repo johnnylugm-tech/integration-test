@@ -619,6 +619,21 @@ const POSTCONDITIONS = {
 if (START <= 0) {
   phase('Bootstrap')
 
+  // Idempotency prep (Bug #5 + #6 fix): wipe the artifacts that earlier
+  // Bootstrap runs may have left behind — submodule, venv, .git/modules
+  // residue, and any other untracked file. After this block the working
+  // tree MUST match the 2-file baseline.
+  //
+  // We do NOT touch CLAUDE.md (operator notes may live there) nor
+  // .sessi-work/sentinels/ (L6 lesson: preserved across phase cleanup).
+  // We cannot literally run `git clean -ffdx` because that would wipe
+  // any untracked file the operator dropped in (e.g. scratch notes);
+  // instead we explicitly remove the known Bootstrap outputs.
+  try { sh('git submodule deinit --all -f') } catch {}
+  try { sh('rm -rf .git/modules/harness') } catch {}
+  try { sh('rm -rf harness .venv .harness .methodology 03-development .coverage') } catch {}
+  try { sh('rm -f PROJECT_BRIEF.md .gitmodules') } catch {}
+
   // Guard: must start from the 2-file baseline.
   if (sh('git status --porcelain') !== '') throw new Error('bootstrap: working tree not clean — revert to baseline first')
   const files = sh('git ls-files').split('\n').sort()
