@@ -63,7 +63,26 @@ const sh = (cmd, opts) =>
 // Called BEFORE spawning an orchestrator to catch cross-deliverable breaks
 // early (node-level, deterministic — no agent variability).
 const validateHandoff = (n) => {
-  if (n < 2 || n > 6) return // P1 has no upstream; P7/P8 are P6-dependent
+  if (n === 1) {
+    // Bug W4 fix: P1 has no upstream phase, but the bootstrap phase (P0)
+    // leaves a .methodology/ tree that P1 depends on. Run a tight P1
+    // preflight so the orchestrator never spawns against a broken
+    // baseline. Pre-fix, a corrupted quality_manifest.json or a stale
+    // SPEC.md-to-manifest mismatch would only be caught by P1's
+    // postcondition, wasting an agent session.
+    try {
+      // Manifest must exist + be valid JSON
+      const sub = verifySubmoduleSource()
+      if (!sub.ok) throw new Error(`bootstrap residue: ${sub.reason}`)
+      const mf = verifyManifestJSON()
+      if (!mf.ok) throw new Error(`bootstrap residue: ${mf.reason}`)
+      log('Handoff P0→P1: bootstrap residue OK (submodule + manifest valid)')
+    } catch (e) {
+      throw new Error(`BLOCKED: handoff P0→P1 failed (W4). Fix bootstrap artifacts first:\n${e.message}`)
+    }
+    return
+  }
+  if (n > 6) return // P7/P8 are P6-dependent but their own gates run inline
   const fromPhase = n - 1
   try {
     sh(`${VENV_PY} harness_cli.py validate-handoff --from-phase ${fromPhase} --project .`)
@@ -190,6 +209,13 @@ const verifyP3PostGate2Structural = () => {
 // Plan §B.2 requires every FR to have `.sessi-work/sentinels/g1_<fr>.flag`
 // before p3-post-gate2 push. Workflow-level check catches orchestrator that
 // skips the sentinel write (postcondition passes, push-milestone fails later).
+//
+// Bug W1 fix: must match the framework's `_sentinel_path()` naming
+// (`{fr_id.replace("-", "").lower()}` → `g1_fr01.flag`), NOT a plain
+// `fr.toLowerCase()` (which yields `g1_fr-01.flag`). After the framework
+// Bug #120 fix the hyphenated name no longer exists on disk, so this
+// check would always fail. Strip the hyphen here so the workflow side
+// agrees with the framework side and there is exactly one naming rule.
 const verifyP3Sentinels = () => {
   // FR count from SPEC.md `### FR-XX` headers
   const spec = fs.readFileSync(`${REPO}/SPEC.md`, 'utf-8')
@@ -198,7 +224,7 @@ const verifyP3Sentinels = () => {
   const sentDir = `${REPO}/.sessi-work/sentinels`
   const missing = []
   for (const fr of frIds) {
-    const flag = `${sentDir}/g1_${fr.toLowerCase()}.flag`
+    const flag = `${sentDir}/g1_${fr.toLowerCase().replace(/-/g, '')}.flag`
     if (!fs.existsSync(flag)) missing.push(fr)
   }
   if (missing.length) return { ok: false, reason: `missing Gate 1 sentinels for: ${missing.join(', ')}` }
@@ -309,7 +335,17 @@ PHASE 3 MILESTONES (10-Push Strategy ③④⑤):
   > Last stable snapshot before Gate 2 evaluation.
 - **PUSH ⑤ — p3-post-gate2** (FORMAL P3 exit, v2.9.1 B.2):
   \`${VENV_PY} harness_cli.py push-milestone --type p3-post-gate2 --project . --fr-ids <comma-separated>\`
-  > The push validates: gate2_result.json composite ≥ 75 + every FR has .sessi-work/sentinels/g1_<fr>.flag.
+  > The push validates: gate2_result.json composite ≥ 75 + every FR has
+  > its Gate 1 sentinel at .sessi-work/sentinels/g1_<fr>.flag.
+  >
+  > **Sentinel filename rule** (Bug W1 + W2 fix): the framework writes
+  > the file as \`g1_${'${fr_id}'}.replace("-", "").lower()}.flag\` —
+  > e.g. \`g1_fr01.flag\` for FR-01, NOT \`g1_fr-01.flag\`. Compute it
+  > with: \`echo "g1_$(echo ${fr_id} | tr -d - | tr 'A-Z' 'a-z').flag"\`
+  > or, when scripting, \`pathlib.Path('.sessi-work/sentinels') /
+  > f"g1_{fr_id.replace('-', '').lower()}.flag"\`. The push-milestone
+  > call itself does the existence check, so getting the filename
+  > right is what makes that check pass.
   > On success, HANDOVER.md is written with resume_phase=4.
   > After push: run \`advance-phase --completed 3 --project .\`
 ` : ''}
@@ -355,6 +391,28 @@ const POSTCONDITIONS = {
       if (!exists(`01-requirements/${f}`) && !exists(f)) throw new Error(`P1: ${f} missing`)
     }
     if (!exists('TEST_INVENTORY.yaml')) throw new Error('P1: TEST_INVENTORY.yaml missing')
+    // Bug W3 fix: quality_manifest.fr_ids must list every FR declared in
+    // SPEC.md. Pre-fix, P1 postcondition trusted that init-project would
+    // populate the manifest correctly, and only checked the file existed.
+    // A partial manifest (e.g. only FR-01/02 registered, FR-03 missing) then
+    // passed P1, but P3 entry_gate would block when the per-FR sentinel for
+    // FR-03 was expected. Catch the mismatch here so the orchestrator
+    // re-runs the manifest generator with the fresh SPEC before advancing.
+    const specSrc = fs.readFileSync(`${REPO}/SPEC.md`, 'utf-8')
+    const specFrs = [...specSrc.matchAll(/^###\s+FR-(\d+)/gm)].map((m) => `FR-${m[1]}`)
+    if (specFrs.length === 0) throw new Error('P1: SPEC.md has no FR headers — cannot verify manifest')
+    const mf = readJson('.methodology/quality_manifest.json')
+    const mfFrs = Array.isArray(mf.fr_ids) ? mf.fr_ids : []
+    const missing = specFrs.filter((fr) => !mfFrs.includes(fr))
+    const extra = mfFrs.filter((fr) => !specFrs.includes(fr))
+    if (missing.length || extra.length) {
+      throw new Error(
+        `P1: quality_manifest.fr_ids inconsistent with SPEC.md — ` +
+        `missing=${JSON.stringify(missing)}, extra=${JSON.stringify(extra)}. ` +
+        `Re-run \`harness_cli.py manifest\` (or init-project) to refresh.`
+      )
+    }
+    log(`P1: fr_ids in manifest match SPEC.md (${mfFrs.length} FR(s))`)
     if (readJson('.methodology/state.json').current_phase < 2) throw new Error('P1: state not advanced')
   },
   2: () => {
