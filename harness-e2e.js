@@ -559,6 +559,17 @@ const POSTCONDITIONS = {
       if (e.stderr) throw new Error(`P5: ${e.message}\n${e.stderr}`)
       throw e
     }
+    // D4 spec-coverage ≥ 90% (plan:156-159). advance-phase only checks ≥ 80%
+    // (line 167), so a P5 at 80-89% would advance and later fail Gate 4. Fail
+    // loud here at P5 exit instead. Re-use the framework CLI to keep the
+    // threshold logic in one place; treat exit 0 as pass, non-zero as fail.
+    try {
+      sh(`${VENV_PY} harness_cli.py spec-coverage-check --project . --threshold 90.0`, { timeout: 120000 })
+      log('P5: D4 spec-coverage ≥ 90% OK')
+    } catch (e) {
+      const out = (e.stdout || '') + (e.stderr || '')
+      throw new Error(`P5: D4 spec-coverage ≥ 90% failed — Gate 4 will block.\n${out}`)
+    }
     if (readJson('.methodology/state.json').current_phase < 6) throw new Error('P5: state not advanced')
   },
   6: () => {
@@ -579,8 +590,28 @@ const POSTCONDITIONS = {
     if (!exists('08-config/RELEASE_CHECKLIST.md') && !exists('RELEASE_CHECKLIST.md')) throw new Error('P8: RELEASE_CHECKLIST missing')
     if (!exists('FINAL_SIGN_OFF.md')) throw new Error('P8: FINAL_SIGN_OFF missing')
     if (!exists('.methodology-archive')) throw new Error('P8: .methodology-archive/ missing (p8-archive-check)')
+    // P8 completion: do NOT rely on `st.pipeline_complete` or `st.state === 'COMPLETE'`.
+    // The framework never sets either — `harness_cli.py` writes `state: "RUNNING"`
+    // and there is no `pipeline_complete` field anywhere in the framework.
+    // Pre-fix, this postcondition always failed silently, blocking P8 exit.
+    // Use conditions the framework DOES guarantee:
+    //   (a) last_milestone_command recorded a p8 push
+    //   (b) .methodology-archive/ has at least one file (proves p8-archive ran)
     const st = readJson('.methodology/state.json')
-    if (!(st.pipeline_complete === true || st.state === 'COMPLETE')) throw new Error('P8: pipeline not COMPLETE')
+    const lastMs = String(st.last_milestone_command || '')
+    if (!/p8/i.test(lastMs)) {
+      throw new Error(
+        `P8: last_milestone_command does not reference p8 (got: ${JSON.stringify(lastMs)}). ` +
+        `Did the orchestrator run \`push-milestone --type p8\`?`
+      )
+    }
+    // The archive dir is created by the orchestrator before the p8 push.
+    // Spot-check that it has content (a single-file archive is suspicious).
+    const archiveFiles = sh(`ls -1 ${REPO}/.methodology-archive/ 2>/dev/null | wc -l`).trim()
+    if (!archiveFiles || parseInt(archiveFiles, 10) < 1) {
+      throw new Error('P8: .methodology-archive/ is empty — p8-archive step missing')
+    }
+    log(`P8: pipeline-complete (last_milestone=${lastMs}, archive=${archiveFiles} file(s))`)
   },
 }
 
