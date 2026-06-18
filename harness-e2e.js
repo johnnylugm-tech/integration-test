@@ -154,18 +154,33 @@ const validateHandoff = (n) => {
     // Bug W4 fix: P1 has no upstream phase, but the bootstrap phase (P0)
     // leaves a .methodology/ tree that P1 depends on. Run a tight P1
     // preflight so the orchestrator never spawns against a broken
-    // baseline. Pre-fix, a corrupted quality_manifest.json or a stale
-    // SPEC.md-to-manifest mismatch would only be caught by P1's
-    // postcondition, wasting an agent session.
+    // baseline. Pre-fix, a corrupted submodule pointer or a stale
+    // .gitmodules would only be caught by P1's postcondition, wasting
+    // an agent session.
+    // Bug W5 fix: quality_manifest.json is CREATED BY P1's run-phase
+    // (see phase1_plan.md step 1), so it does NOT exist yet at this
+    // handoff point. Checking for it here causes a false BLOCKED. The
+    // manifest preflight is moved to P2's handoff (P1 → P2) where it
+    // becomes a real bootstrap-residue / P1-deliverable check.
     try {
-      // Manifest must exist + be valid JSON
       const sub = verifySubmoduleSource()
       if (!sub.ok) throw new Error(`bootstrap residue: ${sub.reason}`)
-      const mf = verifyManifestJSON()
-      if (!mf.ok) throw new Error(`bootstrap residue: ${mf.reason}`)
-      log('Handoff P0→P1: bootstrap residue OK (submodule + manifest valid)')
+      log('Handoff P0→P1: bootstrap residue OK (submodule valid)')
     } catch (e) {
       throw new Error(`BLOCKED: handoff P0→P1 failed (W4). Fix bootstrap artifacts first:\n${e.message}`)
+    }
+    return
+  }
+  if (n === 2) {
+    // Bug W5 fix: P1 must have produced .methodology/quality_manifest.json
+    // via run-phase --phase 1. Check it before P2's orchestrator spawns so
+    // a broken P1 output fails fast instead of wasting a P2 agent session.
+    try {
+      const mf = verifyManifestJSON()
+      if (!mf.ok) throw new Error(`P1 deliverable missing: ${mf.reason}`)
+      log(`Handoff P1→P2: quality_manifest OK (${mf.keys} keys)`)
+    } catch (e) {
+      throw new Error(`BLOCKED: handoff P1→P2 failed (W5). Re-run P1 first:\n${e.message}`)
     }
     return
   }
