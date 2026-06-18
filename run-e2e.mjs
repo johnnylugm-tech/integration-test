@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// /tmp/run-e2e.mjs — node-native E2E driver for harness-e2e.js
+// run-e2e.mjs — node-native E2E driver for harness-e2e.js
 //
-// LIVES OUTSIDE THE REPO on purpose. The harness-e2e.js:9-14 baseline
-// contract mandates exactly 2 tracked files (SPEC.md + harness-e2e.js).
-// The driver is invoked as `node /tmp/run-e2e.mjs` from REPO.
+// LOCATION: committed to repo root as part of the v3 baseline reset. The
+// earlier version lived at /tmp/run-e2e.mjs to preserve a 2-file baseline
+// (SPEC.md + harness-e2e.js). That constraint is now relaxed: baseline
+// tag = SPEC.md + harness-e2e.js (3 bug-fixes) + run-e2e.mjs.
 //
 // PURPOSE
 //   Run the full P0→P8 harness-methodology validation pipeline without
@@ -25,6 +26,17 @@
 //   `.mjs` / dynamic-import path. vm.SourceTextModule hits the same error.
 //   Eval-extraction sidesteps it because we never run the source as a
 //   module — we just lift the const declarations.
+//
+// DELIBERATE DUPLICATES (vs. harness-e2e.js baseline)
+//   The driver re-implements `sh`, `exists`, `readJson`, `gateScore`,
+//   `saveCheckpoint`, `detect429`, `REPO`, `START`, `MODEL`, `HARNESS_REMOTE`,
+//   `PY`, `VENV_PY` locally rather than extracting them from the source. Reason:
+//   several baseline consts (`saveCheckpoint`, `loadCheckpoint`) share a single
+//   `// === Checkpoint save/resume ===` section header, so `extractConstBlock`
+//   would pull in unrelated siblings and either truncate or over-fetch. Local
+//   copies keep the extraction list focused on the 10 helpers POSTCONDITIONS
+//   actually depends on. If baseline changes those local helpers' behaviour,
+//   the driver will diverge silently — keep this list in sync during audits.
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -211,12 +223,42 @@ function spawnOrchestrator(n, prompt) {
   return { exitCode: result.status, signal: result.signal, stdout, stderr, combined: stdout + '\n' + stderr }
 }
 
+// Find the { that opens the JSON block after `marker`. Then walk braces.
+// Returns the balanced JSON string (including outer braces), or null.
+function extractBalancedJson(text, marker) {
+  // Marker on its own line; the { may be on the same line (after a space)
+  // or on the next non-empty line.
+  const markerRe = new RegExp(`^${marker}(?:\\s|$)`, 'm')
+  const m = text.match(markerRe)
+  if (!m) return null
+  let i = m.index + m[0].length
+  while (i < text.length && /\s/.test(text[i])) i++
+  if (text[i] !== '{') return null
+  const jsonStart = i
+  let depth = 0
+  let inStr = false
+  let escape = false
+  for (; i < text.length; i++) {
+    const c = text[i]
+    if (escape) { escape = false; continue }
+    if (c === '\\') { escape = true; continue }
+    if (c === '"') { inStr = !inStr; continue }
+    if (inStr) continue
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return text.slice(jsonStart, i + 1)
+    }
+  }
+  return null
+}
+
 function parsePhaseResult(spawnOut) {
   const text = spawnOut.combined
-  const bugMatch = text.match(/^===FRAMEWORK_BUG===\s*(\{[\s\S]*?\})\s*$/m)
-  if (bugMatch) return { kind: 'frameworkBug', report: bugMatch[1] }
-  const doneMatch = text.match(/^===PHASE_DONE===\s*(\{[\s\S]*?\})\s*$/m)
-  if (doneMatch) return { kind: 'phaseDone', report: doneMatch[1] }
+  const bugJson = extractBalancedJson(text, '===FRAMEWORK_BUG===')
+  if (bugJson !== null) return { kind: 'frameworkBug', report: bugJson }
+  const doneJson = extractBalancedJson(text, '===PHASE_DONE===')
+  if (doneJson !== null) return { kind: 'phaseDone', report: doneJson }
   return { kind: 'incomplete', exitCode: spawnOut.exitCode, tail: text.slice(-2000) }
 }
 
