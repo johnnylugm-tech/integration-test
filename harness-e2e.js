@@ -428,7 +428,7 @@ PHASE 3 MILESTONES (10-Push Strategy ③④⑤):
   > **Sentinel filename rule** (Bug W1 + W2 fix): the framework writes
   > the file as \`g1_${'${fr_id}'}.replace("-", "").lower()}.flag\` —
   > e.g. \`g1_fr01.flag\` for FR-01, NOT \`g1_fr-01.flag\`. Compute it
-  > with: \`echo "g1_$(echo ${fr_id} | tr -d - | tr 'A-Z' 'a-z').flag"\`
+  > with: \`echo "g1_$(echo \${fr_id} | tr -d - | tr 'A-Z' 'a-z').flag"\`
   > or, when scripting, \`pathlib.Path('.sessi-work/sentinels') /
   > f"g1_{fr_id.replace('-', '').lower()}.flag"\`. The push-milestone
   > call itself does the existence check, so getting the filename
