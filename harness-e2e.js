@@ -29,6 +29,93 @@
 //   --no-session-persistence
 // then run the same postcondition checks.
 
+// === E2E LESSONS (Bug #116-#120, #H, W1-W4) — must survive baseline reset ===
+//
+// These rules are derived from the v2.9.1 P1→P4 run. They are embedded here
+// (in baseline) rather than in CLAUDE.md so they persist across the
+// `git reset --hard baseline` step at the start of every validation round.
+// After bootstrap, re-emit them into CLAUDE.md via _installE2eLessons() so
+// the running project keeps a copy in its working tree.
+//
+// Sentinel naming rule (Bug #120, W1, W2 — applies to BOTH framework and
+// workflow, single source of truth):
+//   path = .sessi-work/sentinels/g1_<fr_id with hyphens removed, lower>.flag
+//   e.g.  g1_fr01.flag for FR-01,  g1_fr02.flag for FR-02
+//   Framework: framework/_sentinel_path()
+//   Workflow : harness-e2e.js verifyP3Sentinels()
+//   Shell    : g1_$(echo "$fr" | tr -d - | tr 'A-Z' 'a-z').flag
+//   Any new check that touches sentinels MUST go through one of the above
+//   three; do not invent a new naming rule.
+//
+// Bare pytest rule (Bug #117 + 6-site extension):
+//   ALWAYS [sys.executable, '-m', 'pytest', ...] in subprocess.run, NEVER
+//   ['pytest', ...]. Bare 'pytest' on macOS PATH resolves to
+//   /Library/Developer/CommandLineTools/.../Python3.framework (3.9.6) and
+//   will fail collection for any 3.10+ source syntax (datetime.UTC, PEP
+//   604 unions, match statement). Patched sites:
+//     - core/quality_gate/phase_truth_verifier.py
+//     - core/quality_gate/stage_pass_generator.py
+//     - core/auto_fix/strategies.py
+//     - enforcement/framework_enforcer.py
+//     - harness_cli.py (2 sites: collect-only + coverage)
+//
+// mkstemp / atomic write (reliability_lint py-mkstemp-outside-try):
+//   Wrap tempfile.mkstemp in try/finally with os.unlink(tmp) on failure.
+//   try/except is not enough — the semgrep rule requires finally.
+//
+// quality_manifest gate_results (Bug #118):
+//   After finalize-gate writes .methodology/gate{N}_result.json, the
+//   manifest's gate_results.gate{N} is now auto-patched. Do NOT hand-edit
+//   the manifest's gate_results; let the framework do it.
+//
+// SAB.json modules (Bug #119):
+//   Prefer PROJECT-RELATIVE FULL PATHS ("03-development/src/taskq/cli.py")
+//   over dotted ("taskq.cli") or slash ("taskq/cli.py") forms. Both the
+//   constitution check and the drift check now use the shared
+//   sab_module_to_path_variants() helper from detection/drift_detector.py.
+//
+// .sessi-work rmtree (Bug #H):
+//   advance-phase preserves .sessi-work/sentinels/ across the cleanup.
+//   rmtree() is scoped so the next phase's validate-handoff can still
+//   find g1_frNN.flag. The pre-fix behavior wiped sentinels and broke
+//   every validate-handoff precondition check.
+//
+// CRG community_cohesion (proposal A, still unfixed upstream):
+//   For codebases with < 50 functions per file, expect Gate 3
+//   architecture = 0. Hub-and-spoke orchestrator pattern is a legitimate
+//   architecture but the framework's CRG formula does not normalize
+//   by codebase size. Pre-emptively write a hub-and-spoke justification
+//   in gate3_result.json.architecture.tool_evidence.
+//
+// P1 preflight (Bug W3, W4):
+//   - validateHandoff now runs a P0→P1 preflight (submodule + manifest
+//     valid JSON) instead of skipping P1 entirely.
+//   - P1 postcondition cross-checks quality_manifest.fr_ids against
+//     SPEC.md ### FR-XX headers; mismatches fail-loud before any agent
+//     spawn.
+//
+// P1..P8 postcondition (B.1 / B.2 / B.3):
+//   - P1: SRS / SPEC_TRACKING / TRACEABILITY / TEST_INVENTORY +
+//     quality_manifest.fr_ids ⊇ SPEC.md FRs
+//   - P2: SAD / ADR / TEST_SPEC (B.3: must have parseable table rows) +
+//     quality_manifest valid JSON + SAB.json present
+//   - P3: gate2_result composite ≥ 75 + p3-post-gate2 structural in
+//     HANDOVER.md (not just a string) + per-FR Gate 1 sentinels
+//   - P4: bug_hunt_report (Guard #8: every confirmed critical/high has
+//     resolution with fix_commit|repro_test OR refute_evidence) +
+//     gate3 ≥ 80 + TEST_PLAN/TEST_RESULTS/COVERAGE_REPORT
+//   - P5: BASELINE + VERIFICATION_REPORT + push-milestone p5-baseline
+//   - P6: gate4 ≥ 85 + QUALITY_REPORT + RELEASE_NOTES + FINAL_SIGN_OFF
+//   - P7: RISK_REGISTER / RISK_MITIGATION_PLANS / RISK_STATUS_REPORT
+//   - P8: CONFIG_RECORDS + RELEASE_CHECKLIST + .methodology-archive +
+//     state.pipeline_complete = true
+//
+// HTTP 429 / session quota:
+//   The orchestrator retries up to 3 times with 30s / 60s / 120s
+//   backoff. detect429() matches /rate.limit|429|session.*quota/i.
+//   Exhausted retries save checkpoint and return — resume with
+//   args.startPhase=N. (harness-e2e.js phase loop.)
+
 export const meta = {
   name: 'harness-e2e',
   description: 'Full P1→P8 harness-methodology pipeline validation on the taskq SPEC',
@@ -549,7 +636,103 @@ if (START <= 0) {
   if (!bundle.ok) throw new Error(`bootstrap: ${bundle.reason}`)
   log(`Bootstrap: harness @ ${bundle.head.slice(0,8)} contains B-bundle markers`)
 
+  // Re-install E2E lessons into CLAUDE.md. init-project regenerates
+  // CLAUDE.md from a template (auto block only); the W1-W4 + Baseline
+  // 12 rules that we curate are NOT in the framework template and
+  // would otherwise be lost on the next baseline reset. Append them
+  // to the auto block as a "lessons" section so the working tree has
+  // a copy. The canonical source of truth is the comment block at the
+  // top of this file.
+  _installE2eLessons()
+
   log('Bootstrap complete.')
+}
+
+// === E2E lessons re-installer (Bug W1-W4 survival) ===
+// Reads the lessons embedded in the E2E_LESSONS_BLOCK constant above and
+// injects them into CLAUDE.md as a clearly-marked section AFTER the
+// framework-managed auto block. Idempotent: if the marker is already
+// present, skip. Called once during bootstrap so the working tree
+// contains the lessons even though baseline only carries the 2 files
+// SPEC.md + harness-e2e.js.
+const _LESSONS_MARKER_START = '<!-- e2e:lessons-start -->'
+const _LESSONS_MARKER_END   = '<!-- e2e:lessons-end -->'
+const _E2E_LESSONS_RULES = [
+  '## E2E Lessons (Bug #116-#120, #H, W1-W4)',
+  '',
+  '> These rules are the embedded-survival copy of the lessons block at the',
+  '> top of `harness-e2e.js`. They are re-installed into CLAUDE.md during',
+  '> bootstrap (see `_installE2eLessons()`) because CLAUDE.md itself is NOT',
+  '> in the baseline tag and would otherwise be wiped on every reset.',
+  '',
+  '### L1. Sentinel naming (Bug #120, W1, W2 — framework + workflow)',
+  '- File: `.sessi-work/sentinels/g1_<fr_id with hyphens removed, lower>.flag`',
+  '- e.g. `g1_fr01.flag` for FR-01, `g1_fr02.flag` for FR-02',
+  '- Framework: `framework/_sentinel_path()`',
+  '- Workflow: `harness-e2e.js verifyP3Sentinels()`',
+  '- Shell: `g1_$(echo "$fr" | tr -d - | tr "A-Z" "a-z").flag`',
+  '- Any new sentinel check MUST go through one of the above; do NOT invent a new naming rule.',
+  '',
+  '### L2. Bare pytest (Bug #117 + 6-site extension)',
+  '- Always `[sys.executable, "-m", "pytest", ...]` in `subprocess.run`.',
+  '- Bare `["pytest", ...]` on macOS PATH → CommandLineTools 3.9.6 → collection fails for 3.10+ source.',
+  '- Patched sites: `core/quality_gate/phase_truth_verifier.py`, `core/quality_gate/stage_pass_generator.py`, `core/auto_fix/strategies.py`, `enforcement/framework_enforcer.py`, `harness_cli.py` (collect-only + coverage).',
+  '',
+  '### L3. mkstemp / atomic write (reliability_lint py-mkstemp-outside-try)',
+  '- Wrap `tempfile.mkstemp` in `try/finally` with `os.unlink(tmp)` on failure.',
+  '- `try/except` is not enough — semgrep requires `finally`.',
+  '',
+  '### L4. quality_manifest gate_results (Bug #118)',
+  '- After `finalize-gate` writes `gate{N}_result.json`, the manifest\'s `gate_results.gate{N}` is auto-patched.',
+  '- Do NOT hand-edit the manifest\'s gate_results; let the framework do it.',
+  '',
+  '### L5. SAB.json modules (Bug #119)',
+  '- Prefer PROJECT-RELATIVE FULL PATHS (`"03-development/src/taskq/cli.py"`).',
+  '- Dotted (`"taskq.cli"`) and slash (`"taskq/cli.py"`) forms still work via the shared `sab_module_to_path_variants()` helper in `detection/drift_detector.py`, but full paths have zero ambiguity.',
+  '',
+  '### L6. .sessi-work rmtree (Bug #H)',
+  '- `advance-phase` preserves `.sessi-work/sentinels/` across the cleanup.',
+  '- Pre-fix behavior wiped sentinels and broke every validate-handoff precondition check.',
+  '',
+  '### L7. CRG community_cohesion (proposal A, still unfixed upstream)',
+  '- For codebases with < 50 functions per file, expect Gate 3 `architecture = 0`.',
+  '- Hub-and-spoke orchestrator pattern is legitimate; pre-emptively write a justification in `gate3_result.json.architecture.tool_evidence`.',
+  '',
+  '### L8. P1 preflight (Bug W3, W4)',
+  '- `validateHandoff` runs a P0→P1 preflight (submodule + manifest valid JSON) instead of skipping P1 entirely.',
+  '- P1 postcondition cross-checks `quality_manifest.fr_ids` against `SPEC.md ### FR-XX` headers; mismatches fail-loud before any agent spawn.',
+  '',
+  '### L9. HTTP 429 / session quota',
+  '- The orchestrator retries up to 3 times with 30s / 60s / 120s backoff.',
+  '- `detect429()` matches `/rate.limit|429|session.*quota/i`.',
+  '- Exhausted retries save checkpoint and return — resume with `args.startPhase=N`.',
+  '',
+  '### L10. Baseline update protocol',
+  '- Baseline commit tree must contain only `SPEC.md` + `harness-e2e.js`.',
+  '- After editing `harness-e2e.js`:',
+  '  ```',
+  '  TREE=$(git ls-tree HEAD SPEC.md harness-e2e.js | git mktree)',
+  '  NEW=$(echo "v3.3 + <label>" | git commit-tree $TREE -p HEAD)',
+  '  git tag -f baseline $NEW',
+  '  git push origin HEAD main && git push origin baseline --force',
+  '  ```',
+  '- Do NOT move baseline to a commit that contains taskq code — that breaks the bootstrap contract.',
+  '',
+]
+const _installE2eLessons = () => {
+  const claudePath = `${REPO}/CLAUDE.md`
+  let existing = ''
+  try { existing = fs.readFileSync(claudePath, 'utf-8') } catch { existing = '' }
+  // Idempotency: if marker present, just no-op (caller can still call
+  // multiple times safely).
+  if (existing.includes(_LESSONS_MARKER_START)) {
+    log('Bootstrap: E2E lessons already present in CLAUDE.md (idempotent)')
+    return
+  }
+  const block = _LESSONS_MARKER_START + '\n' + _E2E_LESSONS_RULES.join('\n') + '\n' + _LESSONS_MARKER_END + '\n'
+  const next = existing.endsWith('\n') ? existing + '\n' + block : existing + '\n\n' + block
+  fs.writeFileSync(claudePath, next)
+  log(`Bootstrap: installed ${_E2E_LESSONS_RULES.length - 1} E2E lesson lines into CLAUDE.md`)
 }
 
 // === Phases 1..8 ===
