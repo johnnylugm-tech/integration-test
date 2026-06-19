@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "ea334164ea9aa8754faf41f605d08765a9e51736",
-  "content_sha256": "0e9af736eaab7aa3d93c579d16720fc95de0264177c7db5a3839c04f7612b92a",
+  "git_sha": "19c8c84216a9e5c775427a5e703a4d0f6276c26e",
+  "content_sha256": "d7f077cffd6ade215f3e2bcea0e98e7972c8a013ef06186874988e5ec489c6d2",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -9,24 +9,42 @@
     "schema_version": "harness/traceability/overlay/v1",
     "project_id": "integration-test",
     "completeness": {
-      "total_requirements": 0,
-      "srs_coverage": "0%",
-      "code_coverage": "0%",
-      "test_coverage": "0%",
-      "verification_rate": "0%",
-      "total_links": 0,
+      "total_requirements": 1,
+      "srs_coverage": "100.0%",
+      "code_coverage": "0.0%",
+      "test_coverage": "0.0%",
+      "verification_rate": "0.0%",
+      "total_links": 1,
       "missing_mappings": {
         "fr_without_srs": [],
-        "fr_without_code": [],
-        "fr_without_test": []
+        "fr_without_code": [
+          "FR-01"
+        ],
+        "fr_without_test": [
+          "FR-01"
+        ]
       }
     },
     "missing": {
       "fr_without_srs": [],
-      "fr_without_code": [],
-      "fr_without_test": []
+      "fr_without_code": [
+        "FR-01"
+      ],
+      "fr_without_test": [
+        "FR-01"
+      ]
     },
-    "requirements": {},
+    "requirements": {
+      "FR-01": {
+        "fr_id": "FR-01",
+        "status": "pending",
+        "srs_section": "SAD.md",
+        "code_files": [],
+        "test_files": [],
+        "sad_module": "—",
+        "priority": "HIGH"
+      }
+    },
     "annotations": {}
   }
 }
