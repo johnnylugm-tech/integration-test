@@ -54,17 +54,18 @@ export const meta = {
 }
 
 // ---- Resolve REPO from args (no process.* / no fs) ----
-let REPO = null
+// Accept args.repo if provided; otherwise default to the canonical project root.
+// The default is the intended deployment target for this workflow, so missing args
+// is not a hard error — we just use the known location.
+const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+let REPO = DEFAULT_REPO
 if (typeof args === 'string') {
   try { args = JSON.parse(args) } catch {}
 }
-if (args && typeof args.repo === 'string' && args.repo.length > 0) {
+if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) {
   REPO = args.repo
 }
-if (!REPO) {
-  log('FATAL: args.repo required. Pass Workflow({ args: { repo: "/abs/path" } })')
-  return { error: 'args.repo missing' }
-}
+log('REPO = ' + REPO)
 const PY = '/usr/bin/python3'
 const MAX_B_ROUNDS = 5  // HR-12
 
@@ -161,18 +162,43 @@ await agent(
 )
 
 // ---- Phase: Load PROJECT_BRIEF.md (needed as DOC 1 for SRS B review per phase1_plan.md) ----
+// v3 BUG: Read-tool-based brief loader hallucinated content from CLAUDE.md / memory.
+// v4 FIX: use Bash `cat` for unambiguous byte-level read + content verification.
+// Bash is more reliable because the agent cannot substitute training-data content
+// for actual file bytes when stdout is the only output channel.
 
 phase('Load Project Brief')
-log('Read PROJECT_BRIEF.md content via Read tool agent')
+log('Read PROJECT_BRIEF.md via Bash cat (v4 fix for v3 Read-tool hallucination)')
 
-const briefText = await agent(
-  'Use the Read tool to read ' + REPO + '/PROJECT_BRIEF.md.\n'
-  + 'Return ONLY the complete file content as plain text. No commentary, no headings, no JSON wrapping.\n'
-  + 'Return the file content verbatim as your final message.',
+const briefLoadResult = await agent(
+  'YOU ARE THE PROJECT BRIEF LOADER. Your ONLY job: run ONE bash command and return stdout verbatim.\n'
+  + 'REPO: ' + REPO + '\n\n'
+  + 'CRITICAL: Use ONLY the Bash tool. Do NOT use Read tool. Do NOT use any other tool.\n'
+  + 'Do NOT add commentary, headers, or any wrapper around the file content.\n\n'
+  + 'Bash command (run EXACTLY this, no other commands before/after):\n'
+  + 'cat ' + REPO + '/PROJECT_BRIEF.md\n\n'
+  + 'Return the EXACT stdout as your final message. The file content IS your response.\n'
+  + 'If the file does not exist, return exactly: ERROR: PROJECT_BRIEF.md not found at <path>',
   { label: 'load-project-brief', phase: 'Load Project Brief', agentType: 'general-purpose' },
 )
-const projectBriefContent = typeof briefText === 'string' ? briefText : String(briefText ?? '')
-log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars')
+
+let projectBriefContent = typeof briefLoadResult === 'string' ? briefLoadResult : String(briefLoadResult ?? '')
+// Strip any leading/trailing whitespace the agent may have added
+projectBriefContent = projectBriefContent.trim()
+
+// Verify content looks like PROJECT_BRIEF.md (defensive: prevent LLM agent substitution)
+// Real file starts with "# Project Brief" — check that AND minimum length
+const briefLooksValid = projectBriefContent.startsWith('# Project Brief') && projectBriefContent.length >= 50
+if (!briefLooksValid) {
+  return {
+    error: 'PROJECT_BRIEF.md load FAILED validation. Loaded content does not start with "# Project Brief" or is too short.',
+    repo: REPO,
+    loaded_length: projectBriefContent.length,
+    loaded_preview: projectBriefContent.slice(0, 300),
+    hint: 'The brief loader agent may have read a different file or hallucinated content. Verify REPO is correct and PROJECT_BRIEF.md exists at that path.',
+  }
+}
+log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars | first line: ' + projectBriefContent.split('\n')[0])
 
 // ---- Sub-Task 1/4: SRS.md ----
 
