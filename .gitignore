@@ -1,0 +1,15 @@
+
+# harness-methodology runtime (auto-added by git_strategy)
+.sessi-work/
+.methodology/last_block.md
+.methodology/steering_history.json
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.mutmut-cache/
+.code-review-graph/
