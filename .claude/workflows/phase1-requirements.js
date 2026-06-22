@@ -134,28 +134,31 @@ function buildBPrompt(role, deliverableName, docs, checklist) {
 phase('Preflight')
 log('Preflight: run-phase 1 + CI wiring + load-context')
 
-await agent(
-  'YOU ARE THE PREFLIGHT ORCHESTRATOR. Your ONLY job is to run 3 bash commands and report.\n'
+const preflightReport = await agent(
+  'YOU ARE THE PREFLIGHT ORCHESTRATOR. Your ONLY job is to run EXACTLY 3 bash commands (listed below) and report.\n'
   + 'REPO: ' + REPO + '\n'
   + 'PYTHON: ' + PY + '\n\n'
-  + 'Steps (run via Bash tool, in order, stop on first unrecoverable error):\n'
-  + '1. Run: ' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 1 --project ' + REPO + '\n'
-  + '   If it PASSES: report FULL stdout.\n'
-  + '   If it FAILS: fix FSM/Constitution/Drift issues using your tools. Re-run run-phase after each fix. Max 3 attempts.\n'
+  + 'EXHAUSTIVE STEP LIST — run ONLY these 3 steps, in order:\n'
+  + '1. ' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 1 --project ' + REPO + '\n'
+  + '   If PASSES: note it. If FAILS: fix FSM/Constitution/Drift issues, re-run (max 3 attempts).\n'
   + '2. Verify CI wiring (Bash test -f for each):\n'
   + '   a. ' + REPO + '/.methodology/state.json — must exist and contain "current_phase": 1\n'
   + '   b. ' + REPO + '/.github/workflows/harness_quality_gate.yml — must exist\n'
   + '   c. ' + REPO + '/.git/hooks/prepare-commit-msg — must exist\n'
-  + '   If any missing, run: ' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 1 --project ' + REPO + ' (then re-verify).\n'
+  + '   If any missing: ' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 1 --project ' + REPO + ' --overwrite\n'
   + '3. mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 1 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase1_ctx.json\n\n'
   + 'Report final outcome as plain text: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <one-line reason>".\n\n'
-  + 'SCOPE RULES (you MUST obey):\n'
-  + '- DO NOT write any NEW P1 deliverables, but you MAY edit existing ones if required to fix Drift/Constitution.\n'
-  + '- DO NOT run any phase-transition command.\n'
+  + 'ABSOLUTE SCOPE RULES (violations will break the pipeline):\n'
+  + '- ONLY run the 3 steps above. Zero other harness commands.\n'
+  + '- DO NOT run validate-handoff — Phase 1 is the FIRST phase; there is no upstream phase to validate.\n'
+  + '- DO NOT run advance-phase, push-checkpoint, run-gate, or any phase-transition command.\n'
   + '- DO NOT do B-2 review, constitution-check, or peer-review work.\n'
-  + '- ONLY run the commands above, fix issues if needed, and report.',
+  + '- DO NOT write any new P1 deliverables (you MAY edit existing ones if needed to fix Drift/Constitution).',
   { label: 'preflight', phase: 'Preflight', agentType: 'general-purpose' },
 )
+if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightReport))) {
+  return { error: 'Phase 1 preflight did not PASS', raw: String(preflightReport ?? '').slice(-800) }
+}
 
 // ---- Phase: Load PROJECT_BRIEF.md (needed as DOC 1 for SRS B review per phase1_plan.md) ----
 // v3 BUG: Read-tool-based brief loader hallucinated content from CLAUDE.md / memory.
@@ -164,34 +167,32 @@ await agent(
 // for actual file bytes when stdout is the only output channel.
 
 phase('Load Project Brief')
-log('Read PROJECT_BRIEF.md via Bash cat (v4 fix for v3 Read-tool hallucination)')
+log('Read PROJECT_BRIEF.md via Bash cat (retry up to 3; validate full content)')
 
-const briefLoadResult = await agent(
-  'YOU ARE THE PROJECT BRIEF LOADER. Your ONLY job: run ONE bash command and return stdout verbatim.\n'
-  + 'REPO: ' + REPO + '\n\n'
-  + 'CRITICAL: Use ONLY the Bash tool. Do NOT use Read tool. Do NOT use any other tool.\n'
-  + 'Do NOT add commentary, headers, or any wrapper around the file content.\n\n'
-  + 'Bash command (run EXACTLY this, no other commands before/after):\n'
-  + 'cat ' + REPO + '/PROJECT_BRIEF.md\n\n'
-  + 'Return the EXACT stdout as your final message. The file content IS your response.\n'
-  + 'If the file does not exist, return exactly: ERROR: PROJECT_BRIEF.md not found at <path>',
-  { label: 'load-project-brief', phase: 'Load Project Brief', agentType: 'general-purpose' },
-)
-
-let projectBriefContent = typeof briefLoadResult === 'string' ? briefLoadResult : String(briefLoadResult ?? '')
-// Strip any leading/trailing whitespace the agent may have added
-projectBriefContent = projectBriefContent.trim()
-
-// Verify content looks like PROJECT_BRIEF.md (defensive: prevent LLM agent substitution)
-// Real file starts with "# Project Brief" — check that AND minimum length
-const briefLooksValid = projectBriefContent.startsWith('# Project Brief') && projectBriefContent.length >= 50
-if (!briefLooksValid) {
+let projectBriefContent = ''
+for (let bAttempt = 1; bAttempt <= 3; bAttempt++) {
+  log('  brief load attempt ' + bAttempt + '/3')
+  const briefLoadResult = await agent(
+    'YOU ARE THE PROJECT BRIEF LOADER. Failure mode: agents summarize instead of dump raw content. Do NOT do that.\n'
+    + 'REPO: ' + REPO + '\n\n'
+    + 'Run TWO bash commands:\n'
+    + '1. wc -c ' + REPO + '/PROJECT_BRIEF.md   (get exact byte count)\n'
+    + '2. cat ' + REPO + '/PROJECT_BRIEF.md      (print full content)\n\n'
+    + 'Your final message MUST be the COMPLETE raw output of cat — every character, every line.\n'
+    + 'Do NOT add any commentary, do NOT summarize, do NOT truncate, do NOT describe what you see.\n'
+    + 'Your message = file content. Nothing else.',
+    { label: 'load-brief-' + bAttempt, phase: 'Load Project Brief', agentType: 'general-purpose' },
+  )
+  const candidate = (typeof briefLoadResult === 'string' ? briefLoadResult : String(briefLoadResult ?? '')).trim()
+  if (candidate.length >= 200) { projectBriefContent = candidate; break }
+  log('  attempt ' + bAttempt + ' returned only ' + candidate.length + ' chars — retrying')
+}
+if (projectBriefContent.length < 200) {
   return {
-    error: 'PROJECT_BRIEF.md load FAILED validation. Loaded content does not start with "# Project Brief" or is too short.',
+    error: 'PROJECT_BRIEF.md load FAILED after 3 attempts (content too short — agent truncated).',
     repo: REPO,
     loaded_length: projectBriefContent.length,
     loaded_preview: projectBriefContent.slice(0, 300),
-    hint: 'The brief loader agent may have read a different file or hallucinated content. Verify REPO is correct and PROJECT_BRIEF.md exists at that path.',
   }
 }
 log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars | first line: ' + projectBriefContent.split('\n')[0])
@@ -562,7 +563,6 @@ for (let attempt = 1; attempt <= 5; attempt++) {
   log('  constitution FAIL — retrying (attempt ' + attempt + ')')
 }
 if (!constitutionPass) return { error: 'Constitution check FAIL after 5 attempts', raw: String(constitutionResult ?? '').slice(-500) }
-}
 
 // ---- Phase: Peer Review (holistic B review of all 4 deliverables per CHECKPOINT-PEER-REVIEW) ----
 

@@ -17,17 +17,17 @@ Provides complete **FR -> SRS -> Code -> Test** bidirectional traceability suppo
 
 | FR ID | Functional Requirement | SRS Section | Priority | Status |
 |-------|----------------------|-------------|----------|--------|
-| FR-01 | Task submission and validation | SS 2.1 | HIGH | DRAFT |
-| FR-02 | Task executor (subprocess, state machine, --all concurrency) | SS 2.2 | HIGH | DRAFT |
-| FR-03 | Retry + circuit breaker | SS 2.3 | HIGH | DRAFT |
-| FR-04 | Result TTL cache | SS 2.4 | MEDIUM | DRAFT |
-| FR-05 | CLI integration (subcommands, --json, exit codes) | SS 2.5 | HIGH | DRAFT |
-| NFR-01 | Performance: submit+status p95 < 50ms (100 iter) | SS 3.1 | HIGH | DRAFT |
-| NFR-02 | Security: shell=True forbidden; injection-char blacklist tested | SS 3.2 | HIGH | DRAFT |
-| NFR-03 | Reliability: atomic write + JSON-after-interrupt + breaker recovery | SS 3.3 | HIGH | DRAFT |
-| NFR-04 | Security: secret redaction in stdout_tail/stderr_tail | SS 3.4 | HIGH | DRAFT |
-| NFR-05 | Maintainability: docstring + [FR-XX] reference | SS 3.5 | MEDIUM | DRAFT |
-| NFR-06 | Deployability: TASKQ_* env vars + .env.example (8 entries) | SS 3.6 | MEDIUM | DRAFT |
+| FR-01 | Task submission and validation | SRS §2 / SPEC §3 FR-01 | HIGH | DRAFT |
+| FR-02 | Task executor (subprocess, state machine, --all concurrency) | SRS §2 / SPEC §3 FR-02 | HIGH | DRAFT |
+| FR-03 | Retry + circuit breaker | SRS §2 / SPEC §3 FR-03 | HIGH | DRAFT |
+| FR-04 | Result TTL cache | SRS §2 / SPEC §3 FR-04 | MEDIUM | DRAFT |
+| FR-05 | CLI integration (subcommands, --json, exit codes) | SRS §2 / SPEC §3 FR-05 | HIGH | DRAFT |
+| NFR-01 | Performance: submit+status p95 < 50ms (100 iter) | SRS §3 / SPEC §4 NFR-01 | HIGH | DRAFT |
+| NFR-02 | Security: shell=True forbidden; injection-char blacklist tested | SRS §3 / SPEC §4 NFR-02 | HIGH | DRAFT |
+| NFR-03 | Reliability: atomic write + JSON-after-interrupt + breaker recovery | SRS §3 / SPEC §4 NFR-03 | HIGH | DRAFT |
+| NFR-04 | Security: secret redaction in stdout_tail/stderr_tail | SRS §3 / SPEC §4 NFR-04 | HIGH | DRAFT |
+| NFR-05 | Maintainability: docstring + [FR-XX] reference | SRS §3 / SPEC §4 NFR-05 | MEDIUM | DRAFT |
+| NFR-06 | Deployability: TASKQ_* env vars + .env.example (8 entries) | SRS §3 / SPEC §4 NFR-06 | MEDIUM | DRAFT |
 
 ---
 
@@ -41,6 +41,7 @@ Provides complete **FR -> SRS -> Code -> Test** bidirectional traceability suppo
 | FR-01 | src/taskq/cli.py | submit_cmd | TBD | DRAFT |
 | FR-01 | src/taskq/store.py | add_task | TBD | DRAFT |
 | FR-01 | src/taskq/executor.py | _validate_command | TBD | DRAFT |
+| FR-01 | src/taskq/models.py | Task, TaskStatus | TBD | DRAFT |
 | FR-02 | src/taskq/executor.py | run_task | TBD | DRAFT |
 | FR-02 | src/taskq/executor.py | run_all | TBD | DRAFT |
 | FR-02 | src/taskq/store.py | add_task (Lock) | TBD | DRAFT |
@@ -49,6 +50,7 @@ Provides complete **FR -> SRS -> Code -> Test** bidirectional traceability suppo
 | FR-04 | src/taskq/cache.py | signature, get, set | TBD | DRAFT |
 | FR-04 | src/taskq/executor.py | run_task (--cached branch) | TBD | DRAFT |
 | FR-05 | src/taskq/cli.py | main, submit_cmd, run_cmd, status_cmd, list_cmd, clear_cmd | TBD | DRAFT |
+| FR-05 | src/taskq/__main__.py | module entry point (python -m taskq) | TBD | DRAFT |
 | NFR-01 | src/taskq/store.py | add_task / get_task | TBD | DRAFT |
 | NFR-02 | (audit) | grep guard for `shell=True` | TBD | DRAFT |
 | NFR-03 | src/taskq/store.py | atomic_write | TBD | DRAFT |

@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-19
+> **Date**: 2026-06-23
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 3 - Implementation
 > **Status**: Full version (including Phase 3 detailed tasks)
@@ -98,7 +98,7 @@ python3 harness_cli.py load-context --phase 3 --project . --json \
 **{FR-ID} — {FR-TITLE from fr_details}**
 
 - **[ORCH-RED]**     `run-fr-step --phase 3 --fr-id {FR-ID} --step TDD-RED --project . --srs 01-requirements/SRS.md`
-- **[P3-MIRROR]**    `python3 harness_cli.py check-test-mirrors-spec --phase 3 --fr-id {FR-ID} --test-file tests/test_*.py --project .`
+- **[P3-MIRROR]**    `python3 harness_cli.py check-test-mirrors-spec --phase 3 --fr-id {FR-ID} --test-file 03-development/tests/test_*.py --project .`
 - **[ORCH-GREEN]**   `run-fr-step --phase 3 --fr-id {FR-ID} --step TDD-GREEN --project . --srs 01-requirements/SRS.md`
 - **[ORCH-IMPROVE]** `run-fr-step --phase 3 --fr-id {FR-ID} --step TDD-IMPROVE --project .`
 - **[ORCH-GATE1]**   `run-fr-step --phase 3 --fr-id {FR-ID} --step GATE1 --project .`

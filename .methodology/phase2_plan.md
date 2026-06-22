@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-19
+> **Date**: 2026-06-23
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 2 - Architecture Design
 > **Status**: Full version (including Phase 2 detailed tasks)
@@ -355,7 +355,9 @@ are not re-opened. This bounds backtracking to a single step.
   
     layers:  # EXAMPLE — replace with your project's layers
       - name: api
-        modules: ["app.api.webhooks"]
+        modules:
+          - name: "app.api.webhooks"
+            implemented_in: "app.main"  # OPTIONAL — Use if consolidated into another file
         allowed_dependencies: ["service"]
   
     allowed_dependencies:

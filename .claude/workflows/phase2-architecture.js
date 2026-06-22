@@ -170,12 +170,16 @@ if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightR
 // Phase: Load Upstream (SRS.md — needed verbatim for stateless B reviews)
 // ════════════════════════════════════════════════════════════════════════
 phase('Load Upstream')
-log('cat SRS.md for embedding into stateless Agent B prompts')
+log('cat SRS.md + harness templates for embedding into stateless Agent B prompts')
 const srsContent = await loadFileViaBash('01-requirements/SRS.md', '#', 'Load Upstream')
 if (srsContent.startsWith('ERROR:') || srsContent.length < 50) {
   return { error: 'Failed to load SRS.md for upstream context', loaded_preview: srsContent.slice(0, 200) }
 }
 log('  SRS.md loaded: ' + srsContent.length + ' chars')
+const sadTemplateContent = await loadFileViaBash('harness/templates/SAD.md', '#', 'Load Upstream')
+log('  harness/templates/SAD.md loaded: ' + sadTemplateContent.length + ' chars')
+const adrTemplateContent = await loadFileViaBash('harness/templates/ADR.md', '#', 'Load Upstream')
+log('  harness/templates/ADR.md loaded: ' + adrTemplateContent.length + ' chars')
 
 // ════════════════════════════════════════════════════════════════════════
 // Sub-Task 1/3: SAD.md
@@ -200,10 +204,11 @@ const sad = await abLoop({
   buildBDocs: (content) => [
     ['DOC 1: 01-requirements/SRS.md (full)', srsContent],
     ['DOC 2: draft 02-architecture/SAD.md (full)', content],
+    ['DOC 3: harness/templates/SAD.md §2.1 — Directory Structure Design Principles', sadTemplateContent],
   ],
   checklist:
     '- Every FR maps to ≥1 module?\n- NFRs addressed (latency/security/reliability)?\n- No circular dependencies?\n- Data flow diagrams consistent?\n'
-    + '- SAB block present in §5 (<!-- SAB:START --> marker exists)?\n- Directory structure follows cohesion principles (≤15 files/dir, no god-module, no flat dump)?',
+    + '- SAB block present in §5 (<!-- SAB:START --> marker exists)?\n- Directory structure follows CRG cohesion principles (SAD.md §2.1)? See embedded DOC 3\n- ≤15 files/dir, no god-module, no flat dump?',
 })
 if (!sad.ok) return sad
 const sadContent = sad.content, sadB2 = sad.b2
@@ -228,10 +233,12 @@ const adr = await abLoop({
     ['DOC 1: Previous Sub-Task B-2 review JSON — SAD.md (gaps may contain non-blocking caveats)', JSON.stringify(sadB2, null, 2)],
     ['DOC 2: 02-architecture/SAD.md (APPROVED — full)', sadContent],
     ['DOC 3: draft 02-architecture/adr/ADR.md (full)', content],
+    ['DOC 4: harness/templates/ADR.md (template format)', adrTemplateContent],
   ],
   checklist:
     '- Upstream SAD review caveats addressed?\n- All major decisions documented (tech stack, patterns, interfaces)?\n'
-    + '- Each ADR has clear context, decision, consequences?\n- Alternatives considered documented?\n- Decision aligns with SAD.md architecture?',
+    + '- Each ADR has clear context, decision, consequences?\n- Alternatives considered documented?\n- Decision aligns with SAD.md architecture?\n'
+    + '- ADR format matches harness/templates/ADR.md (template format)? See embedded DOC 4',
 })
 if (!adr.ok) return adr
 const adrContent = adr.content, adrB2 = adr.b2
