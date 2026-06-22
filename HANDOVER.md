@@ -2,7 +2,7 @@
 
 **Checkpoint**: `P1-exit-20260622`  
 **Phase**: P1 — Spec & Discovery  
-**Generated**: 2026-06-22T17:46:42Z
+**Generated**: 2026-06-22T17:48:19Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -64,14 +64,6 @@ P1 phase completed — pushed for record.
 **Recently Committed Files:**
   - `.claude/workflows/phase1-requirements.js`
   - `.claude/workflows/phase2-architecture.js`
-  - `.claude/workflows/phase3-implementation.js`
-  - `.claude/workflows/phase4-testing.js`
-  - `.claude/workflows/phase5-verification.js`
-  - `.claude/workflows/phase6-quality.js`
-  - `.claude/workflows/phase7-risk.js`
-  - `.claude/workflows/phase8-config.js`
-  - `.github/workflows/harness_quality_gate.yml`
-  - `.gitignore`
   - `.harness/traces/agent_trajectory.jsonl`
   - `.methodology/phase1_plan.md`
   - `.methodology/phase2_plan.md`
@@ -82,6 +74,14 @@ P1 phase completed — pushed for record.
   - `.methodology/phase7_plan.md`
   - `.methodology/phase8_plan.md`
   - `.methodology/plan_status.md`
+  - `01-requirements/SPEC_TRACKING.md`
+  - `01-requirements/TRACEABILITY_MATRIX.md`
+  - `HANDOVER.md`
+  - `harness`
+  - `.claude/workflows/phase3-implementation.js`
+  - `.claude/workflows/phase4-testing.js`
+  - `.claude/workflows/phase5-verification.js`
+  - `.claude/workflows/phase6-quality.js`
 
 ## 接下來的工作
 

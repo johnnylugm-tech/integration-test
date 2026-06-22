@@ -3,5 +3,14 @@
   "current_phase": 1,
   "last_gate": null,
   "last_fr": null,
-  "last_update": "2026-06-18T15:25:56.970904+00:00"
+  "last_update": "2026-06-18T15:25:56.970904+00:00",
+  "last_push_checkpoint": "2026-06-22T17:46:46.831295+00:00",
+  "last_push_checkpoint_phase": 1,
+  "phase_completed": {
+    "1": {
+      "sha": "e93f43b938f9d4810da2df8e5a2e06bdfc021b68",
+      "timestamp": "2026-06-22T17:46:46.851408+00:00"
+    }
+  },
+  "test_inventory_checksum": "0873d2aa6d3e336d6cc4d68a8e6a07f9600d278dbbde1a8c1f2abb40c066c12b"
 }
