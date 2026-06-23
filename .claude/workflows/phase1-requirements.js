@@ -197,6 +197,18 @@ if (projectBriefContent.length < 200) {
 }
 log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars | first line: ' + projectBriefContent.split('\n')[0])
 
+// ---- loadDeliverable: load file content from disk via Bash cat ----
+// Use after Agent A writes a deliverable — avoids JSON truncation for large files.
+async function loadDeliverable(filePath, label, phaseName) {
+  const res = await agent(
+    'Use ONLY the Bash tool. Run EXACTLY: cat ' + filePath + '\n'
+    + 'Your ENTIRE response must be the raw file content — no commentary, no summary, no headers.\n'
+    + 'If the file does not exist, return exactly: FILE_MISSING: ' + filePath,
+    { label: label, phase: phaseName, agentType: 'general-purpose' },
+  )
+  return (typeof res === 'string' ? res : '').trim()
+}
+
 // ---- Sub-Task 1/4: SRS.md ----
 
 phase('Sub-Task 1/4 — SRS.md')
@@ -230,14 +242,15 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '4. (Re-)read the file via Read tool to capture its FINAL on-disk state.\n'
     + '5. If round > 1: review previous B-2 review JSON (DOC 1 below). Apply HIGH-SEVERITY gap fixes to SRS.md via Edit (surgical; do NOT rewrite the whole file). MED/LOW gaps: log but skip unless trivial.\n'
     + '6. (Re-)read the file via Read tool to capture its FINAL on-disk state after any edits.\n'
-    + '7. Return ONLY this JSON object as your final message:\n'
-    + '{"status":"OK","files":[{"path":"01-requirements/SRS.md","content":"<FULL FINAL FILE CONTENT, verbatim>"}],"confidence":"high|medium|low","citations":["SPEC.md §3 FR-01","..."],"summary":"<1-2 lines>"}\n\n'
+    + '7. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SRS.md && wc -l ' + REPO + '/01-requirements/SRS.md`\n'
+    + '8. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["SPEC.md §3 FR-01","..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES (you MUST obey):\n'
     + '- DO NOT write any deliverable OTHER than 01-requirements/SRS.md.\n'
     + '- DO NOT run git commit, git push, advance-phase, push-checkpoint, or any phase-transition command.\n'
     + '- DO NOT run constitution-check, peer-review, or any quality-gate command.\n'
     + '- DO NOT spawn other agents or do the work of downstream sub-tasks (SPEC_TRACKING / TRACEABILITY / TEST_INVENTORY).\n'
-    + '- ONLY do steps 1-7 above. Return the JSON when done.'
+    + '- ONLY do steps 1-8 above. Return the compact JSON when done.'
 
   let aFullPrompt = aPromptHeader
   if (round > 1 && srsB2) {
@@ -250,17 +263,16 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     agentType: 'general-purpose',
   })
   let a
-  try {
-    a = parseAgentJson(aResult, 'A-srs-r' + round)
-  } catch (e) {
-    // Parse failure = infrastructure problem (agent didn't return JSON). Hard error.
-    return { error: 'Sub-Task 1/4 A parse failed (round ' + round + ')', sub_task: '1/4 SRS.md', detail: e.message, raw: String(aResult ?? '').slice(-500) }
+  try { a = parseAgentJson(aResult, 'A-srs-r' + round) } catch (e) {
+    log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
+    a = null
   }
-  if (!a || !a.files || !Array.isArray(a.files) || a.files.length === 0 || !a.files[0].content) {
-    return { error: 'Sub-Task 1/4 A returned invalid JSON shape (round ' + round + ')', sub_task: '1/4 SRS.md', got: JSON.stringify(a).slice(0, 200) }
+  // Load content from disk (A wrote the file; its JSON may not embed content)
+  srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'srs-load-r' + round, 'Sub-Task 1/4 — SRS.md')
+  if (srsContent.startsWith('FILE_MISSING') || srsContent.length < 50) {
+    return { error: 'Sub-Task 1/4: SRS.md not found on disk after A (round ' + round + ')', loader_preview: srsContent.slice(0, 200) }
   }
-  srsContent = a.files[0].content
-  log('  A returned: status=' + a.status + ' confidence=' + (a.confidence ?? '?') + ' | size=' + srsContent.length + ' chars')
+  log('  A status=' + (a && a.status ? a.status : 'assumed-OK') + ' | srs loaded: ' + srsContent.length + ' chars')
 
   // --- B: BUSINESS_ANALYST (stateless; docs embedded verbatim) ---
   const bPrompt = buildBPrompt('BUSINESS_ANALYST', 'SRS.md', [
