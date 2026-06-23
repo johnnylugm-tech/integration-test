@@ -25,6 +25,11 @@ from taskq.models import Task, TaskStatus
 # ---------------------------------------------------------------------------
 
 
+_SRC_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "src")
+)
+
+
 def _run_cli(*args, tmp_path=None, env_override=None):
     """Run python -m taskq <args> in subprocess; return CompletedProcess."""
     env = os.environ.copy()
@@ -32,15 +37,12 @@ def _run_cli(*args, tmp_path=None, env_override=None):
         env["TASKQ_HOME"] = str(tmp_path)
     if env_override:
         env.update(env_override)
-    src_dir = os.path.join(
-        os.path.dirname(__file__), "..", "03-development", "src"
-    )
     return subprocess.run(
         [sys.executable, "-m", "taskq", *args],
         capture_output=True,
         text=True,
         env=env,
-        cwd=os.path.normpath(src_dir),
+        cwd=_SRC_DIR,
     )
 
 
@@ -371,3 +373,174 @@ def test_fr05_clear_subcommand_reachable(tmp_path):
     result = _run_cli("clear", tmp_path=tmp_path)
     assert "invalid choice" not in result.stderr
     assert result.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# Direct unit tests for main() and CLI functions (coverage enhancement)
+# ---------------------------------------------------------------------------
+
+
+def test_fr05_main_submit_plain(tmp_path, monkeypatch, capsys):
+    """[FR-05] main() dispatches submit and prints task id.
+
+    Sub-assertion: AC05-success-exit-0
+    """
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["taskq", "submit", "echo main_plain"])
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code in (None, 0)
+    out = capsys.readouterr().out.strip()
+    assert len(out) == 8
+    assert all(c in "0123456789abcdef" for c in out)
+
+
+def test_fr05_main_submit_json_flag(tmp_path, monkeypatch, capsys):
+    """[FR-05] main() with --json flag prints single-line JSON.
+
+    Sub-assertions: AC05-json-single-line
+    """
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["taskq", "--json", "submit", "echo json_flag"])
+    try:
+        main()
+    except SystemExit:
+        pass
+    out = capsys.readouterr().out.strip()
+    data = json.loads(out)
+    assert "id" in data
+    assert data["status"] == "pending"
+    assert "\n" not in out
+
+
+def test_fr05_main_status(tmp_path, monkeypatch, capsys):
+    """[FR-05] main() status dispatches and shows task fields.
+
+    Sub-assertion: AC05-success-exit-0
+    """
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+    task = cmd_submit("echo status_main", name=None, cfg=cfg)
+    monkeypatch.setattr(sys, "argv", ["taskq", "status", task.id])
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code in (None, 0)
+    out = capsys.readouterr().out
+    assert task.id in out
+    assert "status" in out
+
+
+def test_fr05_main_list(tmp_path, monkeypatch, capsys):
+    """[FR-05] main() list dispatches and shows tasks.
+
+    Sub-assertion: AC05-success-exit-0
+    """
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+    cmd_submit("echo list_main", name=None, cfg=cfg)
+    monkeypatch.setattr(sys, "argv", ["taskq", "list"])
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code in (None, 0)
+    out = capsys.readouterr().out
+    assert "pending" in out
+
+
+def test_fr05_main_list_json(tmp_path, monkeypatch, capsys):
+    """[FR-05] main() --json list outputs JSON array."""
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+    cmd_submit("echo list_json", name=None, cfg=cfg)
+    monkeypatch.setattr(sys, "argv", ["taskq", "--json", "list"])
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code in (None, 0)
+    out = capsys.readouterr().out.strip()
+    data = json.loads(out)
+    assert isinstance(data, list)
+
+
+def test_fr05_main_list_with_status_filter(tmp_path, monkeypatch, capsys):
+    """[FR-05] main() list --status pending filters output."""
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+    cmd_submit("echo filter_main", name=None, cfg=cfg)
+    monkeypatch.setattr(sys, "argv", ["taskq", "list", "--status", "pending"])
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code in (None, 0)
+    out = capsys.readouterr().out
+    assert "pending" in out
+
+
+def test_fr05_main_clear(tmp_path, monkeypatch):
+    """[FR-05] main() clear removes data files."""
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+    cmd_submit("echo clear_main", name=None, cfg=cfg)
+    tasks_path = tmp_path / "tasks.json"
+    assert tasks_path.exists()
+    monkeypatch.setattr(sys, "argv", ["taskq", "clear"])
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code in (None, 0)
+    assert not tasks_path.exists()
+
+
+def test_fr05_main_unknown_status_exits_2(tmp_path, monkeypatch, capsys):
+    """[FR-05] main() status on unknown id exits 2 with stderr message.
+
+    Sub-assertions: AC05-exit-2-unknown, AC05-unknown-task-stderr
+    """
+    import pytest
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["taskq", "status", "deadbeef"])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+
+
+def test_fr05_main_submit_validates_injection_chars(tmp_path, monkeypatch):
+    """[FR-05] main() submit exits 2 on injection characters (NFR-02).
+
+    Sub-assertion: AC05-exit-2-validation
+    """
+    import pytest
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    for ch in (";", "|", "&", "$", ">", "<", "`"):
+        monkeypatch.setattr(sys, "argv", ["taskq", "submit", f"echo hi{ch}"])
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 2, f"char {ch!r} should exit 2"
+
+
+def test_fr05_main_status_json(tmp_path, monkeypatch, capsys):
+    """[FR-05] main() --json status outputs JSON with all fields."""
+    from taskq.cli import main
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+    task = cmd_submit("echo status_json", name=None, cfg=cfg)
+    monkeypatch.setattr(sys, "argv", ["taskq", "--json", "status", task.id])
+    try:
+        main()
+    except SystemExit as exc:
+        assert exc.code in (None, 0)
+    out = capsys.readouterr().out.strip()
+    data = json.loads(out)
+    assert data["id"] == task.id
+    assert data["status"] == "pending"
