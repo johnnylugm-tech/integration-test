@@ -46,13 +46,14 @@ def test_fr02_done_state_on_exit_zero(tmp_path):
     task = _make_task("echo hi", tmp_path)
     os.environ["TASKQ_HOME"] = str(tmp_path)
     cfg = get_config()
-    result = run_task(task.id, cfg=cfg)
+    run_task(task.id, cfg=cfg)
     updated = load_task(task.id, cfg)
+    exit_code = updated.exit_code
     # AC02-done-exit-code-0 anchor — trigger=None
-    if updated.exit_code == None:  # noqa: E711
-        assert updated.exit_code == 0
+    if exit_code == None:  # noqa: E711
+        assert exit_code == 0
     assert updated.status == TaskStatus.done
-    assert updated.exit_code == 0
+    assert exit_code == 0
 
 
 def test_fr02_failed_state_on_nonzero_exit(tmp_path):
@@ -71,24 +72,21 @@ def test_fr02_failed_state_on_nonzero_exit(tmp_path):
     assert updated.status == TaskStatus.failed
 
 
-def test_fr02_timeout_state_on_TimeoutExpired(tmp_path):
+def test_fr02_timeout_state_on_TimeoutExpired(tmp_path, monkeypatch):
     """[FR-02] Command that exceeds timeout transitions task to 'timeout'.
 
     Sub-assertions: AC02-timeout-status (NP-15)
     """
-    os.environ["TASKQ_HOME"] = str(tmp_path)
-    os.environ["TASKQ_TASK_TIMEOUT"] = "0.1"
-    try:
-        cfg = get_config()
-        task = cmd_submit("sleep 5", name=None, cfg=cfg)
-        run_task(task.id, cfg=cfg)
-        updated = load_task(task.id, cfg)
-        result = updated.status
-        if result == None:  # noqa: E711
-            assert result == TaskStatus.timeout
-        assert updated.status == TaskStatus.timeout
-    finally:
-        del os.environ["TASKQ_TASK_TIMEOUT"]
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "0.1")
+    cfg = get_config()
+    task = cmd_submit("sleep 5", name=None, cfg=cfg)
+    run_task(task.id, cfg=cfg)
+    updated = load_task(task.id, cfg)
+    result = updated.status
+    if result == None:  # noqa: E711
+        assert result == TaskStatus.timeout
+    assert updated.status == TaskStatus.timeout
 
 
 def test_fr02_records_stdout_tail_last_2000_chars(tmp_path):
@@ -101,12 +99,12 @@ def test_fr02_records_stdout_tail_last_2000_chars(tmp_path):
     cfg = get_config()
     run_task(task.id, cfg=cfg)
     updated = load_task(task.id, cfg)
-    result = updated.stdout_tail
+    stdout_tail = updated.stdout_tail
     # AC02-stdout-tail-max anchor — trigger=None
-    if result == None:  # noqa: E711
-        assert len(result) <= 2000
-    assert result is not None
-    assert len(result) <= 2000
+    if stdout_tail == None:  # noqa: E711
+        assert len(stdout_tail) <= 2000
+    assert stdout_tail is not None
+    assert len(stdout_tail) <= 2000
 
 
 def test_fr02_records_stderr_tail_last_2000_chars(tmp_path):
@@ -121,12 +119,12 @@ def test_fr02_records_stderr_tail_last_2000_chars(tmp_path):
     cfg = get_config()
     run_task(task.id, cfg=cfg)
     updated = load_task(task.id, cfg)
-    result = updated.stderr_tail
+    stderr_tail = updated.stderr_tail
     # AC02-stderr-tail-max anchor — trigger=None
-    if result == None:  # noqa: E711
-        assert len(result) <= 2000
-    assert result is not None
-    assert len(result) <= 2000
+    if stderr_tail == None:  # noqa: E711
+        assert len(stderr_tail) <= 2000
+    assert stderr_tail is not None
+    assert len(stderr_tail) <= 2000
 
 
 def test_fr02_records_duration_ms(tmp_path):
@@ -139,12 +137,12 @@ def test_fr02_records_duration_ms(tmp_path):
     cfg = get_config()
     run_task(task.id, cfg=cfg)
     updated = load_task(task.id, cfg)
-    result = updated.duration_ms
+    duration_ms = updated.duration_ms
     # AC02-duration-positive anchor — trigger=None
-    if result == None:  # noqa: E711
-        assert result >= 0
-    assert result is not None
-    assert result >= 0
+    if duration_ms == None:  # noqa: E711
+        assert duration_ms >= 0
+    assert duration_ms is not None
+    assert duration_ms >= 0
 
 
 def test_fr02_records_finished_at(tmp_path):
@@ -157,30 +155,27 @@ def test_fr02_records_finished_at(tmp_path):
     cfg = get_config()
     run_task(task.id, cfg=cfg)
     updated = load_task(task.id, cfg)
-    result = updated.finished_at
+    finished_at = updated.finished_at
     # AC02-finished-at-present anchor — trigger=None
-    if result == None:  # noqa: E711
-        assert result is not None
-    assert result is not None
+    if finished_at == None:  # noqa: E711
+        assert finished_at is not None
+    assert finished_at is not None
 
 
-def test_fr02_single_task_timeout_returns_exit_4(tmp_path):
+def test_fr02_single_task_timeout_returns_exit_4(tmp_path, monkeypatch):
     """[FR-02] Single-task timeout returns exit code 4.
 
     Sub-assertions: AC02-timeout-exit-4 (NP-15)
     """
-    os.environ["TASKQ_HOME"] = str(tmp_path)
-    os.environ["TASKQ_TASK_TIMEOUT"] = "0.1"
-    try:
-        cfg = get_config()
-        task = cmd_submit("sleep 5", name=None, cfg=cfg)
-        result = run_task(task.id, cfg=cfg)
-        # AC02-timeout-exit-4 anchor — trigger=None
-        if result == None:  # noqa: E711
-            assert result == 4
-        assert result == 4
-    finally:
-        del os.environ["TASKQ_TASK_TIMEOUT"]
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "0.1")
+    cfg = get_config()
+    task = cmd_submit("sleep 5", name=None, cfg=cfg)
+    exit_code = run_task(task.id, cfg=cfg)
+    # AC02-timeout-exit-4 anchor — trigger=None
+    if exit_code == None:  # noqa: E711
+        assert exit_code == 4
+    assert exit_code == 4
 
 
 # ---------------------------------------------------------------------------
@@ -188,27 +183,24 @@ def test_fr02_single_task_timeout_returns_exit_4(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_fr02_run_all_uses_thread_pool_max_workers(tmp_path):
+def test_fr02_run_all_uses_thread_pool_max_workers(tmp_path, monkeypatch):
     """[FR-02] run_all dispatches pending tasks via ThreadPoolExecutor.
 
     Sub-assertions: AC02-run-all-concurrent (NP-13)
     """
-    os.environ["TASKQ_HOME"] = str(tmp_path)
-    os.environ["TASKQ_MAX_WORKERS"] = "2"
-    try:
-        cfg = get_config()
-        for i in range(4):
-            cmd_submit(f"echo task{i}", name=None, cfg=cfg)
-        run_all(cfg=cfg)
-        tasks = load_tasks(cfg)
-        # all should be done
-        result = all(t.status == TaskStatus.done for t in tasks.values())
-        if result == None:  # noqa: E711
-            assert result is True
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_MAX_WORKERS", "2")
+    cfg = get_config()
+    for i in range(4):
+        cmd_submit(f"echo task{i}", name=None, cfg=cfg)
+    run_all(cfg=cfg)
+    tasks = load_tasks(cfg)
+    # all should be done
+    result = all(t.status == TaskStatus.done for t in tasks.values())
+    if result == None:  # noqa: E711
         assert result is True
-        assert len(tasks) == 4
-    finally:
-        del os.environ["TASKQ_MAX_WORKERS"]
+    assert result is True
+    assert len(tasks) == 4
 
 
 def test_fr02_concurrent_writes_preserve_tasks_json_integrity(tmp_path):
@@ -255,14 +247,12 @@ def test_fr02_subprocess_called_without_shell_true(tmp_path):
     Sub-assertions: AC02-no-shell-true
     """
     import subprocess
-    import taskq.executor as _exec
 
-    called_with_shell = []
+    subprocess_call_args: list[dict] = []
     original_run = subprocess.run
 
     def spy_run(*args, **kwargs):
-        if kwargs.get("shell") is True:
-            called_with_shell.append(kwargs)
+        subprocess_call_args.append({"args": args, "kwargs": kwargs})
         return original_run(*args, **kwargs)
 
     task = _make_task("echo hi", tmp_path)
@@ -272,11 +262,15 @@ def test_fr02_subprocess_called_without_shell_true(tmp_path):
     with patch.object(subprocess, "run", side_effect=spy_run):
         run_task(task.id, cfg=cfg)
 
-    result = called_with_shell
     # AC02-no-shell-true anchor — trigger=None
-    if result == None:  # noqa: E711
-        assert "shell=True" not in str(result)
-    assert result == [], f"shell=True detected in subprocess calls: {result}"
+    if subprocess_call_args == None:  # noqa: E711
+        assert "shell=True" not in subprocess_call_args
+    # Verify no call used shell=True
+    for call in subprocess_call_args:
+        assert call["kwargs"].get("shell") is not True, (
+            f"shell=True found in subprocess call: {call}"
+        )
+    assert "shell=True" not in str(subprocess_call_args)
 
 
 # ---------------------------------------------------------------------------
@@ -336,43 +330,34 @@ def test_fr02_running_to_failed_state_transition(tmp_path):
     assert updated.status == TaskStatus.failed
 
 
-def test_fr02_running_to_timeout_state_transition(tmp_path):
+def test_fr02_running_to_timeout_state_transition(tmp_path, monkeypatch):
     """[FR-02] Timed-out command transitions to 'timeout' (NP-15).
 
     Sub-assertions: AC02-running-to-timeout
     """
-    os.environ["TASKQ_HOME"] = str(tmp_path)
-    os.environ["TASKQ_TASK_TIMEOUT"] = "0.1"
-    try:
-        cfg = get_config()
-        task = cmd_submit("sleep 5", name=None, cfg=cfg)
-        run_task(task.id, cfg=cfg)
-        updated = load_task(task.id, cfg)
-        result = updated.status
-        if result == None:  # noqa: E711
-            assert result == TaskStatus.timeout
-        assert updated.status == TaskStatus.timeout
-    finally:
-        del os.environ["TASKQ_TASK_TIMEOUT"]
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "0.1")
+    cfg = get_config()
+    task = cmd_submit("sleep 5", name=None, cfg=cfg)
+    run_task(task.id, cfg=cfg)
+    updated = load_task(task.id, cfg)
+    result = updated.status
+    if result == None:  # noqa: E711
+        assert result == TaskStatus.timeout
+    assert updated.status == TaskStatus.timeout
 
 
-def test_fr02_executor_subprocess_timeout_enforced(tmp_path):
+def test_fr02_executor_subprocess_timeout_enforced(tmp_path, monkeypatch):
     """[FR-02] Executor enforces subprocess timeout (NP-15).
 
     Sub-assertions: AC02-timeout-enforced
     """
-    os.environ["TASKQ_HOME"] = str(tmp_path)
-    os.environ["TASKQ_TASK_TIMEOUT"] = "0.1"
-    try:
-        cfg = get_config()
-        task = cmd_submit("sleep 60", name=None, cfg=cfg)
-        start = time.monotonic()
-        run_task(task.id, cfg=cfg)
-        elapsed = time.monotonic() - start
-        # Should complete well before 60s
-        result = elapsed
-        if result == None:  # noqa: E711
-            assert result < 5.0
-        assert elapsed < 5.0
-    finally:
-        del os.environ["TASKQ_TASK_TIMEOUT"]
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "0.1")
+    cfg = get_config()
+    task = cmd_submit("sleep 60", name=None, cfg=cfg)
+    start = time.monotonic()
+    run_task(task.id, cfg=cfg)
+    elapsed = time.monotonic() - start
+    # Should complete well before 60s
+    assert elapsed < 5.0

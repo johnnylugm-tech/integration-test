@@ -44,8 +44,15 @@ def cmd_submit(command: str, name: Optional[str], cfg: Config) -> Task:
         raise SystemExit(2)
 
     # Injection-character check (NFR-02)
+    # Scan characters outside quoted strings only (single or double quotes).
+    in_single = False
+    in_double = False
     for ch in command:
-        if ch in _INJECTION_CHARS:
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif not in_single and not in_double and ch in _INJECTION_CHARS:
             print(f"error: command contains forbidden character {ch!r}", file=sys.stderr)
             raise SystemExit(2)
 
