@@ -10,14 +10,14 @@ Sub-assertion anchor pattern per check-test-mirrors-spec:
 import os
 import threading
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from taskq.config import get_config
 from taskq.executor import run_task, run_all  # noqa: F401 — import triggers RED if missing
 from taskq.models import Task, TaskStatus
-from taskq.store import load_tasks, save_task, load_task
+from taskq.store import load_tasks, load_task
 from taskq.cli import cmd_submit
 
 
@@ -361,3 +361,293 @@ def test_fr02_executor_subprocess_timeout_enforced(tmp_path, monkeypatch):
     elapsed = time.monotonic() - start
     # Should complete well before 60s
     assert elapsed < 5.0
+
+
+# ---------------------------------------------------------------------------
+# Config validation edge cases (NFR-06 coverage)
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_validate_config_invalid_max_workers(tmp_path):
+    """[FR-02] validate_config returns False for max_workers < 1.
+
+    Sub-assertions: AC02-config-validate-workers
+    """
+    from taskq.config import Config, validate_config
+
+    cfg = Config(
+        home=str(tmp_path), max_workers=0, task_timeout=10.0,
+        retry_limit=2, backoff_base=0.1, breaker_threshold=3,
+        breaker_cooldown=5.0, cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr02_validate_config_invalid_task_timeout(tmp_path):
+    """[FR-02] validate_config returns False for task_timeout <= 0.
+
+    Sub-assertions: AC02-config-validate-timeout
+    """
+    from taskq.config import Config, validate_config
+
+    cfg = Config(
+        home=str(tmp_path), max_workers=4, task_timeout=0.0,
+        retry_limit=2, backoff_base=0.1, breaker_threshold=3,
+        breaker_cooldown=5.0, cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr02_validate_config_invalid_backoff_base(tmp_path):
+    """[FR-02] validate_config returns False for backoff_base <= 0.
+
+    Sub-assertions: AC02-config-validate-backoff
+    """
+    from taskq.config import Config, validate_config
+
+    cfg = Config(
+        home=str(tmp_path), max_workers=4, task_timeout=10.0,
+        retry_limit=2, backoff_base=0.0, breaker_threshold=3,
+        breaker_cooldown=5.0, cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr02_validate_config_invalid_breaker_threshold(tmp_path):
+    """[FR-02] validate_config returns False for breaker_threshold < 1.
+
+    Sub-assertions: AC02-config-validate-breaker
+    """
+    from taskq.config import Config, validate_config
+
+    cfg = Config(
+        home=str(tmp_path), max_workers=4, task_timeout=10.0,
+        retry_limit=2, backoff_base=0.1, breaker_threshold=0,
+        breaker_cooldown=5.0, cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr02_validate_config_invalid_breaker_cooldown(tmp_path):
+    """[FR-02] validate_config returns False for breaker_cooldown <= 0.
+
+    Sub-assertions: AC02-config-validate-cooldown
+    """
+    from taskq.config import Config, validate_config
+
+    cfg = Config(
+        home=str(tmp_path), max_workers=4, task_timeout=10.0,
+        retry_limit=2, backoff_base=0.1, breaker_threshold=3,
+        breaker_cooldown=0.0, cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr02_validate_config_invalid_cache_ttl(tmp_path):
+    """[FR-02] validate_config returns False for cache_ttl <= 0.
+
+    Sub-assertions: AC02-config-validate-cache-ttl
+    """
+    from taskq.config import Config, validate_config
+
+    cfg = Config(
+        home=str(tmp_path), max_workers=4, task_timeout=10.0,
+        retry_limit=2, backoff_base=0.1, breaker_threshold=3,
+        breaker_cooldown=5.0, cache_ttl=0.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr02_store_corrupted_json_exits_1(tmp_path):
+    """[FR-02] load_tasks raises SystemExit(1) on corrupted tasks.json.
+
+    Sub-assertions: AC02-store-corrupt-exit-1
+    """
+
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+
+    tasks_file = tmp_path / "tasks.json"
+    tasks_file.write_text("{not valid json", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc_info:
+        load_tasks(cfg)
+    assert exc_info.value.code == 1
+
+
+def test_fr02_store_load_task_unknown_id_exits_2(tmp_path):
+    """[FR-02] load_task raises SystemExit(2) for unknown task id.
+
+    Sub-assertions: AC02-store-unknown-id-exit-2
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+
+    with pytest.raises(SystemExit) as exc_info:
+        load_task("nonexistent", cfg)
+    assert exc_info.value.code == 2
+
+
+def test_fr02_store_redact_masks_secrets(tmp_path):
+    """[FR-02] store._redact replaces lines containing sk-* or token= with [REDACTED].
+
+    Sub-assertions: AC02-store-redact-secrets (NFR-04)
+    """
+    from taskq.store import _redact
+
+    text = "normal line\nsk-ABCDEFGH1234secret\ntoken=my_secret_value\nclean line"
+    result = _redact(text)
+    assert result is not None
+    assert "[REDACTED]" in result
+    assert "sk-ABCDEFGH1234secret" not in result
+    assert "token=my_secret_value" not in result
+    assert "normal line" in result
+    assert "clean line" in result
+
+
+def test_fr02_run_task_unknown_id_exits_2(tmp_path):
+    """[FR-02] run_task with unknown task id propagates SystemExit(2).
+
+    Sub-assertions: AC02-run-unknown-id-exit-2
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+
+    with pytest.raises(SystemExit) as exc_info:
+        run_task("nonexistent", cfg=cfg)
+    assert exc_info.value.code == 2
+
+
+def test_fr02_cli_submit_empty_command_exits_2(tmp_path):
+    """[FR-02] cmd_submit rejects empty command with SystemExit(2).
+
+    Sub-assertions: AC02-cli-empty-command
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    with pytest.raises(SystemExit) as exc_info:
+        cmd_submit("", name=None, cfg=cfg)
+    assert exc_info.value.code == 2
+
+
+def test_fr02_cli_submit_too_long_command_exits_2(tmp_path):
+    """[FR-02] cmd_submit rejects commands over 1000 chars with SystemExit(2).
+
+    Sub-assertions: AC02-cli-long-command
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    with pytest.raises(SystemExit) as exc_info:
+        cmd_submit("x" * 1001, name=None, cfg=cfg)
+    assert exc_info.value.code == 2
+
+
+def test_fr02_cli_submit_injection_char_outside_quotes_exits_2(tmp_path):
+    """[FR-02] cmd_submit rejects injection chars outside quotes with SystemExit(2).
+
+    Sub-assertions: AC02-cli-injection-outside-quotes (NFR-02)
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    with pytest.raises(SystemExit) as exc_info:
+        cmd_submit("echo hi; rm x", name=None, cfg=cfg)
+    assert exc_info.value.code == 2
+
+
+def test_fr02_cli_submit_duplicate_name_exits_2(tmp_path):
+    """[FR-02] cmd_submit rejects duplicate name for pending task with SystemExit(2).
+
+    Sub-assertions: AC02-cli-duplicate-name
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    cmd_submit("echo first", name="myname", cfg=cfg)
+    with pytest.raises(SystemExit) as exc_info:
+        cmd_submit("echo second", name="myname", cfg=cfg)
+    assert exc_info.value.code == 2
+
+
+def test_fr02_cli_fmt_submit_json_output(tmp_path):
+    """[FR-02] _fmt_submit returns JSON when json_output=True.
+
+    Sub-assertions: AC02-cli-fmt-submit-json
+    """
+    import json as _json
+    from taskq.cli import _fmt_submit
+
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    task = cmd_submit("echo hi", name=None, cfg=cfg)
+    result = _fmt_submit(task, json_output=True)
+    parsed = _json.loads(result)
+    assert "id" in parsed
+    assert parsed["status"] == "pending"
+
+
+def test_fr02_cli_cmd_status_json(tmp_path):
+    """[FR-02] cmd_status outputs JSON when json_output=True.
+
+    Sub-assertions: AC02-cli-status-json
+    """
+    import io
+    import json as _json
+    from taskq.cli import cmd_status
+
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    task = cmd_submit("echo hi", name=None, cfg=cfg)
+    run_task(task.id, cfg=cfg)
+
+    captured = io.StringIO()
+    import sys as _sys
+    old_stdout = _sys.stdout
+    _sys.stdout = captured
+    try:
+        cmd_status(task.id, cfg=cfg, json_output=True)
+    finally:
+        _sys.stdout = old_stdout
+    parsed = _json.loads(captured.getvalue())
+    assert parsed["id"] == task.id
+    assert parsed["status"] == "done"
+
+
+def test_fr02_cli_cmd_list_all(tmp_path):
+    """[FR-02] cmd_list enumerates all tasks.
+
+    Sub-assertions: AC02-cli-list-all
+    """
+    import io
+    from taskq.cli import cmd_list
+
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    cmd_submit("echo a", name=None, cfg=cfg)
+    cmd_submit("echo b", name=None, cfg=cfg)
+
+    captured = io.StringIO()
+    import sys as _sys
+    old_stdout = _sys.stdout
+    _sys.stdout = captured
+    try:
+        cmd_list(status_filter=None, cfg=cfg, json_output=False)
+    finally:
+        _sys.stdout = old_stdout
+    output = captured.getvalue()
+    assert "echo a" in output
+    assert "echo b" in output
+
+
+def test_fr02_cli_cmd_clear(tmp_path):
+    """[FR-02] cmd_clear removes tasks.json from TASKQ_HOME.
+
+    Sub-assertions: AC02-cli-clear
+    """
+    from taskq.cli import cmd_clear
+
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    cmd_submit("echo hi", name=None, cfg=cfg)
+    tasks_file = tmp_path / "tasks.json"
+    assert tasks_file.exists()
+    cmd_clear(cfg=cfg)
+    assert not tasks_file.exists()
