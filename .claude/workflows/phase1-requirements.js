@@ -615,6 +615,19 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
 
   if (peerB2.review_status === 'APPROVE' && !hasHighGap(peerB2.gaps)) { log('  APPROVED'); break }
   if (round === MAX_B_ROUNDS) return { error: 'Peer Review did not converge in ' + MAX_B_ROUNDS + ' rounds (HR-12 escalation)', lastB2: peerB2 }
+  log('  Peer review found gaps — dispatching fixer for round ' + (round + 1))
+  await agent(
+    'YOU ARE REQUIREMENTS_ENGINEER (holistic fixer). Fix peer-review gaps across P1 deliverables.\n'
+    + 'REPO: ' + REPO + '\n\nPeer review B-2 JSON:\n' + JSON.stringify(peerB2, null, 2) + '\n\n'
+    + 'Apply surgical Edits to whichever of 01-requirements/SRS.md, 01-requirements/SPEC_TRACKING.md, 01-requirements/TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml are affected. Address all high-severity gaps.\n\n'
+    + 'SCOPE RULES:\n- DO NOT run phase-transition/push/run-gate.\n- DO NOT modify harness/.\n- ONLY edit the 4 P1 deliverables. Report what you changed.',
+    { label: 'peer-fix-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
+  )
+  srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'peer-reload-srs-r' + round, 'Peer Review')
+  stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'peer-reload-st-r' + round, 'Peer Review')
+  tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'peer-reload-tm-r' + round, 'Peer Review')
+  tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'peer-reload-ti-r' + round, 'Peer Review')
+  log('  Reloaded after fixer: SRS=' + srsContent.length + ' ST=' + stContent.length + ' TM=' + tmContent.length + ' TI=' + tiContent.length)
 }
 
 // ---- Phase: Push (per phase1_plan.md B-PUSH — retry until success, NO --no-verify) ----
