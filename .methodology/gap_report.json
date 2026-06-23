@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 16,
+    "total": 18,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 16,
+    "orphaned": 18,
     "critical": 0,
     "major": 0,
-    "minor": 16
+    "minor": 18
   },
   "gaps": [
     {
@@ -56,6 +56,18 @@
       "severity": "minor",
       "reason": "'validate_config' has no corresponding specification in SPEC.md",
       "action": "Add spec for validate_config or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'run_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for run_task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'run_all' has no corresponding specification in SPEC.md",
+      "action": "Add spec for run_all or remove if unnecessary"
     },
     {
       "type": "ORPHANED",

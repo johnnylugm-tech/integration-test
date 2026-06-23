@@ -2,7 +2,8 @@
   "schema_version": "1.0",
   "generated_at_phase": 2,
   "fr_ids": [
-    "FR-01"
+    "FR-01",
+    "FR-02"
   ],
   "nfr_dimension_mapping": {
     "NFR-01": "performance",
@@ -77,6 +78,13 @@
     "gate1": {
       "FR-01": {
         "score": 93.88,
+        "quality_complete": true,
+        "rounds_used": 2,
+        "open_critical": 0,
+        "open_high": 0
+      },
+      "FR-02": {
+        "score": 93.37,
         "quality_complete": true,
         "rounds_used": 2,
         "open_critical": 0,
