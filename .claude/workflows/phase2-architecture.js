@@ -103,12 +103,12 @@ async function abLoop(cfg) {
     })
     let a
     try { a = parseAgentJson(aResult, 'A-' + cfg.key + '-r' + round) }
-    catch (e) { return { error: cfg.deliverable + ' A parse failed (round ' + round + ')', detail: e.message, raw: String(aResult ?? '').slice(-400) } }
-    if (!a || !a.files || !Array.isArray(a.files) || !a.files[0] || !a.files[0].content) {
-      return { error: cfg.deliverable + ' A bad JSON shape (round ' + round + ')', got: JSON.stringify(a).slice(0, 200) }
+    catch (e) { log('  A JSON parse fail (likely truncated): ' + e.message.slice(0, 80)); a = null }
+    content = await loadFileViaBash(cfg.diskPath, '', cfg.phaseName)
+    if (content.startsWith('ERROR:') || content.length < 50) {
+      return { error: cfg.deliverable + ' not found on disk after A (round ' + round + ')', loader_preview: content.slice(0, 200) }
     }
-    content = a.files[0].content
-    log('  A returned: size=' + content.length + ' chars, confidence=' + (a.confidence ?? '?'))
+    log('  A status=' + (a && a.status ? a.status : 'assumed-OK') + ' | disk loaded: ' + content.length + ' chars, confidence=' + (a && a.confidence ? a.confidence : '?'))
 
     const bResult = await agent(buildBPrompt(cfg.bRole, cfg.deliverable, cfg.buildBDocs(content), cfg.checklist), {
       label: 'b-' + cfg.key + '-r' + round, phase: cfg.phaseName, agentType: 'general-purpose',
@@ -185,7 +185,7 @@ log('  harness/templates/ADR.md loaded: ' + adrTemplateContent.length + ' chars'
 // Sub-Task 1/3: SAD.md
 // ════════════════════════════════════════════════════════════════════════
 const sad = await abLoop({
-  phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD',
+  phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/SAD.md',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 1/3 SAD.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/SAD.md\n\n'
@@ -198,7 +198,8 @@ const sad = await abLoop({
     + '   - No circular dependencies.\n'
     + '3. Re-read file (Read) for FINAL state. Create dir ' + REPO + '/02-architecture if missing (Write tool).\n'
     + (round > 1 ? '4. Apply HIGH-severity gap fixes from previous B-2 (DOC below) via Edit (surgical, do NOT rewrite whole file).\n' : '')
-    + 'Return ONLY this JSON: {"status":"OK","files":[{"path":"02-architecture/SAD.md","content":"<FULL FINAL CONTENT>"}],"confidence":"high|medium|low","citations":["SRS.md FR-01","..."],"summary":"<1-2 lines>"}\n\n'
+    + 'Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["SRS.md FR-01","..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES:\n- DO NOT write ADR.md or TEST_SPEC.md.\n- DO NOT run phase-transition / quality-gate / generate_sab commands.\n- DO NOT modify harness/ (HR-17).\n- ONLY author SAD.md and return JSON.'
     + (round > 1 && prevB2 ? '\n\n=== [DOC: Previous B-2 review JSON — SAD.md] ===\n' + JSON.stringify(prevB2, null, 2) : ''),
   buildBDocs: (content) => [
@@ -211,13 +212,13 @@ const sad = await abLoop({
     + '- SAB block present in §5 (<!-- SAB:START --> marker exists)?\n- Directory structure follows CRG cohesion principles (SAD.md §2.1)? See embedded DOC 3\n- ≤15 files/dir, no god-module, no flat dump?',
 })
 if (!sad.ok) return sad
-const sadContent = sad.content, sadB2 = sad.b2
+let sadContent = sad.content, sadB2 = sad.b2
 
 // ════════════════════════════════════════════════════════════════════════
 // Sub-Task 2/3: ADR.md
 // ════════════════════════════════════════════════════════════════════════
 const adr = await abLoop({
-  phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD',
+  phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/adr/ADR.md',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 2/3 ADR.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/adr/ADR.md\n\n'
@@ -226,7 +227,8 @@ const adr = await abLoop({
     + '2. Extract key architecture decisions from SAD.md (read ' + REPO + '/02-architecture/SAD.md). Write individual ADR entries. EACH ADR: context, decision, consequences, alternatives considered. Cover tech stack (Python 3.11 stdlib-only), patterns (ThreadPoolExecutor, atomic write, circuit breaker), interfaces. Remove any `<!-- harness:template-stub -->` markers.\n'
     + '3. Create dir ' + REPO + '/02-architecture/adr if missing. Re-read for FINAL state.\n'
     + (round > 1 ? '4. Apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n' : '')
-    + 'Return ONLY: {"status":"OK","files":[{"path":"02-architecture/adr/ADR.md","content":"<FULL CONTENT>"}],"confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
+    + 'Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
     + 'SCOPE RULES:\n- DO NOT write SAD.md or TEST_SPEC.md.\n- DO NOT run phase-transition / quality-gate commands.\n- ONLY author ADR.md.'
     + (round > 1 && prevB2 ? '\n\n=== [DOC: Previous B-2 review JSON — ADR.md] ===\n' + JSON.stringify(prevB2, null, 2) : ''),
   buildBDocs: (content) => [
@@ -241,7 +243,7 @@ const adr = await abLoop({
     + '- ADR format matches harness/templates/ADR.md (template format)? See embedded DOC 4',
 })
 if (!adr.ok) return adr
-const adrContent = adr.content, adrB2 = adr.b2
+let adrContent = adr.content, adrB2 = adr.b2
 
 // ---- Constitution Check — ADR (single-file, per phase2_plan.md CONSTITUTION-CHECK-ADR) ----
 phase('Constitution Check — ADR')
@@ -264,7 +266,7 @@ if (!(typeof adrConstReport === 'string' && /ADR-CONSTITUTION:\s*PASS/.test(adrC
 // Sub-Task 3/3: TEST_SPEC.md
 // ════════════════════════════════════════════════════════════════════════
 const testSpec = await abLoop({
-  phaseName: 'Sub-Task 3/3 — TEST_SPEC.md', key: 'test-spec', deliverable: 'TEST_SPEC.md', bRole: 'TECH_LEAD',
+  phaseName: 'Sub-Task 3/3 — TEST_SPEC.md', key: 'test-spec', deliverable: 'TEST_SPEC.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/TEST_SPEC.md',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 3/3 TEST_SPEC.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/TEST_SPEC.md\n\n'
@@ -278,7 +280,8 @@ const testSpec = await abLoop({
     + '3. Run self-consistency: `' + PY + ' ' + REPO + '/harness_cli.py check-test-spec-consistency --project ' + REPO + '`. Fix until it passes.\n'
     + '4. Re-read for FINAL state.\n'
     + (round > 1 ? '5. Apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n' : '')
-    + 'Return ONLY: {"status":"OK","files":[{"path":"02-architecture/TEST_SPEC.md","content":"<FULL CONTENT>"}],"confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
+    + 'Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
     + 'SCOPE RULES:\n- DO NOT write SAD/ADR.\n- DO NOT run phase-transition / run-gate commands.\n- DO NOT modify harness/.\n- ONLY author TEST_SPEC.md (check-test-spec-consistency is allowed).'
     + (round > 1 && prevB2 ? '\n\n=== [DOC: Previous B-2 review JSON — TEST_SPEC.md] ===\n' + JSON.stringify(prevB2, null, 2) : ''),
   buildBDocs: (content) => [
@@ -296,7 +299,7 @@ const testSpec = await abLoop({
     + '- Each `### FR-XX:` header followed by TABLE ROWS (not prose-only)?\n- Summary table populated with counts per type?',
 })
 if (!testSpec.ok) return testSpec
-const testSpecContent = testSpec.content
+let testSpecContent = testSpec.content
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: SAB Generation (machine-readable architecture baseline — SAD §5)
@@ -378,8 +381,10 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + 'SCOPE RULES:\n- DO NOT run phase-transition/push/run-gate.\n- DO NOT modify harness/.\n- ONLY edit the 3 P2 deliverables. Report what you changed.',
     { label: 'peer-fix-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
   )
-  // Re-load edited content for next round's embedding
-  // (re-read from disk so the next B sees the fixes)
+  sadContent = await loadFileViaBash('02-architecture/SAD.md', '', 'Peer Review')
+  adrContent = await loadFileViaBash('02-architecture/adr/ADR.md', '', 'Peer Review')
+  testSpecContent = await loadFileViaBash('02-architecture/TEST_SPEC.md', '', 'Peer Review')
+  log('  Reloaded after fixer: SAD=' + sadContent.length + ' ADR=' + adrContent.length + ' TEST_SPEC=' + testSpecContent.length)
 }
 
 // ════════════════════════════════════════════════════════════════════════

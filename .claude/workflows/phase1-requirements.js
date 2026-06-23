@@ -342,12 +342,13 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: review previous B-2 review JSON (DOC 1 below). Apply HIGH-severity gap fixes via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
-    + '6. Return ONLY this JSON:\n'
-    + '{"status":"OK","files":[{"path":"01-requirements/SPEC_TRACKING.md","content":"<FULL FINAL CONTENT>"}],"confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
+    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SPEC_TRACKING.md && wc -l ' + REPO + '/01-requirements/SPEC_TRACKING.md`\n'
+    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write SRS.md, TRACEABILITY_MATRIX.md, or TEST_INVENTORY.yaml.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
-    + '- ONLY do steps 1-6 above.'
+    + '- ONLY do steps 1-7 above.'
 
   let aFullPrompt = aPromptHeader
   if (round > 1 && specTrackB2) {
@@ -361,13 +362,14 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   })
   let a
   try { a = parseAgentJson(aResult, 'A-spec-tracking-r' + round) } catch (e) {
-    return { error: 'Sub-Task 2/4 A parse failed (round ' + round + ')', sub_task: '2/4 SPEC_TRACKING.md', detail: e.message, raw: String(aResult ?? '').slice(-500) }
+    log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
+    a = null
   }
-  if (!a || !a.files || !Array.isArray(a.files) || a.files.length === 0 || !a.files[0].content) {
-    return { error: 'Sub-Task 2/4 A bad JSON shape (round ' + round + ')', sub_task: '2/4 SPEC_TRACKING.md', got: JSON.stringify(a).slice(0, 200) }
+  stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'spec-tracking-load-r' + round, 'Sub-Task 2/4 — SPEC_TRACKING.md')
+  if (stContent.startsWith('FILE_MISSING') || stContent.length < 50) {
+    return { error: 'Sub-Task 2/4: SPEC_TRACKING.md not found on disk after A (round ' + round + ')', loader_preview: stContent.slice(0, 200) }
   }
-  stContent = a.files[0].content
-  log('  A returned: size=' + stContent.length + ' chars')
+  log('  A status=' + (a && a.status ? a.status : 'assumed-OK') + ' | spec-tracking loaded: ' + stContent.length + ' chars')
 
   const bPrompt = buildBPrompt('BUSINESS_ANALYST', 'SPEC_TRACKING.md', [
     ['DOC 1: Previous Sub-Task B-2 review JSON — SRS.md (Sub-Task 1/4, gaps field may contain non-blocking caveats)', JSON.stringify(srsB2, null, 2)],
@@ -426,12 +428,13 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
-    + '6. Return ONLY this JSON:\n'
-    + '{"status":"OK","files":[{"path":"01-requirements/TRACEABILITY_MATRIX.md","content":"<FULL FINAL CONTENT>"}],"confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
+    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md && wc -l ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md`\n'
+    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write other P1 deliverables.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
-    + '- ONLY do steps 1-6.'
+    + '- ONLY do steps 1-7.'
 
   const aResult = await agent(aPromptHeader, {
     label: 'a-traceability-r' + round,
@@ -440,13 +443,14 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   })
   let a
   try { a = parseAgentJson(aResult, 'A-traceability-r' + round) } catch (e) {
-    return { error: 'Sub-Task 3/4 A parse failed (round ' + round + ')', sub_task: '3/4 TRACEABILITY_MATRIX.md', detail: e.message, raw: String(aResult ?? '').slice(-500) }
+    log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
+    a = null
   }
-  if (!a || !a.files || !Array.isArray(a.files) || a.files.length === 0 || !a.files[0].content) {
-    return { error: 'Sub-Task 3/4 A bad JSON shape (round ' + round + ')', sub_task: '3/4 TRACEABILITY_MATRIX.md', got: JSON.stringify(a).slice(0, 200) }
+  tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'traceability-load-r' + round, 'Sub-Task 3/4 — TRACEABILITY_MATRIX.md')
+  if (tmContent.startsWith('FILE_MISSING') || tmContent.length < 50) {
+    return { error: 'Sub-Task 3/4: TRACEABILITY_MATRIX.md not found on disk after A (round ' + round + ')', loader_preview: tmContent.slice(0, 200) }
   }
-  tmContent = a.files[0].content
-  log('  A returned: size=' + tmContent.length + ' chars')
+  log('  A status=' + (a && a.status ? a.status : 'assumed-OK') + ' | traceability loaded: ' + tmContent.length + ' chars')
 
   const bPrompt = buildBPrompt('BUSINESS_ANALYST', 'TRACEABILITY_MATRIX.md', [
     ['DOC 1: Previous Sub-Task B-2 review JSON — SRS.md (gaps field may contain non-blocking caveats)', JSON.stringify(srsB2, null, 2)],
@@ -499,8 +503,8 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '4. If round > 1: apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
     + '6. Verify YAML parses: ' + PY + ' -c "import yaml; yaml.safe_load(open(\'' + REPO + '/TEST_INVENTORY.yaml\'))".\n'
-    + '7. Return ONLY this JSON:\n'
-    + '{"status":"OK","files":[{"path":"TEST_INVENTORY.yaml","content":"<FULL FINAL CONTENT>"}],"confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
+    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write other P1 deliverables.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
@@ -513,13 +517,14 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   })
   let a
   try { a = parseAgentJson(aResult, 'A-test-inventory-r' + round) } catch (e) {
-    return { error: 'Sub-Task 4/4 A parse failed (round ' + round + ')', sub_task: '4/4 TEST_INVENTORY.yaml', detail: e.message, raw: String(aResult ?? '').slice(-500) }
+    log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
+    a = null
   }
-  if (!a || !a.files || !Array.isArray(a.files) || a.files.length === 0 || !a.files[0].content) {
-    return { error: 'Sub-Task 4/4 A bad JSON shape (round ' + round + ')', sub_task: '4/4 TEST_INVENTORY.yaml', got: JSON.stringify(a).slice(0, 200) }
+  tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'test-inventory-load-r' + round, 'Sub-Task 4/4 — TEST_INVENTORY.yaml')
+  if (tiContent.startsWith('FILE_MISSING') || tiContent.length < 50) {
+    return { error: 'Sub-Task 4/4: TEST_INVENTORY.yaml not found on disk after A (round ' + round + ')', loader_preview: tiContent.slice(0, 200) }
   }
-  tiContent = a.files[0].content
-  log('  A returned: size=' + tiContent.length + ' chars')
+  log('  A status=' + (a && a.status ? a.status : 'assumed-OK') + ' | test-inventory loaded: ' + tiContent.length + ' chars')
 
   const bPrompt = buildBPrompt('BUSINESS_ANALYST', 'TEST_INVENTORY.yaml', [
     ['DOC 1: Previous Sub-Task B-2 review JSON — TRACEABILITY_MATRIX.md', JSON.stringify(traceB2, null, 2)],
