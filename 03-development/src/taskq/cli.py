@@ -117,6 +117,8 @@ def cmd_status(task_id: str, cfg: Config, json_output: bool = False) -> None:
         print(f"status:      {status_val}")
         print(f"created_at:  {task.created_at}")
         print(f"exit_code:   {task.exit_code}")
+        print(f"stdout_tail: {task.stdout_tail}")
+        print(f"stderr_tail: {task.stderr_tail}")
         print(f"duration_ms: {task.duration_ms}")
         print(f"finished_at: {task.finished_at}")
         print(f"cached:      {task.cached}")
