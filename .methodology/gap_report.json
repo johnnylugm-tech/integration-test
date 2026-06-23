@@ -1,0 +1,109 @@
+{
+  "summary": {
+    "total": 16,
+    "missing": 0,
+    "incomplete": 0,
+    "orphaned": 16,
+    "critical": 0,
+    "major": 0,
+    "minor": 16
+  },
+  "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_submit' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_submit or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_status' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_status or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_list' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_list or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_clear' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_clear or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'main' has no corresponding specification in SPEC.md",
+      "action": "Add spec for main or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'Config' has no corresponding specification in SPEC.md",
+      "action": "Add spec for Config or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'get_config' has no corresponding specification in SPEC.md",
+      "action": "Add spec for get_config or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'validate_config' has no corresponding specification in SPEC.md",
+      "action": "Add spec for validate_config or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'TaskStatus' has no corresponding specification in SPEC.md",
+      "action": "Add spec for TaskStatus or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'BreakerState' has no corresponding specification in SPEC.md",
+      "action": "Add spec for BreakerState or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'Task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for Task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'BreakerRecord' has no corresponding specification in SPEC.md",
+      "action": "Add spec for BreakerRecord or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'CacheEntry' has no corresponding specification in SPEC.md",
+      "action": "Add spec for CacheEntry or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'load_tasks' has no corresponding specification in SPEC.md",
+      "action": "Add spec for load_tasks or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'load_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for load_task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'save_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for save_task or remove if unnecessary"
+    }
+  ]
+}

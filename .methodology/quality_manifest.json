@@ -1,7 +1,9 @@
 {
   "schema_version": "1.0",
   "generated_at_phase": 2,
-  "fr_ids": [],
+  "fr_ids": [
+    "FR-01"
+  ],
   "nfr_dimension_mapping": {
     "NFR-01": "performance",
     "NFR-02": "security",
@@ -72,7 +74,15 @@
     "test_coverage": 80.0
   },
   "gate_results": {
-    "gate1": {},
+    "gate1": {
+      "FR-01": {
+        "score": 93.88,
+        "quality_complete": true,
+        "rounds_used": 2,
+        "open_critical": 0,
+        "open_high": 0
+      }
+    },
     "gate2": null,
     "gate3": null,
     "gate4": null

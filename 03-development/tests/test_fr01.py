@@ -7,6 +7,7 @@ Sub-assertion anchor pattern per check-test-mirrors-spec:
     if <var> == None:  (trigger=None matches spec_trigger {"None"})
         assert <predicate>   (predicate matches TEST_SPEC.md verbatim)
 """
+import json
 import os
 import threading
 import pytest
@@ -15,8 +16,8 @@ import pytest
 # until GREEN phase creates the source. This is the expected RED state.
 from taskq.store import load_tasks, save_task, load_task
 from taskq.models import Task, TaskStatus
-from taskq.config import get_config
-from taskq.cli import cmd_submit
+from taskq.config import get_config, validate_config, Config
+from taskq.cli import cmd_submit, cmd_status, cmd_list, cmd_clear, _fmt_submit
 
 
 def _submit_exit_code(command, name, tmp_path) -> int:
@@ -251,3 +252,288 @@ def test_fr01_store_concurrent_writes_preserve_tasks_json_integrity(tmp_path):
     cfg = get_config()
     tasks = load_tasks(cfg)
     assert len(tasks) == 10
+
+
+# ---------------------------------------------------------------------------
+# store.py coverage — _redact, load_tasks corrupted, load_task unknown, _dict_to_task
+# ---------------------------------------------------------------------------
+
+
+def test_fr01_store_load_tasks_corrupted_json_exits_1(tmp_path):
+    """[FR-01] Corrupted tasks.json causes exit 1 with 'store corrupted' (SPEC §7)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    tasks_path = tmp_path / "tasks.json"
+    tasks_path.write_text("NOT VALID JSON", encoding="utf-8")
+    cfg = get_config()
+    with pytest.raises(SystemExit) as exc:
+        load_tasks(cfg)
+    assert exc.value.code == 1
+
+
+def test_fr01_store_load_task_unknown_exits_2(tmp_path):
+    """[FR-01] load_task with unknown id exits 2 with 'unknown task: <id>' (SPEC §7)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    with pytest.raises(SystemExit) as exc:
+        load_task("deadbeef", cfg)
+    assert exc.value.code == 2
+
+
+def test_fr01_store_redact_none_returns_none(tmp_path):
+    """[FR-01] _redact(None) returns None (NFR-04 null guard)."""
+    from taskq.store import _redact
+    result = _redact(None)
+    assert result is None
+
+
+def test_fr01_store_redact_sk_key_line(tmp_path):
+    """[FR-01] Lines containing sk-XXXXXXXX are replaced with [REDACTED] (NFR-04)."""
+    from taskq.store import _redact
+    text = "output: sk-abcdefghij123\nnormal line\n"
+    result = _redact(text)
+    assert "[REDACTED]" in result
+    assert "sk-abcdefghij123" not in result
+    assert "normal line" in result
+
+
+def test_fr01_store_redact_token_line(tmp_path):
+    """[FR-01] Lines containing token=xxx are replaced with [REDACTED] (NFR-04)."""
+    from taskq.store import _redact
+    text = "Authorization: token=secret123\nsafe line\n"
+    result = _redact(text)
+    assert "[REDACTED]" in result
+    assert "token=secret123" not in result
+
+
+def test_fr01_store_save_task_with_redacted_output(tmp_path):
+    """[FR-01] save_task redacts sk-* in stdout_tail before persistence (NFR-04)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    task = cmd_submit("echo hi", name=None, cfg=cfg)
+    # Patch task with sensitive stdout
+    task.stdout_tail = "result: sk-abcdef12345678\n"
+    task.stderr_tail = "token=mysecret\n"
+    save_task(task, cfg)
+    tasks_path = tmp_path / "tasks.json"
+    raw = json.loads(tasks_path.read_text())
+    assert raw[task.id]["stdout_tail"] == "[REDACTED]\n"
+    assert raw[task.id]["stderr_tail"] == "[REDACTED]\n"
+
+
+def test_fr01_store_dict_to_task_invalid_status(tmp_path):
+    """[FR-01] _dict_to_task falls back to 'pending' for invalid status values."""
+    from taskq.store import _dict_to_task
+    data = {"status": "INVALID_STATUS", "command": "echo hi", "name": None, "created_at": ""}
+    task = _dict_to_task("abc12345", data)
+    assert task.status == TaskStatus.pending
+
+
+# ---------------------------------------------------------------------------
+# cli.py coverage — cmd_status, cmd_list, cmd_clear, _fmt_submit
+# ---------------------------------------------------------------------------
+
+
+def test_fr01_cli_cmd_status_known_task(tmp_path, capsys):
+    """[FR-01] cmd_status prints all fields for a known task (FR-05 reachability)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    task = cmd_submit("echo status", name=None, cfg=cfg)
+    cmd_status(task.id, cfg=cfg)
+    captured = capsys.readouterr()
+    assert task.id in captured.out
+    assert "pending" in captured.out
+
+
+def test_fr01_cli_cmd_status_unknown_exits_2(tmp_path):
+    """[FR-01] cmd_status for unknown task exits 2 (SPEC §7)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    with pytest.raises(SystemExit) as exc:
+        cmd_status("deadbeef", cfg=cfg)
+    assert exc.value.code == 2
+
+
+def test_fr01_cli_cmd_status_json_output(tmp_path, capsys):
+    """[FR-01] cmd_status with json_output=True prints single-line JSON (FR-05)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    task = cmd_submit("echo json", name=None, cfg=cfg)
+    cmd_status(task.id, cfg=cfg, json_output=True)
+    captured = capsys.readouterr()
+    data = json.loads(captured.out.strip())
+    assert data["id"] == task.id
+    assert data["status"] == "pending"
+
+
+def test_fr01_cli_cmd_list_no_filter(tmp_path, capsys):
+    """[FR-01] cmd_list without filter shows all tasks (FR-05 reachability)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    cmd_submit("echo a", name=None, cfg=cfg)
+    cmd_submit("echo b", name=None, cfg=cfg)
+    cmd_list(status_filter=None, cfg=cfg)
+    captured = capsys.readouterr()
+    assert "pending" in captured.out
+
+
+def test_fr01_cli_cmd_list_with_status_filter(tmp_path, capsys):
+    """[FR-01] cmd_list with --status filters correctly (FR-05 reachability)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    cmd_submit("echo x", name=None, cfg=cfg)
+    cmd_list(status_filter="pending", cfg=cfg)
+    captured = capsys.readouterr()
+    assert "pending" in captured.out
+
+
+def test_fr01_cli_cmd_list_json_output(tmp_path, capsys):
+    """[FR-01] cmd_list with json_output=True returns a JSON array (FR-05)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    cmd_submit("echo y", name=None, cfg=cfg)
+    cmd_list(status_filter=None, cfg=cfg, json_output=True)
+    captured = capsys.readouterr()
+    data = json.loads(captured.out.strip())
+    assert isinstance(data, list)
+    assert data[0]["status"] == "pending"
+
+
+def test_fr01_cli_cmd_clear(tmp_path):
+    """[FR-01] cmd_clear removes data files (FR-05 reachability)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    cmd_submit("echo z", name=None, cfg=cfg)
+    tasks_path = tmp_path / "tasks.json"
+    assert tasks_path.exists()
+    cmd_clear(cfg=cfg)
+    assert not tasks_path.exists()
+
+
+def test_fr01_cli_fmt_submit_plain(tmp_path):
+    """[FR-01] _fmt_submit returns 8-hex id when json_output=False (FR-01)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    task = cmd_submit("echo fmt", name=None, cfg=cfg)
+    result = _fmt_submit(task, json_output=False)
+    assert result == task.id
+
+
+def test_fr01_cli_fmt_submit_json(tmp_path):
+    """[FR-01] _fmt_submit returns JSON string with id+status when json_output=True (FR-01)."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    task = cmd_submit("echo fmtjson", name=None, cfg=cfg)
+    result = _fmt_submit(task, json_output=True)
+    data = json.loads(result)
+    assert data["id"] == task.id
+    assert data["status"] == "pending"
+
+
+# ---------------------------------------------------------------------------
+# config.py — validate_config edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_fr01_config_validate_rejects_zero_timeout():
+    """[FR-01] validate_config returns False when task_timeout <= 0 (NFR-06)."""
+    cfg = Config(
+        home=".taskq",
+        max_workers=4,
+        task_timeout=0.0,
+        retry_limit=2,
+        backoff_base=0.1,
+        breaker_threshold=3,
+        breaker_cooldown=5.0,
+        cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr01_config_validate_rejects_zero_workers():
+    """[FR-01] validate_config returns False when max_workers < 1 (NFR-06)."""
+    cfg = Config(
+        home=".taskq",
+        max_workers=0,
+        task_timeout=10.0,
+        retry_limit=2,
+        backoff_base=0.1,
+        breaker_threshold=3,
+        breaker_cooldown=5.0,
+        cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr01_config_validate_rejects_negative_retry():
+    """[FR-01] validate_config returns False when retry_limit < 0 (NFR-06)."""
+    cfg = Config(
+        home=".taskq",
+        max_workers=4,
+        task_timeout=10.0,
+        retry_limit=-1,
+        backoff_base=0.1,
+        breaker_threshold=3,
+        breaker_cooldown=5.0,
+        cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr01_config_validate_rejects_zero_backoff():
+    """[FR-01] validate_config returns False when backoff_base <= 0 (NFR-06)."""
+    cfg = Config(
+        home=".taskq",
+        max_workers=4,
+        task_timeout=10.0,
+        retry_limit=2,
+        backoff_base=0.0,
+        breaker_threshold=3,
+        breaker_cooldown=5.0,
+        cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr01_config_validate_rejects_zero_breaker_threshold():
+    """[FR-01] validate_config returns False when breaker_threshold < 1 (NFR-06)."""
+    cfg = Config(
+        home=".taskq",
+        max_workers=4,
+        task_timeout=10.0,
+        retry_limit=2,
+        backoff_base=0.1,
+        breaker_threshold=0,
+        breaker_cooldown=5.0,
+        cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr01_config_validate_rejects_zero_cooldown():
+    """[FR-01] validate_config returns False when breaker_cooldown <= 0 (NFR-06)."""
+    cfg = Config(
+        home=".taskq",
+        max_workers=4,
+        task_timeout=10.0,
+        retry_limit=2,
+        backoff_base=0.1,
+        breaker_threshold=3,
+        breaker_cooldown=0.0,
+        cache_ttl=3600.0,
+    )
+    assert validate_config(cfg) is False
+
+
+def test_fr01_config_validate_rejects_zero_cache_ttl():
+    """[FR-01] validate_config returns False when cache_ttl <= 0 (NFR-06)."""
+    cfg = Config(
+        home=".taskq",
+        max_workers=4,
+        task_timeout=10.0,
+        retry_limit=2,
+        backoff_base=0.1,
+        breaker_threshold=3,
+        breaker_cooldown=5.0,
+        cache_ttl=0.0,
+    )
+    assert validate_config(cfg) is False
