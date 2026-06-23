@@ -4,7 +4,8 @@
   "fr_ids": [
     "FR-01",
     "FR-02",
-    "FR-03"
+    "FR-03",
+    "FR-04"
   ],
   "nfr_dimension_mapping": {
     "NFR-01": "performance",

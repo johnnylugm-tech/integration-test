@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "a9e29a9c7adce2b67dbe1d7c3f52942697aa06ff",
-  "content_sha256": "94de1419c1558d12e75549d6a8ee6825594c6f705a9ca43a686f284d878743af",
+  "git_sha": "4a9177e44e88a214c39e6f2b4832c99534fcc3c6",
+  "content_sha256": "0f38103640ab3a9b10bd949ffa86ad4a980d06190770c35d96206a442b15a056",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -12,14 +12,13 @@
       "total_requirements": 5,
       "srs_coverage": "100.0%",
       "code_coverage": "100.0%",
-      "test_coverage": "60.0%",
-      "verification_rate": "60.0%",
-      "total_links": 37,
+      "test_coverage": "80.0%",
+      "verification_rate": "80.0%",
+      "total_links": 39,
       "missing_mappings": {
         "fr_without_srs": [],
         "fr_without_code": [],
         "fr_without_test": [
-          "FR-04",
           "FR-05"
         ]
       }
@@ -28,7 +27,6 @@
       "fr_without_srs": [],
       "fr_without_code": [],
       "fr_without_test": [
-        "FR-04",
         "FR-05"
       ]
     },
@@ -91,15 +89,18 @@
       },
       "FR-04": {
         "fr_id": "FR-04",
-        "status": "in_progress",
+        "status": "verified",
         "srs_section": "SAD.md",
         "code_files": [
           "03-development/src/taskq/__init__.py",
           "03-development/src/taskq/cli.py",
           "03-development/src/taskq/config.py",
-          "03-development/src/taskq/models.py"
+          "03-development/src/taskq/models.py",
+          "03-development/tests/test_fr04.py"
         ],
-        "test_files": [],
+        "test_files": [
+          "tests/test_fr04.py"
+        ],
         "sad_module": "—",
         "priority": "HIGH"
       },
