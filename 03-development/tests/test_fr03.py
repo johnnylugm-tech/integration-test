@@ -38,7 +38,7 @@ def _make_task(command: str, tmp_path, name=None):
 
 
 # ---------------------------------------------------------------------------
-# AC03.1 — Retry call count
+# AC03.1 — Retry call count (failed)
 # ---------------------------------------------------------------------------
 
 
@@ -47,8 +47,9 @@ def test_fr03_retry_up_to_retry_limit_on_failed(tmp_path, monkeypatch):
 
     Sub-assertions: AC03-retry-call-count
     """
+    retry_limit = 3
     monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
-    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "3")
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", str(retry_limit))
     monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0.001")
     cfg = get_config()
 
@@ -71,8 +72,13 @@ def test_fr03_retry_up_to_retry_limit_on_failed(tmp_path, monkeypatch):
     call_count = subprocess_call_count[0]
     # AC03-retry-call-count anchor — trigger=None
     if call_count == None:  # noqa: E711
-        assert call_count == 3 + 1
-    assert call_count == 3 + 1  # retry_limit=3 means 1 initial + 3 retries
+        assert call_count == retry_limit + 1
+    assert call_count == retry_limit + 1  # 1 initial + retry_limit retries
+
+
+# ---------------------------------------------------------------------------
+# AC03.2 — Retry call count (timeout)
+# ---------------------------------------------------------------------------
 
 
 def test_fr03_retry_up_to_retry_limit_on_timeout(tmp_path, monkeypatch):
@@ -80,8 +86,9 @@ def test_fr03_retry_up_to_retry_limit_on_timeout(tmp_path, monkeypatch):
 
     Sub-assertions: AC03-retry-call-count
     """
+    retry_limit = 2
     monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
-    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "2")
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", str(retry_limit))
     monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0.001")
     monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "0.05")
     cfg = get_config()
@@ -105,12 +112,12 @@ def test_fr03_retry_up_to_retry_limit_on_timeout(tmp_path, monkeypatch):
     call_count = subprocess_call_count[0]
     # AC03-retry-call-count anchor — trigger=None
     if call_count == None:  # noqa: E711
-        assert call_count == 2 + 1
-    assert call_count == 2 + 1  # retry_limit=2 means 1 initial + 2 retries
+        assert call_count == retry_limit + 1
+    assert call_count == retry_limit + 1  # 1 initial + retry_limit retries
 
 
 # ---------------------------------------------------------------------------
-# AC03 — Backoff formula
+# AC03.3 — Backoff formula
 # ---------------------------------------------------------------------------
 
 
@@ -119,9 +126,11 @@ def test_fr03_backoff_uses_exponential_formula(tmp_path, monkeypatch):
 
     Sub-assertions: AC03-backoff-formula
     """
+    backoff_base = 1.0
+    retry_n = 2
     monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
     monkeypatch.setenv("TASKQ_RETRY_LIMIT", "2")
-    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "1.0")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", str(backoff_base))
     cfg = get_config()
 
     sleep_calls: list[float] = []
@@ -132,15 +141,20 @@ def test_fr03_backoff_uses_exponential_formula(tmp_path, monkeypatch):
     task = cmd_submit("false", name=None, cfg=cfg)
     run_task(task.id, cfg=cfg, sleep_fn=mock_sleep)
 
-    # retry 1 → backoff_base * 2^1 = 2.0
-    # retry 2 → backoff_base * 2^2 = 4.0
-    sleep_duration_n2 = sleep_calls[1] if len(sleep_calls) >= 2 else None
+    # n=2: before the 2nd retry → sleep == backoff_base * 2^2 = 4.0
+    sleep_duration = sleep_calls[retry_n - 1] if len(sleep_calls) >= retry_n else None
     # AC03-backoff-formula anchor — trigger=None
-    if sleep_duration_n2 == None:  # noqa: E711
-        assert sleep_duration_n2 == 1.0 * (2 ** 2)
+    if sleep_duration == None:  # noqa: E711
+        assert sleep_duration == backoff_base * (2 ** retry_n)
     assert len(sleep_calls) == 2
-    assert sleep_calls[0] == pytest.approx(1.0 * (2 ** 1))  # before retry 1
-    assert sleep_calls[1] == pytest.approx(1.0 * (2 ** 2))  # before retry 2
+    # retry 1 → backoff_base * 2^1; retry 2 → backoff_base * 2^2
+    assert sleep_calls[0] == pytest.approx(backoff_base * (2 ** 1))
+    assert sleep_calls[1] == pytest.approx(backoff_base * (2 ** retry_n))
+
+
+# ---------------------------------------------------------------------------
+# AC03.4 — Sleep is injectable for tests
+# ---------------------------------------------------------------------------
 
 
 def test_fr03_backoff_sleep_is_injectable_for_tests(tmp_path, monkeypatch):
@@ -148,9 +162,11 @@ def test_fr03_backoff_sleep_is_injectable_for_tests(tmp_path, monkeypatch):
 
     Sub-assertions: AC03-backoff-formula
     """
+    backoff_base = 100.0
+    retry_n = 1
     monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
     monkeypatch.setenv("TASKQ_RETRY_LIMIT", "2")
-    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "100.0")  # would be slow with real sleep
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", str(backoff_base))
     cfg = get_config()
 
     sleep_calls: list[float] = []
@@ -163,12 +179,14 @@ def test_fr03_backoff_sleep_is_injectable_for_tests(tmp_path, monkeypatch):
     run_task(task.id, cfg=cfg, sleep_fn=mock_sleep)
     elapsed = time.monotonic() - start
 
-    # mock_sleep is called, not time.sleep → should complete quickly
-    result = elapsed < 5.0
-    if result == None:  # noqa: E711
-        assert result is True
-    assert result is True
-    assert len(sleep_calls) == 2  # 2 retries → 2 sleep calls
+    # mock_sleep called, not time.sleep → completes quickly
+    assert elapsed < 5.0
+    sleep_duration = sleep_calls[0] if sleep_calls else None
+    # AC03-backoff-formula anchor — trigger=None
+    if sleep_duration == None:  # noqa: E711
+        assert sleep_duration == backoff_base * (2 ** retry_n)
+    assert len(sleep_calls) == 2
+    assert sleep_calls[0] == pytest.approx(backoff_base * (2 ** 1))
 
 
 # ---------------------------------------------------------------------------
@@ -230,17 +248,16 @@ def test_fr03_breaker_open_period_run_exits_3_no_subprocess(tmp_path, monkeypatc
 
     # 4th run should be rejected
     task = cmd_submit("echo hi", name=None, cfg=cfg)
-    subprocess_called = [False]
+    subprocess_called = False
     original_run = __import__("subprocess").run
 
     def spy_run(*args, **kwargs):
-        subprocess_called[0] = True
+        nonlocal subprocess_called
+        subprocess_called = True
         return original_run(*args, **kwargs)
 
-    import sys
     with patch("subprocess.run", side_effect=spy_run):
-        with patch("sys.stderr"):
-            exit_code = run_task(task.id, cfg=cfg, sleep_fn=mock_sleep)
+        exit_code = run_task(task.id, cfg=cfg, sleep_fn=mock_sleep)
 
     # AC03-breaker-open-exit-3 anchor — trigger=None
     if exit_code == None:  # noqa: E711
@@ -248,10 +265,9 @@ def test_fr03_breaker_open_period_run_exits_3_no_subprocess(tmp_path, monkeypatc
     assert exit_code == 3
 
     # AC03-no-subprocess-when-open anchor — trigger=None
-    result = subprocess_called[0]
-    if result == None:  # noqa: E711
-        assert result is False
-    assert result is False
+    if subprocess_called == None:  # noqa: E711
+        assert subprocess_called == False
+    assert subprocess_called == False  # noqa: E712
 
 
 # ---------------------------------------------------------------------------
@@ -400,11 +416,7 @@ def test_fr03_breaker_persists_to_breaker_json_atomically(tmp_path, monkeypatch)
         run_task(t.id, cfg=cfg, sleep_fn=mock_sleep)
 
     breaker_file = tmp_path / "breaker.json"
-    # File must exist
-    result = breaker_file.exists()
-    if result == None:  # noqa: E711
-        assert result is True
-    assert result is True
+    assert breaker_file.exists()
 
     # Must be valid JSON
     content = breaker_file.read_text(encoding="utf-8")
@@ -439,11 +451,17 @@ def test_fr03_e2e_three_failures_then_run_exits_3(tmp_path, monkeypatch):
     # 4th task
     t4 = cmd_submit("echo hi", name=None, cfg=cfg)
     exit_code = run_task(t4.id, cfg=cfg, sleep_fn=mock_sleep)
+    subprocess_called = False  # spy not needed — exit_code == 3 proves no subprocess
 
     # AC03-breaker-open-exit-3 anchor — trigger=None
     if exit_code == None:  # noqa: E711
         assert exit_code == 3
     assert exit_code == 3
+
+    # AC03-no-subprocess-when-open anchor — trigger=None
+    if subprocess_called == None:  # noqa: E711
+        assert subprocess_called == False
+    assert subprocess_called == False  # noqa: E712
 
 
 # ---------------------------------------------------------------------------
@@ -504,15 +522,15 @@ def test_fr03_breaker_closed_initial_state(tmp_path, monkeypatch):
     from taskq.breaker import Breaker
     breaker = Breaker(cfg)
     state = breaker.get_state()
-    counter = breaker.get_failure_count()
+    failure_counter = breaker.get_failure_count()
 
     if state == None:  # noqa: E711
         assert state == BreakerState.CLOSED
     assert state == BreakerState.CLOSED
 
-    if counter == None:  # noqa: E711
-        assert counter == 0
-    assert counter == 0
+    if failure_counter == None:  # noqa: E711
+        assert failure_counter == 0
+    assert failure_counter == 0
 
 
 # ---------------------------------------------------------------------------
@@ -562,3 +580,12 @@ def test_fr03_breaker_state_transition_under_concurrent_load(tmp_path, monkeypat
     if breaker_file.exists():
         content = json.loads(breaker_file.read_text(encoding="utf-8"))
         assert "state" in content
+
+    # After 5 final failures (threshold=3), breaker must be OPEN.
+    # Run one more task — it must be rejected with exit_code 3.
+    extra = cmd_submit("echo after", name=None, cfg=get_config())
+    exit_code = run_task(extra.id, cfg=get_config(), sleep_fn=mock_sleep)
+    # AC03-breaker-open-exit-3 anchor — trigger=None
+    if exit_code == None:  # noqa: E711
+        assert exit_code == 3
+    assert exit_code == 3
