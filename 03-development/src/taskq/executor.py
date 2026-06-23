@@ -22,6 +22,7 @@ from typing import Callable, Optional
 from taskq.config import Config, validate_config
 from taskq.models import TaskStatus
 from taskq.store import load_task, load_tasks, save_task
+from taskq.cache import lookup as cache_lookup, write as cache_write
 
 
 def run_task(
@@ -61,6 +62,20 @@ def run_task(
 
     task = load_task(task_id, cfg)
 
+    # FR-04: TTL cache lookup (only when --cached flag is set)
+    if cached:
+        hit = cache_lookup(task.command, cfg)
+        if hit is not None:
+            task.status = TaskStatus.done
+            task.exit_code = hit.exit_code
+            task.stdout_tail = hit.stdout_tail
+            task.stderr_tail = hit.stderr_tail
+            task.duration_ms = hit.duration_ms
+            task.finished_at = hit.finished_at
+            task.cached = True
+            save_task(task, cfg)
+            return 0
+
     retry_limit = cfg.retry_limit
     backoff_base = cfg.backoff_base
 
@@ -99,6 +114,8 @@ def run_task(
                 task.status = TaskStatus.done
                 save_task(task, cfg)
                 breaker.record_success()
+                # FR-04: write successful result to cache
+                cache_write(task.command, task, cfg)
                 return 0
             else:
                 task.status = TaskStatus.failed
