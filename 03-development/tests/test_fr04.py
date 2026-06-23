@@ -22,8 +22,6 @@ import os
 import threading
 from unittest.mock import patch
 
-import pytest
-
 from taskq.config import get_config
 from taskq.models import Task, TaskStatus
 from taskq.cli import cmd_submit
@@ -59,7 +57,6 @@ def test_fr04_signature_is_sha256_of_command(tmp_path, monkeypatch):
     Sub-assertions: AC04-sha256-len
     """
     monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
-    cfg = get_config()
 
     command = "echo hi"
     expected_key = _sha256(command)
@@ -111,7 +108,7 @@ def test_fr04_cached_replay_within_ttl_skips_subprocess(tmp_path, monkeypatch):
 
     # AC04-no-subprocess-on-hit anchor — trigger=None
     if subprocess_called == None:  # noqa: E711
-        assert subprocess_called == False
+        assert subprocess_called == False  # noqa: E712
     assert subprocess_called == False  # noqa: E712
 
 
@@ -148,7 +145,7 @@ def test_fr04_cached_replay_marks_task_cached_true(tmp_path, monkeypatch):
 
     # AC04-cached-flag anchor — trigger=None
     if task_cached == None:  # noqa: E711
-        assert task_cached == True
+        assert task_cached == True  # noqa: E712
     assert task_cached == True  # noqa: E712
 
 
@@ -187,7 +184,7 @@ def test_fr04_cache_miss_executes_subprocess(tmp_path, monkeypatch):
 
     # AC04-subprocess-on-miss anchor — trigger=None
     if subprocess_called == None:  # noqa: E711
-        assert subprocess_called == True
+        assert subprocess_called == True  # noqa: E712
     assert subprocess_called == True  # noqa: E712
 
 
@@ -235,7 +232,7 @@ def test_fr04_cache_expired_executes_subprocess(tmp_path, monkeypatch):
 
     # AC04-subprocess-on-miss anchor — trigger=None
     if subprocess_called == None:  # noqa: E711
-        assert subprocess_called == True
+        assert subprocess_called == True  # noqa: E712
     assert subprocess_called == True  # noqa: E712
 
 
@@ -363,7 +360,7 @@ def test_fr04_e2e_repeated_command_replays_from_cache(tmp_path, monkeypatch):
 
     # AC04-cached-flag anchor — trigger=None
     if r2.cached == None:  # noqa: E711
-        assert r2.cached == True
+        assert r2.cached == True  # noqa: E712
     assert r2.status == TaskStatus.done
     assert r2.cached == expected_second_cached
 
@@ -405,8 +402,7 @@ def test_fr04_cache_unavailable_fallback(tmp_path, monkeypatch):
     with patch("subprocess.run", side_effect=spy_run):
         exit_code = run_task(t.id, cfg=cfg, cached=True, sleep_fn=mock_sleep)
 
-    expected_behavior = "normal_execution"
-    assert exit_code == 0  # task completed
+    assert exit_code == 0  # expected_behavior = "normal_execution"
     assert subprocess_called, "Expected subprocess to run on cache fault"
 
 
@@ -470,7 +466,7 @@ def test_fr04_cache_actually_used_on_hit(tmp_path, monkeypatch):
 
     # AC04-no-subprocess-on-hit anchor — trigger=None
     if second_call_subprocess == None:  # noqa: E711
-        assert second_call_subprocess == False
+        assert second_call_subprocess == False  # noqa: E712
     assert second_call_subprocess == False  # noqa: E712
 
 
