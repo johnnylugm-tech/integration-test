@@ -1,8 +1,8 @@
 {
   "gate": 1,
   "phase": 3,
-  "fr_id": "FR-02",
-  "overall_score": 93.37,
+  "fr_id": "FR-03",
+  "overall_score": 95.58,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
@@ -14,16 +14,16 @@
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "{\"filesAnalyzed\": 7, \"errorCount\": 0, \"warningCount\": 0, \"informationCount\": 0, \"timeInSec\": 1.777}"
+      "tool_evidence": "{\"filesAnalyzed\": 8, \"errorCount\": 0, \"warningCount\": 0, \"informationCount\": 0, \"timeInSec\": 0.32}"
     },
     "test_coverage": {
-      "score": 80,
+      "score": 87,
       "threshold": 80,
-      "tests_passed": 34,
+      "tests_passed": 14,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "34 passed in 1.13s\nName                                   Stmts   Miss  Cover\n----------------------------------------------------------\n03-development/src/taskq/cli.py          125     54    57%\n03-development/src/taskq/config.py        39      1    97%\n03-development/src/taskq/executor.py      46      0   100%\n03-development/src/taskq/models.py        38      0   100%\n03-development/src/taskq/store.py         78     10    87%\n----------------------------------------------------------\nTOTAL                                    326     65    80%"
+      "tool_evidence": "14 passed in 1.12s\nName                                   Stmts   Miss  Cover\n----------------------------------------------------------\n03-development/src/taskq/breaker.py       76      9    88%\n03-development/src/taskq/executor.py      72     10    86%\n----------------------------------------------------------\nTOTAL                                    148     19    87%"
     }
   },
-  "composite_score": 93.37
+  "composite_score": 95.58
 }

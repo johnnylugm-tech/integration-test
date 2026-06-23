@@ -1,14 +1,62 @@
 {
   "summary": {
-    "total": 18,
+    "total": 26,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 18,
+    "orphaned": 26,
     "critical": 0,
     "major": 0,
-    "minor": 18
+    "minor": 26
   },
   "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'Breaker' has no corresponding specification in SPEC.md",
+      "action": "Add spec for Breaker or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'get_state' has no corresponding specification in SPEC.md",
+      "action": "Add spec for get_state or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'get_current_state' has no corresponding specification in SPEC.md",
+      "action": "Add spec for get_current_state or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'get_failure_count' has no corresponding specification in SPEC.md",
+      "action": "Add spec for get_failure_count or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'is_open' has no corresponding specification in SPEC.md",
+      "action": "Add spec for is_open or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'is_half_open' has no corresponding specification in SPEC.md",
+      "action": "Add spec for is_half_open or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'record_success' has no corresponding specification in SPEC.md",
+      "action": "Add spec for record_success or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'record_failure' has no corresponding specification in SPEC.md",
+      "action": "Add spec for record_failure or remove if unnecessary"
+    },
     {
       "type": "ORPHANED",
       "severity": "minor",
