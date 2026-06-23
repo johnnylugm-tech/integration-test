@@ -529,6 +529,25 @@ try {
 }
 ```
 
+### 8.11 P11 ❌ TaskStop 殺死 agent → journal result 未寫入 → resume 重複執行
+
+**症狀**: Agent 完成工作（已寫檔案、已回傳 JSON），但 journal 只有 STARTED 沒有 RESULT。Resume 時 agent 被重試。常見於「agent 在主 context 呼叫 TaskStop 時剛好完成最後一步但 runtime 還沒 flush journal」。
+
+**影響**: Agent 重跑一次（通常很快，因為 self-check pattern 會看到檔案已存在），但浪費 token 且 wall-clock 增加。
+
+**正確處理**:
+1. **不要在 agent 跑到一半時呼叫 TaskStop**。只在確認 workflow task 已完成（收到通知）或明確中止整個流程時才停。
+2. Resume 是無害的：重試 agent 只是重讀已存在的檔案並快速回傳 OK。
+3. **設計 Agent A 為冪等**：先 `test -f <file>` → 若 EXISTS 就直接讀 + return OK，不 overwrite。
+
+```javascript
+// ✅ Agent A 冪等範例
+'1. Self-check: test -f ' + REPO + '/02-architecture/SAD.md && echo EXISTS || echo MISSING\n'
++ '   - If EXISTS: Read it. If complete, return OK without rewriting.\n'
++ '2. If MISSING: author the full deliverable.\n'
++ 'Return compact JSON only.\n'
+```
+
 ### 8.10 P10 ❌ 兩個 workflow run 競爭同一組 deliverables
 
 **症狀**: 舊 v2 run 還在跑、新的 v3 又 launch → 兩 run 互相覆寫同一個 SRS.md,內容不一致。
@@ -563,6 +582,46 @@ APPROVE + all gaps low          → break (continue to next sub-task)
 APPROVE + any med/high gap      → A fixes → re-dispatch B (round 2)
 REJECT                           → A fixes → re-dispatch B
 MAX_B_ROUNDS (5) without resolve → ESCALATE (hard return error, not silent break)
+```
+
+### 9.10 Compact JSON + disk read pattern（Agent A 禁止嵌入檔案內容）
+
+Agent A 在 JSON response 內嵌入完整檔案內容 → 輸出 token 超限 → JSON 截斷 → orchestrator 拿到 null → abLoop 誤認為失敗。
+
+**規則**: Agent A 的 JSON response **禁止**包含 `files[].content`。orchestrator 自己從磁碟讀。
+
+```javascript
+// ✅ 正確：compact JSON + 分開讀磁碟
+// Agent A prompt 結尾:
+'Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
++ '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n'
+
+// Orchestrator 拿到 aResult 後:
+let a
+try { a = parseAgentJson(aResult, 'A-sad-r' + round) }
+catch (e) { log('A JSON parse fail (likely truncated): ' + e.message.slice(0, 80)); a = null }
+// 不論 a 是否 null，都從磁碟讀內容:
+content = await loadFileViaBash(cfg.diskPath, cfg.diskPrefix || '', cfg.phaseName)
+if (content.startsWith('ERROR:') || content.length < 50) {
+  return { error: cfg.deliverable + ' not found on disk after A' }
+}
+```
+
+**附加防護**: `loadFileViaBash` 加 `expectPrefix` 驗證，防止 agent 讀到錯誤檔案：
+
+```javascript
+async function loadFileViaBash(relPath, expectPrefix, phaseName) {
+  const res = await agent(`cat ${REPO}/${relPath}`, { model: 'haiku', ... })
+  const content = (typeof res === 'string' ? res : String(res ?? '')).trim()
+  if (expectPrefix && content.length > 50 && !content.startsWith(expectPrefix) && !content.startsWith('ERROR:')) {
+    return 'ERROR: content-mismatch — expected prefix "' + expectPrefix + '", got: ' + content.slice(0, 120)
+  }
+  return content
+}
+// 呼叫時指定各 deliverable 的前綴:
+// SAD.md → '# SAD'
+// adr/ADR.md → '# Architecture Decision Records'
+// TEST_SPEC.md → '#'
 ```
 
 ### 9.5 Bash cat > Read tool for content loading

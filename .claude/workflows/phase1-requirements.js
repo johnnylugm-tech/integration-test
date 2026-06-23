@@ -204,7 +204,7 @@ async function loadDeliverable(filePath, label, phaseName) {
     'Use ONLY the Bash tool. Run EXACTLY: cat ' + filePath + '\n'
     + 'Your ENTIRE response must be the raw file content — no commentary, no summary, no headers.\n'
     + 'If the file does not exist, return exactly: FILE_MISSING: ' + filePath,
-    { label: label, phase: phaseName, agentType: 'general-purpose' },
+    { label: label, phase: phaseName, agentType: 'general-purpose', model: 'haiku' },
   )
   return (typeof res === 'string' ? res : '').trim()
 }

@@ -40,7 +40,8 @@ let REPO = DEFAULT_REPO
 if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
 if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
 const PY = REPO + '/.venv/bin/python'
-const MAX_B_ROUNDS = 5  // HR-12
+// HR-12: safety ceiling; observed P2 runs converge in ≤2 rounds — lower only if cost is a concern
+const MAX_B_ROUNDS = 5
 log('REPO = ' + REPO + ' | PY = ' + PY)
 
 // ---- JSON parsing (balanced-brace; playbook §5.2 — NOT schema:) ----
@@ -104,7 +105,7 @@ async function abLoop(cfg) {
     let a
     try { a = parseAgentJson(aResult, 'A-' + cfg.key + '-r' + round) }
     catch (e) { log('  A JSON parse fail (likely truncated): ' + e.message.slice(0, 80)); a = null }
-    content = await loadFileViaBash(cfg.diskPath, '', cfg.phaseName)
+    content = await loadFileViaBash(cfg.diskPath, cfg.diskPrefix || '', cfg.phaseName)
     if (content.startsWith('ERROR:') || content.length < 50) {
       return { error: cfg.deliverable + ' not found on disk after A (round ' + round + ')', loader_preview: content.slice(0, 200) }
     }
@@ -132,9 +133,12 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName) {
     'Use ONLY the Bash tool. Run EXACTLY: cat ' + REPO + '/' + relPath + '\n'
     + 'Do NOT use the Read tool. Return the EXACT stdout as your final message — the file content IS your response.\n'
     + 'If the file does not exist, return exactly: ERROR: ' + relPath + ' not found',
-    { label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-'), phase: phaseName, agentType: 'general-purpose' },
+    { label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-'), phase: phaseName, agentType: 'general-purpose', model: 'haiku' },
   )
   const content = (typeof res === 'string' ? res : String(res ?? '')).trim()
+  if (expectPrefix && content.length > 50 && !content.startsWith(expectPrefix) && !content.startsWith('ERROR:')) {
+    return 'ERROR: content-mismatch — expected prefix "' + expectPrefix + '", got: ' + content.slice(0, 120)
+  }
   return content
 }
 
@@ -185,7 +189,7 @@ log('  harness/templates/ADR.md loaded: ' + adrTemplateContent.length + ' chars'
 // Sub-Task 1/3: SAD.md
 // ════════════════════════════════════════════════════════════════════════
 const sad = await abLoop({
-  phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/SAD.md',
+  phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/SAD.md', diskPrefix: '# SAD',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 1/3 SAD.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/SAD.md\n\n'
@@ -218,7 +222,7 @@ let sadContent = sad.content, sadB2 = sad.b2
 // Sub-Task 2/3: ADR.md
 // ════════════════════════════════════════════════════════════════════════
 const adr = await abLoop({
-  phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/adr/ADR.md',
+  phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/adr/ADR.md', diskPrefix: '# Architecture Decision Records',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 2/3 ADR.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/adr/ADR.md\n\n'
@@ -266,7 +270,7 @@ if (!(typeof adrConstReport === 'string' && /ADR-CONSTITUTION:\s*PASS/.test(adrC
 // Sub-Task 3/3: TEST_SPEC.md
 // ════════════════════════════════════════════════════════════════════════
 const testSpec = await abLoop({
-  phaseName: 'Sub-Task 3/3 — TEST_SPEC.md', key: 'test-spec', deliverable: 'TEST_SPEC.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/TEST_SPEC.md',
+  phaseName: 'Sub-Task 3/3 — TEST_SPEC.md', key: 'test-spec', deliverable: 'TEST_SPEC.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/TEST_SPEC.md', diskPrefix: '#',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 3/3 TEST_SPEC.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/TEST_SPEC.md\n\n'
@@ -381,9 +385,9 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + 'SCOPE RULES:\n- DO NOT run phase-transition/push/run-gate.\n- DO NOT modify harness/.\n- ONLY edit the 3 P2 deliverables. Report what you changed.',
     { label: 'peer-fix-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
   )
-  sadContent = await loadFileViaBash('02-architecture/SAD.md', '', 'Peer Review')
-  adrContent = await loadFileViaBash('02-architecture/adr/ADR.md', '', 'Peer Review')
-  testSpecContent = await loadFileViaBash('02-architecture/TEST_SPEC.md', '', 'Peer Review')
+  sadContent = await loadFileViaBash('02-architecture/SAD.md', '# SAD', 'Peer Review')
+  adrContent = await loadFileViaBash('02-architecture/adr/ADR.md', '# Architecture Decision Records', 'Peer Review')
+  testSpecContent = await loadFileViaBash('02-architecture/TEST_SPEC.md', '#', 'Peer Review')
   log('  Reloaded after fixer: SAD=' + sadContent.length + ' ADR=' + adrContent.length + ' TEST_SPEC=' + testSpecContent.length)
 }
 
