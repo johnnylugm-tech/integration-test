@@ -1,29 +1,29 @@
 {
   "gate": 1,
   "phase": 3,
-  "fr_id": "FR-04",
-  "overall_score": 97.0,
+  "fr_id": "FR-05",
+  "overall_score": 94.2,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "ruff check 03-development/src/ --extend-ignore RUF001,RUF002,RUF003\nAll checks passed!"
+      "tool_evidence": "All checks passed!"
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "{\"filesAnalyzed\": 9, \"errorCount\": 0, \"warningCount\": 0, \"informationCount\": 0, \"timeInSec\": 0.35}"
+      "tool_evidence": "{\n  \"version\": \"1.1.409\",\n  \"summary\": {\n    \"filesAnalyzed\": 9,\n    \"errorCount\": 0,\n    \"warningCount\": 0,\n    \"informationCount\": 0\n  }\n}"
     },
     "test_coverage": {
-      "score": 91,
+      "score": 83,
       "threshold": 80,
-      "tests_passed": 15,
+      "tests_passed": 28,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "15 passed in 0.20s\nName                                Stmts   Miss  Cover   Missing\n-----------------------------------------------------------------\n03-development/src/taskq/cache.py      64      6    91%   125-130\n-----------------------------------------------------------------\nTOTAL                                  64      6    91%"
+      "tool_evidence": "Name                                 Stmts   Miss  Cover\n----\n03-development/src/taskq/cli.py        127     20    84%\n03-development/src/taskq/config.py      39      7    82%\n03-development/src/taskq/models.py      38      0   100%\n03-development/src/taskq/store.py       78     21    73%\n----\nTOTAL                                  282     48    83%\n28 passed"
     }
   },
-  "composite_score": 97.0
+  "composite_score": 94.2
 }
