@@ -13,11 +13,10 @@ import json
 import os
 import sys
 import subprocess
-import pytest
 
 from taskq.config import get_config
-from taskq.cli import cmd_submit, cmd_status, cmd_list, cmd_clear, main
-from taskq.store import load_task, load_tasks, save_task
+from taskq.cli import cmd_submit
+from taskq.store import save_task
 from taskq.models import Task, TaskStatus
 
 
