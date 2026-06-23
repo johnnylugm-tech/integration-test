@@ -3,7 +3,8 @@
   "generated_at_phase": 2,
   "fr_ids": [
     "FR-01",
-    "FR-02"
+    "FR-02",
+    "FR-03"
   ],
   "nfr_dimension_mapping": {
     "NFR-01": "performance",
