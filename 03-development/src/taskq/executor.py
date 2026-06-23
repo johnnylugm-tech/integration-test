@@ -65,7 +65,6 @@ def run_task(
     backoff_base = cfg.backoff_base
 
     final_exit_code = 0
-    final_status = TaskStatus.done
 
     for attempt in range(retry_limit + 1):
         # Mark running on first attempt; re-mark on retries
@@ -103,7 +102,6 @@ def run_task(
                 return 0
             else:
                 task.status = TaskStatus.failed
-                final_status = TaskStatus.failed
                 final_exit_code = 0
 
         except subprocess.TimeoutExpired:
@@ -116,7 +114,6 @@ def run_task(
             task.duration_ms = elapsed_ms
             task.finished_at = finished_at
             task.status = TaskStatus.timeout
-            final_status = TaskStatus.timeout
             final_exit_code = 4
 
         save_task(task, cfg)

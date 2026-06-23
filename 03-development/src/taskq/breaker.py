@@ -16,9 +16,8 @@ import os
 import tempfile
 import threading
 import time
-from typing import Optional
 
-from taskq.config import Config, validate_config
+from taskq.config import Config
 from taskq.models import BreakerRecord, BreakerState
 
 _LOCK = threading.Lock()
