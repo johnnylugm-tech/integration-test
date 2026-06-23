@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 26,
+    "total": 28,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 26,
+    "orphaned": 28,
     "critical": 0,
     "major": 0,
-    "minor": 26
+    "minor": 28
   },
   "gaps": [
     {
@@ -56,6 +56,18 @@
       "severity": "minor",
       "reason": "'record_failure' has no corresponding specification in SPEC.md",
       "action": "Add spec for record_failure or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'lookup' has no corresponding specification in SPEC.md",
+      "action": "Add spec for lookup or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'write' has no corresponding specification in SPEC.md",
+      "action": "Add spec for write or remove if unnecessary"
     },
     {
       "type": "ORPHANED",

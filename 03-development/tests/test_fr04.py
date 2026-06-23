@@ -519,3 +519,52 @@ def test_fr04_write_then_lookup_within_ttl_returns_task(tmp_path, monkeypatch):
     assert result is not None
     assert result.exit_code == 0
     assert result.stdout_tail == "hi\n"
+
+
+def test_fr04_write_non_done_task_does_not_cache(tmp_path, monkeypatch):
+    """[FR-04] write() with a non-done task is silently ignored.
+
+    [FR-04] write() only persists done tasks; other statuses skip cache write.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_CACHE_TTL", "3600")
+    cfg = get_config()
+
+    import datetime
+    from taskq.models import TaskStatus
+
+    t = Task(
+        id="abcd1234",
+        command="echo fail",
+        name=None,
+        status=TaskStatus.failed,
+        created_at=datetime.datetime.now().isoformat(),
+        exit_code=1,
+        stdout_tail="",
+        stderr_tail="error\n",
+        duration_ms=5.0,
+        finished_at=datetime.datetime.now().isoformat(),
+        cached=False,
+    )
+
+    write("echo fail", t, cfg)
+    result = lookup("echo fail", cfg)
+
+    # Non-done task should NOT be in cache
+    assert result is None
+
+
+def test_fr04_load_non_dict_json_returns_empty(tmp_path, monkeypatch):
+    """[FR-04] cache.json containing a JSON list (not dict) returns empty cache.
+
+    [FR-04] Validates the isinstance(data, dict) guard in _load.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+
+    # Write a valid JSON list (not a dict)
+    cache_file = tmp_path / "cache.json"
+    cache_file.write_text("[1, 2, 3]", encoding="utf-8")
+
+    result = lookup("echo anything", cfg)
+    assert result is None
