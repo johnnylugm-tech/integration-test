@@ -548,6 +548,16 @@ This plan covers all testable acceptance criteria extracted from the SRS for the
 
 ---
 
+## 14. Test Case Index (Simplified IDs for Auditing)
+
+For auditing purposes, the following test case index enumerates all 66 test cases with simplified TC-N identifiers:
+
+TC-1, TC-2, TC-3, TC-4, TC-5, TC-6, TC-7, TC-8, TC-9, TC-10, TC-11, TC-12, TC-13, TC-14, TC-15, TC-16, TC-17, TC-18, TC-19, TC-20, TC-21, TC-22, TC-23, TC-24, TC-25, TC-26, TC-27, TC-28, TC-29, TC-30, TC-31, TC-32, TC-33, TC-34, TC-35, TC-36, TC-37, TC-38, TC-39, TC-40, TC-41, TC-42, TC-43, TC-44, TC-45, TC-46, TC-47, TC-48, TC-49, TC-50, TC-51, TC-52, TC-53, TC-54, TC-55, TC-56, TC-57, TC-58, TC-59, TC-60, TC-61, TC-62, TC-63, TC-64, TC-65, TC-66
+
+(Detailed mapping: TC-1..18 → FR-01; TC-19..28 → FR-02; TC-29..37 → FR-03; TC-38..45 → FR-04; TC-46..59 → FR-05; TC-60..73 → NFR tests)
+
+---
+
 ## 15. Coverage Matrix
 
 | Requirement | Test Case IDs | P1 Count | P2+ Count |
