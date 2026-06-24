@@ -128,6 +128,20 @@ const frTitle = {}
 if (Array.isArray(ctx.fr_details)) for (const f of ctx.fr_details) frTitle[f.id || f.fr_id] = f.title || f.name || ''
 log('  fr_ids = ' + JSON.stringify(frIds))
 
+// Sentinel pre-check: identify Gate 1 already-done FRs to skip TDD agent invocations on resume/re-run
+const sentinelRaw = await agent(
+  'Use ONLY the Bash tool: `ls ' + REPO + '/.sessi-work/sentinels/ 2>/dev/null | grep "^g1_" | grep "\\.flag$" || true`. Return raw output, no commentary.',
+  { label: 'sentinel-precheck', phase: 'Load FRs' }
+)
+const alreadyDone = new Set()
+if (typeof sentinelRaw === 'string') {
+  for (const line of sentinelRaw.split('\n')) {
+    const m = line.trim().match(/^g1_fr(\d+)\.flag$/)
+    if (m) alreadyDone.add('FR-' + m[1].padStart(2, '0'))
+  }
+}
+if (alreadyDone.size > 0) log('  sentinel pre-check: Gate 1 already PASS for ' + [...alreadyDone].join(', ') + ' — skipping TDD agents')
+
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Per-FR TDD (script-driven loop; one narrow agent per FR)
 // ════════════════════════════════════════════════════════════════════════
@@ -137,29 +151,34 @@ const gate1Fail = []
 let p3MidPushed = false
 const p3MidThreshold = Math.ceil(frIds.length / 2)  // PUSH ③ trigger: ≥50% FRs Gate 1 PASS
 for (const frId of frIds) {
-  log('  === ' + frId + ' (' + (frTitle[frId] || '') + ') — TDD chain ===')
-  const frReport = await agent(
-    'YOU ARE THE IMPLEMENTER for ' + frId + ' (' + (frTitle[frId] || '') + '). Run the full TDD chain for THIS ONE FR.\n'
-    + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-    + 'Run these harness steps IN ORDER (each is a bash command; read its output before the next):\n'
-    + '1. TDD-RED:    `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-RED --project ' + REPO + ' --srs 01-requirements/SRS.md`\n'
-    + '2. MIRROR:     `' + PY + ' ' + REPO + '/harness_cli.py check-test-mirrors-spec --phase 3 --fr-id ' + frId + ' --test-file tests/test_*.py --project ' + REPO + '`\n'
-    + '3. TDD-GREEN:  `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-GREEN --project ' + REPO + ' --srs 01-requirements/SRS.md`\n'
-    + '4. TDD-IMPROVE:`' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-IMPROVE --project ' + REPO + '`\n'
-    + '5. GATE1:      `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step GATE1 --project ' + REPO + '`\n'
-    + '   Gate 1 thresholds: linting(90) type_safety(85) test_coverage(80).\n'
-    + '   - PASS → done.\n'
-    + '   - FAIL → fix failing dims (ruff check . --fix; add tests for coverage; fix pyright errors), re-run GATE1. Max 3 rounds.\n'
-    + '   - Still failing after 3 → report FAIL.\n'
-    + '   Each run-fr-step auto-pushes on completion (idempotent). Crash recovery: `resume-fr-step --phase 3 --project ' + REPO + '`.\n\n'
-    + 'Implement the module per SPEC.md (read ' + REPO + '/SPEC.md for ' + frId + ') + SAD.md module mapping. Write source under 03-development/src/ (or src/taskq/ per SAD), tests under tests/. Docstrings must include [' + frId + '] reference (NFR-05).\n\n'
-    + 'Report final line: "' + frId + ' GATE1: PASS" or "' + frId + ' GATE1: FAIL — <reason>".\n\n'
-    + 'SCOPE RULES:\n- DO NOT implement any FR OTHER than ' + frId + '.\n- DO NOT run run-gate (Gate 2), advance-phase, or push-milestone.\n- DO NOT modify harness/ (HR-17).\n- ONLY the 5 steps above for ' + frId + '.',
-    { label: 'tdd-' + frId, phase: 'Per-FR TDD', agentType: 'general-purpose' },
-  )
-  const passed = typeof frReport === 'string' && new RegExp(frId + '\\s*GATE1:\\s*PASS').test(frReport)
-  if (passed) { gate1Pass.push(frId); log('  ' + frId + ' Gate 1 PASS (' + gate1Pass.length + '/' + frIds.length + ')') }
-  else { gate1Fail.push(frId); log('  ' + frId + ' Gate 1 FAIL') }
+  if (alreadyDone.has(frId)) {
+    log('  ' + frId + ' — sentinel exists, Gate 1 PASS (skip TDD)')
+    gate1Pass.push(frId)
+  } else {
+    log('  === ' + frId + ' (' + (frTitle[frId] || '') + ') — TDD chain ===')
+    const frReport = await agent(
+      'YOU ARE THE IMPLEMENTER for ' + frId + ' (' + (frTitle[frId] || '') + '). Run the full TDD chain for THIS ONE FR.\n'
+      + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
+      + 'Run these harness steps IN ORDER (each is a bash command; read its output before the next):\n'
+      + '1. TDD-RED:    `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-RED --project ' + REPO + ' --srs 01-requirements/SRS.md`\n'
+      + '2. MIRROR:     `' + PY + ' ' + REPO + '/harness_cli.py check-test-mirrors-spec --phase 3 --fr-id ' + frId + ' --test-file tests/test_*.py --project ' + REPO + '`\n'
+      + '3. TDD-GREEN:  `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-GREEN --project ' + REPO + ' --srs 01-requirements/SRS.md`\n'
+      + '4. TDD-IMPROVE:`' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-IMPROVE --project ' + REPO + '`\n'
+      + '5. GATE1:      `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step GATE1 --project ' + REPO + '`\n'
+      + '   Gate 1 thresholds: linting(90) type_safety(85) test_coverage(80).\n'
+      + '   - PASS → done.\n'
+      + '   - FAIL → fix failing dims (ruff check . --fix; add tests for coverage; fix pyright errors), re-run GATE1. Max 3 rounds.\n'
+      + '   - Still failing after 3 → report FAIL.\n'
+      + '   Each run-fr-step auto-pushes on completion (idempotent). Crash recovery: `resume-fr-step --phase 3 --project ' + REPO + '`.\n\n'
+      + 'Implement the module per SPEC.md (read ' + REPO + '/SPEC.md for ' + frId + ') + SAD.md module mapping. Write source under 03-development/src/ (or src/taskq/ per SAD), tests under tests/. Docstrings must include [' + frId + '] reference (NFR-05).\n\n'
+      + 'Report final line: "' + frId + ' GATE1: PASS" or "' + frId + ' GATE1: FAIL — <reason>".\n\n'
+      + 'SCOPE RULES:\n- DO NOT implement any FR OTHER than ' + frId + '.\n- DO NOT run run-gate (Gate 2), advance-phase, or push-milestone.\n- DO NOT modify harness/ (HR-17).\n- ONLY the 5 steps above for ' + frId + '.',
+      { label: 'tdd-' + frId, phase: 'Per-FR TDD', agentType: 'general-purpose' },
+    )
+    const passed = typeof frReport === 'string' && new RegExp(frId + '\\s*GATE1:\\s*PASS').test(frReport)
+    if (passed) { gate1Pass.push(frId); log('  ' + frId + ' Gate 1 PASS (' + gate1Pass.length + '/' + frIds.length + ')') }
+    else { gate1Fail.push(frId); log('  ' + frId + ' Gate 1 FAIL') }
+  }
 
   // PUSH ③ p3-mid — fire once when ≥50% FRs have Gate 1 PASS (but not yet all done).
   if (!p3MidPushed && gate1Pass.length >= p3MidThreshold && gate1Pass.length < frIds.length) {
@@ -168,9 +187,10 @@ for (const frId of frIds) {
     await agent(
       'YOU ARE THE P3 MID-MILESTONE PUSHER (≥50% FRs Gate 1 PASS).\n'
       + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-      + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-mid --project ' + REPO
+      + '0. GUARD: `git -C ' + REPO + ' log --oneline --grep="p3-mid" -1`. If a p3-mid commit already exists, report "MILESTONE: PASS (already pushed)" and stop — do NOT push again.\n'
+      + '1. Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-mid --project ' + REPO
       + ' --fr-done ' + gate1Pass.length + ' --fr-total ' + frIds.length + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
-      + 'Writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n\n'
+      + '   Writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n\n'
       + 'Report: "MILESTONE: PASS|FAIL — <details>".\n\n'
       + 'SCOPE RULES:\n- DO NOT run run-gate / advance-phase / implement FRs.\n- ONLY push-milestone p3-mid.',
       { label: 'milestone-p3-mid', phase: 'Per-FR TDD', agentType: 'general-purpose' },
@@ -189,8 +209,9 @@ log('All ' + frIds.length + ' FRs Gate 1 PASS — push p3-pre-gate2 (last stable
 const preGate2Report = await agent(
   'YOU ARE THE P3 MILESTONE PUSHER. Push the pre-Gate-2 milestone.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-  + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-pre-gate2 --project ' + REPO + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
-  + 'This writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n\n'
+  + '0. GUARD: `git -C ' + REPO + ' log --oneline --grep="p3-pre-gate2" -1`. If a p3-pre-gate2 commit already exists, report "MILESTONE: PASS (already pushed)" and stop.\n'
+  + '1. Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-pre-gate2 --project ' + REPO + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
+  + '   Writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n\n'
   + 'Report: "MILESTONE: PASS|FAIL — <details>".\n\n'
   + 'SCOPE RULES:\n- DO NOT run run-gate or advance-phase.\n- ONLY push-milestone p3-pre-gate2.',
   { label: 'milestone-pre-gate2', phase: 'Milestones', agentType: 'general-purpose' },
@@ -203,7 +224,7 @@ if (!(typeof preGate2Report === 'string' && /MILESTONE:\s*PASS/.test(preGate2Rep
 // Phase: Gate 2 (run-gate → eval dims → finalize → D4 60% → retry; HR-08)
 // ════════════════════════════════════════════════════════════════════════
 phase('Gate 2')
-log('Gate 2 exit (composite ≥75, 10 dims incl. framework-owned traceability)')
+log('Gate 2 exit (composite ≥75, 9 dims: 8 self-scored + traceability framework-owned)')
 let gate2Pass = false, gate2Report = ''
 for (let round = 1; round <= 3; round++) {
   log('  Gate 2 round ' + round + '/3')
@@ -211,6 +232,7 @@ for (let round = 1; round <= 3; round++) {
     'YOU ARE THE GATE-2 ORCHESTRATOR (Phase 3 exit). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
     + 'Steps:\n'
+    + '0. TRACE-PRECHECK: `' + PY + ' ' + REPO + '/harness_cli.py build-trace-attestation --project ' + REPO + ' --write 2>&1 | tail -4`. If output contains "wrote canonical", commit immediately: `git -C ' + REPO + ' add .methodology/trace/attestation.json && git -C ' + REPO + ' commit -m "trace: regen attestation before Gate 2"`. Prevents trace_dirt from blocking finalize-gate.\n'
     + '1. G2a: `' + PY + ' ' + REPO + '/harness_cli.py run-gate --gate 2 --phase 3 --project ' + REPO + '` — read the printed evaluation prompt.\n'
     + '2. G2b: Evaluate ALL Gate 2 dimensions inline per ' + REPO + '/harness/ssi/prompts/evaluate_dimension.md. Write ' + REPO + '/.sessi-work/gate2_result.json.\n'
     + '   Dims: linting(90) type_safety(85) test_coverage(80) security(80) secrets_scanning(100) license_compliance(100) integration_coverage(60) test_assertion_quality(60).\n'
@@ -241,7 +263,8 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-3 EXIT ORCHESTRATOR. Push formal exit + advance to Phase 4.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '1. PUSH ⑤ p3-post-gate2: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-post-gate2 --project ' + REPO + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
+  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?4\\|P4-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. If Phase 4 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
+  + '1. GUARD + PUSH ⑤ p3-post-gate2: `git -C ' + REPO + ' log --oneline --grep="p3-post-gate2" -1`. If a commit exists, skip the push. Else: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-post-gate2 --project ' + REPO + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
   + '   Pre-flight (enforced): gate2_result.json composite ≥75 + per-FR Gate 1 sentinel .sessi-work/sentinels/g1_<fr>.flag exists for every FR. If BLOCKED, read the error list and fix.\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 3 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 60%. Fix any blocker, re-run.\n'
@@ -252,13 +275,16 @@ const advanceReport = await agent(
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },
 )
 
+if (!advanceReport || !/ADVANCE:\s*PASS/.test(advanceReport)) {
+  return { error: 'Advance phase did not confirm PASS — check HANDOVER.md + state.json. If Phase 4 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-400) }
+}
 log('Phase 3 workflow complete. Open .methodology/phase4_plan.md to continue.')
 return {
   phase: 3,
   fr_count: frIds.length,
   gate1_pass: gate1Pass,
   gate2_status: gate2Pass ? 'PASS' : 'unknown',
-  advance_status: typeof advanceReport === 'string' && /ADVANCE:\s*PASS/.test(advanceReport) ? 'PASS' : 'unknown',
+  advance_status: 'PASS',
   artifacts: ['03-development/src/', 'tests/', '.methodology/gate2_result.json', 'HANDOVER.md'],
   notes: 'Phase 3 complete per phase3_plan.md v2.12.0. All FRs Gate 1 PASS + Gate 2 PASS. Phase 4 (Testing) ready.',
 }
