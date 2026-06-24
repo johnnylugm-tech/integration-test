@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P4-pre-gate3-20260624`  
+**Checkpoint**: `P4-gate3-20260624`  
 **Phase**: P4 — Testing  
-**Generated**: 2026-06-24T16:21:14Z
+**Generated**: 2026-06-24T16:24:50Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -14,9 +14,9 @@
 # 1. Clone (if working directory cleared)
 git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-test && cd integration-test
 
-# 2. Read plan and continue Phase 4
-cat .methodology/phase4_plan.md
-# Follow the active plan and continue from where you left off
+# 2. Read plan and start Phase 5
+cat .methodology/phase5_plan.md
+# Follow SKILL.md §0.1 Phase 5 entry check, then execute
 ```
 
 ---
@@ -31,59 +31,34 @@ git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-te
 git log --oneline -3
 
 # Confirm FSM state
-cat .methodology/state.json   # expected: phase=4 state=RUNNING last_gate=2 last_fr=FR-05
+cat .methodology/state.json   # expected: phase=4 state=RUNNING last_gate=3
 
 # Read active plan
-cat .methodology/phase4_plan.md
+cat .methodology/phase5_plan.md
 ```
 
 | 欄位 | 值 |
 |------|----|
 | Remote | `https://github.com/johnnylugm-tech/integration-test` |
 | Branch | `main` |
-| State | `phase=4 state=RUNNING last_gate=2 last_fr=FR-05` |
-| Plan | `.methodology/phase4_plan.md` |
+| State | `phase=4 state=RUNNING last_gate=3` |
+| Plan | `.methodology/phase5_plan.md` |
 
 ---
 
 ## 任務背景
 
-P4 Testing complete. Gate 3 not yet executed.
+Gate 3 PASS — quality cycle complete.
 
 ## 目前執行狀況
 
-All 5 FR(s) Gate 1 re-eval PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 3 (14 dims) not yet started.
-
-**A/B Session Results:**
-  - ? / developer: **COMPLETED**
-
-**Recently Committed Files:**
-  - `03-development/src/taskq/store.py`
-  - `.methodology/effort_metrics.db`
-  - `.methodology/quality_manifest.json`
-  - `.methodology/trace/attestation.latest.json`
-  - `03-development/src/taskq/breaker.py`
-  - `03-development/src/taskq/breaker.py.bak`
-  - `04-testing/COVERAGE_REPORT.md`
-  - `04-testing/TEST_RESULTS.md`
-  - `.methodology/trace/attestation.json`
-  - `03-development/src/taskq/cli.py`
-  - `.methodology/gate_timestamps.jsonl`
-  - `.methodology/state.json`
-  - `03-development/src/taskq/config.py`
-  - `03-development/src/taskq/executor.py`
-  - `03-development/src/taskq/models.py`
-  - `03-development/src/taskq/parser.py`
-  - `harness`
-  - `.claude/workflows/phase4-testing.js`
-  - `.claude/workflows/phase5-verification.js`
-  - `.claude/workflows/phase6-quality.js`
+Gate 3 PASS: score=100.0. — full test suite
 
 ## 接下來的工作
 
-1. Run Gate 3 evaluation (14 dims, target score ≥ 80)
-2. Fix any failures during evaluation
-3. On Gate 3 PASS → `finalize-gate --gate 3` handles push + HANDOVER
+1. Proceed to P5: Review Baseline
+2. Generate BASELINE.md
+3. On BASELINE.md ready → call commit_and_push_p5_baseline()
 
 ## 注意事項
 
@@ -93,7 +68,8 @@ All 5 FR(s) Gate 1 re-eval PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 3 (14 dims
 
 ## 附加資訊
 
-- **fr_count**: 5
+- **gate**: 3
+- **score**: 100.0
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*

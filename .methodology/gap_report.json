@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 28,
+    "total": 29,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 28,
+    "orphaned": 29,
     "critical": 0,
     "major": 0,
-    "minor": 28
+    "minor": 29
   },
   "gaps": [
     {
@@ -158,6 +158,12 @@
       "severity": "minor",
       "reason": "'CacheEntry' has no corresponding specification in SPEC.md",
       "action": "Add spec for CacheEntry or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'build_parser' has no corresponding specification in SPEC.md",
+      "action": "Add spec for build_parser or remove if unnecessary"
     },
     {
       "type": "ORPHANED",

@@ -79,9 +79,9 @@
   },
   "crg_review_context": {
     "status": "ok",
-    "summary": "Review context for 3 changed file(s):\n  - Risk: high\n  - 31 impacted nodes in 8 files",
+    "summary": "Review context for 26 changed file(s):\n  - Risk: high\n  - 31 impacted nodes in 8 files",
     "risk": "high",
-    "changed_file_count": 3,
+    "changed_file_count": 26,
     "impacted_file_count": 8,
     "key_entities": [
       "/Users/johnny/projects/integration-test/03-development/src/taskq/breaker.py",
@@ -98,13 +98,13 @@
     ],
     "context_savings": {
       "estimated": true,
-      "saved_tokens": 4488,
-      "saved_percent": 98
+      "saved_tokens": 441604,
+      "saved_percent": 100
     }
   },
   "crg_impact_radius": {
     "status": "ok",
-    "summary": "Blast radius for 3 changed file(s):\n  - 13 nodes directly changed\n  - 31 nodes impacted (within 2 hops)\n  - 8 additional files affected",
+    "summary": "Blast radius for 26 changed file(s):\n  - 13 nodes directly changed\n  - 31 nodes impacted (within 2 hops)\n  - 8 additional files affected",
     "risk": "high",
     "impacted_file_count": 8,
     "key_entities": [
@@ -117,8 +117,8 @@
     "truncated": false,
     "context_savings": {
       "estimated": true,
-      "saved_tokens": 4484,
-      "saved_percent": 98
+      "saved_tokens": 441600,
+      "saved_percent": 100
     }
   },
   "crg_affected_flows": {
