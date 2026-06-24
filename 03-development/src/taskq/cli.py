@@ -83,17 +83,12 @@ def _check_name_unique(name: str, cfg: Config) -> None:
             raise SystemExit(2)
 
 
-def cmd_submit(command: str, name: Optional[str], cfg: Config) -> Task:
-    """Validate and submit a new task to the queue.
+def _validate_submit_command(command: str) -> None:
+    """Validate command string for submit.
 
-    [FR-01] Validates the command against non-empty, length, injection-char,
-    and name-uniqueness rules. On pass, writes a pending task atomically to
-    $TASKQ_HOME/tasks.json and returns the Task object.
-
-    Raises SystemExit(2) on any validation failure (no storage write occurs).
+    [FR-01] Checks non-empty, length <= 1000, and injection-char restrictions.
+    Raises SystemExit(2) on failure.
     """
-    _ = validate_config(cfg)
-
     if not command or not command.strip():
         print("error: command must not be empty", file=sys.stderr)
         raise SystemExit(2)
@@ -104,19 +99,40 @@ def cmd_submit(command: str, name: Optional[str], cfg: Config) -> Task:
 
     _check_injection(command)
 
-    if name is not None:
-        _check_name_unique(name, cfg)
 
+def _make_pending_task(command: str, name: Optional[str]) -> Task:
+    """Create a pending Task object with generated id and timestamp.
+
+    [FR-01] Does not persist; caller must save.
+    """
     task_id = uuid.uuid4().hex[:8]
     created_at = datetime.now(tz=timezone.utc).isoformat()
 
-    task = Task(
+    return Task(
         id=task_id,
         command=command,
         name=name,
         status=TaskStatus.pending,
         created_at=created_at,
     )
+
+
+def cmd_submit(command: str, name: Optional[str], cfg: Config) -> Task:
+    """Validate and submit a new task to the queue.
+
+    [FR-01] Validates the command against non-empty, length, injection-char,
+    and name-uniqueness rules. On pass, writes a pending task atomically to
+    $TASKQ_HOME/tasks.json and returns the Task object.
+
+    Raises SystemExit(2) on any validation failure (no storage write occurs).
+    """
+    _ = validate_config(cfg)
+    _validate_submit_command(command)
+
+    if name is not None:
+        _check_name_unique(name, cfg)
+
+    task = _make_pending_task(command, name)
     save_task(task, cfg)
     return task
 
