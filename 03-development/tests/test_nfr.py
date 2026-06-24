@@ -7,6 +7,8 @@ Covers NFR-01 through NFR-06 per TEST_SPEC.md:
   NFR-04: Security — secret redaction in stdout_tail/stderr_tail
   NFR-05: Maintainability — docstrings with [FR-XX] references
   NFR-06: Deployability — TASKQ_* env vars + .env.example
+  NFR-99: Placeholder for TBD/deferred NFRs — none emitted in this project
+          (SRS.md §"not emitted" section; no test cases required)
 """
 from __future__ import annotations
 
