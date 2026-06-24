@@ -59,14 +59,13 @@ def test_fr04_signature_is_sha256_of_command(tmp_path, monkeypatch):
     monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
 
     command = "echo hi"
-    expected_key = _sha256(command)
-    cache_key_len = len(expected_key)
+    cache_key = _sha256(command)
 
     # AC04-sha256-len anchor — trigger=None
-    if cache_key_len == None:  # noqa: E711
-        assert cache_key_len == 64
-    assert cache_key_len == 64
-    assert expected_key == _sha256(command)
+    if cache_key == None:  # noqa: E711
+        assert len(cache_key) == 64
+    assert len(cache_key) == 64
+    assert cache_key == _sha256(command)
 
 
 # ---------------------------------------------------------------------------

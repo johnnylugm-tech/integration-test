@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P3-mid-20260624`  
+**Checkpoint**: `P3-pre-gate2-20260624`  
 **Phase**: P3 — Implementation  
-**Generated**: 2026-06-24T06:50:11Z
+**Generated**: 2026-06-24T06:54:06Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -48,39 +48,39 @@ cat .methodology/phase3_plan.md
 
 ## 任務背景
 
-P3 Implementation in progress (≥50% milestone). 3/5 FRs done.
+P3 Implementation complete. Gate 2 not yet executed.
 
 ## 目前執行狀況
 
-3/5 FRs Gate 1 PASS [FR-01,FR-02,FR-03]. TDD cycles complete for passing FRs.
+All 5 FR(s) Gate 1 PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 2 evaluation not yet started.
 
 **Recently Committed Files:**
-  - `.claude/workflows/phase3-implementation.js`
-  - `.claude/workflows/phase4-testing.js`
-  - `.claude/workflows/phase5-verification.js`
-  - `.claude/workflows/phase6-quality.js`
-  - `.claude/workflows/phase7-risk.js`
-  - `.claude/workflows/phase8-config.js`
-  - `.methodology/trace/attestation.json`
-  - `HANDOVER.md`
-  - `.methodology/.gate1_scores.json`
-  - `.methodology/decision_logs/2026-06-23/GATE_3_008.yaml`
-  - `.methodology/effort_metrics.db`
-  - `.methodology/fr_progress.json`
-  - `.methodology/gate1_result.json`
-  - `.methodology/gate_timestamps.jsonl`
-  - `.methodology/quality_manifest.json`
+  - `.gitleaks.toml`
+  - `.methodology/phase1_plan.md`
+  - `.methodology/phase2_plan.md`
+  - `.methodology/phase3_plan.md`
+  - `.methodology/phase4_plan.md`
+  - `.methodology/phase5_plan.md`
+  - `.methodology/phase6_plan.md`
+  - `.methodology/phase7_plan.md`
+  - `.methodology/phase8_plan.md`
+  - `.methodology/plan_status.md`
   - `.methodology/state.json`
   - `.methodology/trace/attestation.latest.json`
-  - `00-summary/Phase3_STAGE_PASS.md`
-  - `CLAUDE.md`
-  - `03-development/tests/test_fr05.py`
+  - `03-development/src/taskq/breaker.py`
+  - `03-development/src/taskq/breaker.py.bak`
+  - `03-development/src/taskq/cache.py.bak`
+  - `03-development/src/taskq/cli.py.bak`
+  - `03-development/tests/integration/__init__.py`
+  - `03-development/tests/integration/test_integration_e2e.py`
+  - `03-development/tests/test_fr01.py`
+  - `03-development/tests/test_fr03.py`
 
 ## 接下來的工作
 
-1. Complete remaining 2 FR(s): FR-04, FR-05
-2. Ensure each FR has passing unit tests (TDD)
-3. When all FRs done → `push-milestone --type p3-pre-gate2`
+1. Run Gate 2 evaluation (target score ≥ 75)
+2. Fix any failures during evaluation
+3. On Gate 2 PASS → `finalize-gate --gate 2` handles push + HANDOVER
 
 ## 注意事項
 
@@ -90,9 +90,7 @@ P3 Implementation in progress (≥50% milestone). 3/5 FRs done.
 
 ## 附加資訊
 
-- **fr_done**: 3
-- **fr_total**: 5
-- **remaining_frs**: FR-04, FR-05
+- **fr_count**: 5
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*
