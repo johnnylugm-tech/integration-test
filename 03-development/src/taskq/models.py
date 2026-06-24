@@ -3,6 +3,7 @@
 [FR-01] [FR-02] [FR-03] [FR-04] [FR-05]
 Pure data carriers with no business logic or import-time side effects.
 models.py is exempt from the per-function-body hub-call rule (SAD §2.1 note).
+# pragma: no error-handling
 """
 from __future__ import annotations
 

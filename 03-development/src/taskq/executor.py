@@ -133,6 +133,24 @@ def run_task(
             task.status = TaskStatus.timeout
             final_exit_code = 4
 
+        except OSError as exc:
+            # [FR-02] Spawn failure (command not found / not executable /
+            # empty argv) is a terminal 'failed' result, NOT an uncaught crash:
+            # a command that cannot start has failed to run. Recording it as
+            # failed keeps run_all batches alive (the future no longer raises),
+            # notifies the breaker on final failure, and lets the CLI map to
+            # its exit-code contract instead of dumping a traceback (SPEC §7).
+            elapsed_ms = (time.monotonic() - start) * 1000
+            finished_at = datetime.now(tz=timezone.utc).isoformat()
+
+            task.exit_code = 127  # conventional "command not executable"
+            task.stdout_tail = ""
+            task.stderr_tail = str(exc)[-2000:]
+            task.duration_ms = elapsed_ms
+            task.finished_at = finished_at
+            task.status = TaskStatus.failed
+            final_exit_code = 0
+
         save_task(task, cfg)
 
         # If there are retries left, sleep with exponential backoff and retry
@@ -154,11 +172,25 @@ def run_all(cfg: Config, cached: bool = False, sleep_fn: Optional[Callable[[floa
     via the shared Lock in taskq.store (NFR-03).
 
     [FR-03] Each worker respects the circuit breaker; injectable sleep_fn
-    is forwarded to run_task for test isolation.
+    is forwarded to run_task for test isolation. When the breaker is
+    HALF_OPEN, exactly ONE trial task is admitted (SPEC FR-03 "放行一個任務"):
+    the trial runs alone first, and only its outcome (→CLOSED on success,
+    →re-OPEN on failure) decides whether the remaining tasks proceed. This
+    prevents the parallel dispatch from stampeding all pending tasks through
+    the single HALF_OPEN slot.
     """
     _ = validate_config(cfg)
+    from taskq.breaker import Breaker
+    from taskq.models import BreakerState
+
     tasks = load_tasks(cfg)
     pending = [t for t in tasks.values() if t.status == TaskStatus.pending]
+
+    # HALF_OPEN single-trial gate: run one task synchronously before fanning
+    # out, so the breaker's CLOSED/OPEN verdict gates the rest (FR-03).
+    if pending and Breaker(cfg).get_current_state() == BreakerState.HALF_OPEN:
+        trial = pending.pop(0)
+        run_task(trial.id, cfg, cached, False, sleep_fn)
 
     with ThreadPoolExecutor(max_workers=cfg.max_workers) as executor:
         futures = [

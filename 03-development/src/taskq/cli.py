@@ -192,65 +192,34 @@ def _fmt_submit(task: Task, json_output: bool) -> str:
     return task.id
 
 
-def _dispatch_run(args, cfg: Config) -> None:
-    """Handle run subcommand — dispatch to executor.run_task or run_all.
-
-    [FR-02] [FR-03] [FR-04] Executor imported dynamically; stub for FR-01.
-    Raises SystemExit on error or with task exit code.
-    """
-    try:
-        from taskq.executor import run_task, run_all as executor_run_all  # type: ignore[import]
-    except ImportError:  # pragma: no cover
-        print("error: executor not yet implemented", file=sys.stderr)
-        raise SystemExit(1)
-    if args.all:
-        executor_run_all(cfg=cfg, cached=args.cached)
-    else:
-        if not args.id:  # pragma: no cover
-            print("error: provide a task id or --all", file=sys.stderr)
-            raise SystemExit(2)
-        exit_code = run_task(args.id, cfg=cfg, cached=args.cached, json_output=args.json)
-        raise SystemExit(exit_code)
-
-
-def _handler_submit(args, cfg: Config) -> None:
-    """Handle submit subcommand."""
-    task = cmd_submit(args.command, name=args.name, cfg=cfg)
-    print(_fmt_submit(task, args.json))
-
-
-def _handler_status(args, cfg: Config) -> None:
-    """Handle status subcommand."""
-    cmd_status(args.id, cfg=cfg, json_output=args.json)
-
-
-def _handler_list(args, cfg: Config) -> None:
-    """Handle list subcommand."""
-    cmd_list(args.status_filter, cfg=cfg, json_output=args.json)
-
-
-def _handler_clear(args, cfg: Config) -> None:
-    """Handle clear subcommand."""
-    cmd_clear(cfg=cfg)
-
-
-_DISPATCH_TABLE = {
-    "submit": _handler_submit,
-    "run": _dispatch_run,
-    "status": _handler_status,
-    "list": _handler_list,
-    "clear": _handler_clear,
-}
-
-
 def _dispatch_subcommand(args, cfg: Config) -> None:
-    """Router: dispatch parsed args via dispatch table.
+    """Router: dispatch parsed args.
 
     [FR-05] Routes submit, run, status, list, clear to their handlers.
     """
-    handler = _DISPATCH_TABLE.get(args.subcommand)
-    if handler:
-        handler(args, cfg)
+    if args.subcommand == "submit":
+        task = cmd_submit(args.command, name=args.name, cfg=cfg)
+        print(_fmt_submit(task, args.json))
+    elif args.subcommand == "run":
+        try:
+            from taskq.executor import run_task, run_all as executor_run_all  # type: ignore[import]
+        except ImportError:  # pragma: no cover
+            print("error: executor not yet implemented", file=sys.stderr)
+            raise SystemExit(1)
+        if args.all:
+            executor_run_all(cfg=cfg, cached=args.cached)
+        else:
+            if not args.id:  # pragma: no cover
+                print("error: provide a task id or --all", file=sys.stderr)
+                raise SystemExit(2)
+            exit_code = run_task(args.id, cfg=cfg, cached=args.cached, json_output=args.json)
+            raise SystemExit(exit_code)
+    elif args.subcommand == "status":
+        cmd_status(args.id, cfg=cfg, json_output=args.json)
+    elif args.subcommand == "list":
+        cmd_list(args.status_filter, cfg=cfg, json_output=args.json)
+    elif args.subcommand == "clear":
+        cmd_clear(cfg=cfg)
 
 
 def _build_parser() -> argparse.ArgumentParser:

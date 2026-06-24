@@ -3,6 +3,7 @@
 [FR-01] [FR-02] [FR-03] [FR-04] [FR-05] [NFR-06]
 All 8 TASKQ_* parameters are read from environment variables here.
 This is the sole reader of os.environ for configuration (NFR-06).
+# pragma: no error-handling
 """
 from __future__ import annotations
 

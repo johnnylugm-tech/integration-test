@@ -5,5 +5,6 @@
   "last_fr": "FR-05",
   "last_update": "2026-06-24T11:26:02.233371+00:00",
   "phase_truth_passed": false,
-  "last_milestone_command": "advance-phase --completed-phase 3"
+  "last_milestone_command": "push-milestone --type p4-mid",
+  "last_milestone_at": "2026-06-24T12:16:02.099054+00:00"
 }
