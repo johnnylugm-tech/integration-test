@@ -1,29 +1,29 @@
 {
   "gate": 1,
   "phase": 5,
-  "fr_id": "FR-01",
-  "overall_score": 96.94,
+  "fr_id": "FR-02",
+  "overall_score": 94.22,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "[]\n"
+      "tool_evidence": "All checks passed!\n"
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1782333782253\",\n    \"generalDiagnostics\": [],\n    \"summary\": {\n        \"filesAnalyzed\": 10,\n        \"errorCount\": 0,\n        \"warningCount\": 0,\n        \"informationCount\": 0,\n        \"timeInSec\": 0.335\n    }\n}\n"
+      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n0 errors, 0 warnings, 0 informations\n"
     },
     "test_coverage": {
-      "score": 91,
+      "score": 83,
       "threshold": 80,
-      "tests_passed": 43,
+      "tests_passed": 37,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "Name                                   Stmts   Miss  Cover\n----------------------------------------------------------\n03-development/src/taskq/__init__.py       0      0   100%\n03-development/src/taskq/cli.py          111     24    78%\n03-development/src/taskq/config.py        39      0   100%\n03-development/src/taskq/models.py        38      0   100%\n03-development/src/taskq/store.py         76      1    99%\n----------------------------------------------------------\nTOTAL                                    264     25    91%\n\nPytest: 43 passed in 0.09s (0 failed, 0 skipped). 13/13 required FR-01 tests present and passing."
+      "tool_evidence": "Name                                   Stmts   Miss  Cover\n03-development/src/taskq/breaker.py       74     16    78%\n03-development/src/taskq/cache.py         62     17    73%\n03-development/src/taskq/config.py        39      1    97%\n03-development/src/taskq/executor.py     101     27    73%\n03-development/src/taskq/models.py        38      0   100%\n03-development/src/taskq/store.py         76      5    93%\nTOTAL                                    390     66    83%\nPytest: 37 passed in 5.32s (0 failed, 0 skipped). 16/16 required FR-02 tests present and passing."
     }
   },
-  "composite_score": 96.94
+  "composite_score": 94.22
 }
