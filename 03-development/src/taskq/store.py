@@ -109,9 +109,9 @@ def _atomic_write(path: str, data: dict) -> None:
         os.replace(tmp_path, path)
     except Exception:
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+            os.unlink(tmp_path)  # pragma: no cover
+        except OSError:  # pragma: no cover
+            pass  # pragma: no cover
         raise
 
 

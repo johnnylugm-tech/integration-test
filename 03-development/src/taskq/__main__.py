@@ -4,5 +4,5 @@
 """
 from taskq.cli import main  # noqa: F401
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

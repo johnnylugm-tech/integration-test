@@ -17,13 +17,9 @@ import json
 import os
 import re
 import tempfile
-import threading
 import time
 from pathlib import Path
-from typing import Optional
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -32,7 +28,7 @@ from taskq.config import get_config, Config, _parse_env
 from taskq.models import Task, TaskStatus
 from taskq.store import save_task, load_tasks, _redact, _atomic_write
 from taskq.breaker import Breaker
-from taskq.cli import cmd_submit, cmd_status
+from taskq.cli import cmd_submit
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +175,7 @@ def test_nfr03_cache_json_valid_after_simulated_interrupt(tmp_path):
     os.environ["TASKQ_HOME"] = str(tmp_path)
     cfg = get_config()
 
-    from taskq.cache import write as cache_write, _load as cache_load
+    from taskq.cache import write as cache_write
     task = Task(
         id="t1",
         command="echo hi",

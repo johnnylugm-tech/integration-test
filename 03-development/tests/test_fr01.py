@@ -28,7 +28,7 @@ def _submit_exit_code(command, name, tmp_path) -> int:
         cmd_submit(command, name=name, cfg=cfg)
         return 0
     except SystemExit as e:
-        return e.code if e.code is not None else 1
+        return int(e.code) if e.code is not None else 1
     except (ValueError, TypeError):
         return 2
 
