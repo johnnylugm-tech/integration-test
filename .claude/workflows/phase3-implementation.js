@@ -246,6 +246,11 @@ for (let round = 1; round <= 3; round++) {
     + 'SCOPE RULES:\n- DO NOT run advance-phase or push-milestone p3-post-gate2 (next phase does that).\n- DO NOT edit .sessi-work/gate2_result.json to fake scores — fix the code.\n- DO NOT modify harness/ (HR-17).\n- ONLY run-gate/eval/finalize/spec-coverage + code fixes.',
     { label: 'gate2-r' + round, phase: 'Gate 2', agentType: 'general-purpose' },
   )
+  // Detect session-limit / rate-limit failures: agent returns null or empty when blocked.
+  if (gate2Report === null || gate2Report === undefined || (typeof gate2Report === 'string' && gate2Report.length < 10)) {
+    log('  Gate 2 agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
+    return { session_limit_blocked: true, gate: 2, message: 'Agent hit session/rate limit during Gate 2 evaluation. Resume after quota reset — GUARD checks will skip completed FRs.' }
+  }
   gate2Pass = typeof gate2Report === 'string' && /GATE2:\s*PASS/.test(gate2Report)
   if (gate2Pass) { log('  Gate 2 PASS'); break }
   log('  Gate 2 not yet PASS — retry round ' + (round + 1))
