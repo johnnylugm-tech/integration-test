@@ -7,8 +7,8 @@
     {
       "name": "cli",
       "modules": [
-        "taskq.cli",
-        "taskq.__main__"
+        "03-development/src/taskq/cli.py",
+        "03-development/src/taskq/__main__.py"
       ],
       "allowed_dependencies": [
         "core",
@@ -18,10 +18,10 @@
     {
       "name": "core",
       "modules": [
-        "taskq.executor",
-        "taskq.breaker",
-        "taskq.cache",
-        "taskq.store"
+        "03-development/src/taskq/executor.py",
+        "03-development/src/taskq/breaker.py",
+        "03-development/src/taskq/cache.py",
+        "03-development/src/taskq/store.py"
       ],
       "allowed_dependencies": [
         "infra"
@@ -30,8 +30,8 @@
     {
       "name": "infra",
       "modules": [
-        "taskq.config",
-        "taskq.models"
+        "03-development/src/taskq/config.py",
+        "03-development/src/taskq/models.py"
       ],
       "allowed_dependencies": []
     }

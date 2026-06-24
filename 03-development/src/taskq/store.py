@@ -108,13 +108,13 @@ def _atomic_write(path: str, data: dict) -> None:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         os.replace(tmp_path, path)
-    except Exception:
+        tmp_path = None
+    finally:
         if tmp_path is not None:
             try:
                 os.unlink(tmp_path)  # pragma: no cover
             except OSError:  # pragma: no cover
                 pass  # pragma: no cover
-        raise
 
 
 def _task_to_dict(task: Task) -> dict:

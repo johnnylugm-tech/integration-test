@@ -82,13 +82,13 @@ class Breaker:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=3)
             os.replace(tmp_path, path)
-        except Exception:
+            tmp_path = None
+        finally:
             if tmp_path is not None:
                 try:
                     os.unlink(tmp_path)  # pragma: no cover
                 except OSError:  # pragma: no cover
                     pass  # pragma: no cover
-            raise
 
     def get_state(self) -> BreakerState:
         """Return the raw persisted FSM state (ignoring cooldown).
