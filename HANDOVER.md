@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P3-pre-gate2-20260624`  
+**Checkpoint**: `P3-gate2-20260624`  
 **Phase**: P3 — Implementation  
-**Generated**: 2026-06-24T06:54:06Z
+**Generated**: 2026-06-24T07:08:21Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -14,9 +14,9 @@
 # 1. Clone (if working directory cleared)
 git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-test && cd integration-test
 
-# 2. Read plan and continue Phase 3
-cat .methodology/phase3_plan.md
-# Follow the active plan and continue from where you left off
+# 2. Read plan and start Phase 4
+cat .methodology/phase4_plan.md
+# Follow SKILL.md §0.1 Phase 4 entry check, then execute
 ```
 
 ---
@@ -31,56 +31,34 @@ git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-te
 git log --oneline -3
 
 # Confirm FSM state
-cat .methodology/state.json   # expected: phase=3 state=RUNNING last_gate=1 last_fr=FR-05
+cat .methodology/state.json   # expected: phase=3 state=RUNNING last_gate=2
 
 # Read active plan
-cat .methodology/phase3_plan.md
+cat .methodology/phase4_plan.md
 ```
 
 | 欄位 | 值 |
 |------|----|
 | Remote | `https://github.com/johnnylugm-tech/integration-test` |
 | Branch | `main` |
-| State | `phase=3 state=RUNNING last_gate=1 last_fr=FR-05` |
-| Plan | `.methodology/phase3_plan.md` |
+| State | `phase=3 state=RUNNING last_gate=2` |
+| Plan | `.methodology/phase4_plan.md` |
 
 ---
 
 ## 任務背景
 
-P3 Implementation complete. Gate 2 not yet executed.
+Gate 2 PASS — quality cycle complete.
 
 ## 目前執行狀況
 
-All 5 FR(s) Gate 1 PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 2 evaluation not yet started.
-
-**Recently Committed Files:**
-  - `.gitleaks.toml`
-  - `.methodology/phase1_plan.md`
-  - `.methodology/phase2_plan.md`
-  - `.methodology/phase3_plan.md`
-  - `.methodology/phase4_plan.md`
-  - `.methodology/phase5_plan.md`
-  - `.methodology/phase6_plan.md`
-  - `.methodology/phase7_plan.md`
-  - `.methodology/phase8_plan.md`
-  - `.methodology/plan_status.md`
-  - `.methodology/state.json`
-  - `.methodology/trace/attestation.latest.json`
-  - `03-development/src/taskq/breaker.py`
-  - `03-development/src/taskq/breaker.py.bak`
-  - `03-development/src/taskq/cache.py.bak`
-  - `03-development/src/taskq/cli.py.bak`
-  - `03-development/tests/integration/__init__.py`
-  - `03-development/tests/integration/test_integration_e2e.py`
-  - `03-development/tests/test_fr01.py`
-  - `03-development/tests/test_fr03.py`
+Gate 2 PASS: score=95.7.
 
 ## 接下來的工作
 
-1. Run Gate 2 evaluation (target score ≥ 75)
-2. Fix any failures during evaluation
-3. On Gate 2 PASS → `finalize-gate --gate 2` handles push + HANDOVER
+1. Proceed to P4: Testing
+2. Build full test suite (Gate 3 target ≥ 80)
+3. On Gate 3 PASS → call commit_and_push_gate(gate_num=3, ...)
 
 ## 注意事項
 
@@ -90,7 +68,8 @@ All 5 FR(s) Gate 1 PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 2 evaluation not y
 
 ## 附加資訊
 
-- **fr_count**: 5
+- **gate**: 2
+- **score**: 95.7
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*
