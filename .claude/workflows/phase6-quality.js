@@ -87,7 +87,7 @@ if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightR
 // ════════════════════════════════════════════════════════════════════════
 phase('Gate 4')
 log('Gate 4 full-project eval (composite ≥85, 14 dims: 13 self-scored + traceability/architecture framework-owned)')
-let gate4Pass = false, gate4Report = ''
+let gate4Pass = false, gate4Report = '', gate4Blocked = false
 for (let round = 1; round <= 3; round++) {
   log('  Gate 4 round ' + round + '/3')
   gate4Report = await agent(
@@ -112,9 +112,18 @@ for (let round = 1; round <= 3; round++) {
     + 'SCOPE RULES:\n- DO NOT generate RELEASE_NOTES/FINAL_SIGN_OFF (next phase) or run advance-phase / git tag.\n- DO NOT edit gate4_result.json scores to fake them — fix code (DA evidence is the only hand-authored part).\n- DO NOT modify harness/ (HR-17).\n- ONLY run-gate/DA-challenge/eval/finalize/spec-coverage + code fixes.',
     { label: 'gate4-r' + round, phase: 'Gate 4', agentType: 'general-purpose' },
   )
+  // Detect session-limit / rate-limit failures: agent returns null or empty when blocked.
+  if (gate4Report === null || gate4Report === undefined || (typeof gate4Report === 'string' && gate4Report.length < 10)) {
+    gate4Blocked = true
+    log('  Gate 4 agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
+    break
+  }
   gate4Pass = typeof gate4Report === 'string' && /GATE4:\s*PASS/.test(gate4Report)
   if (gate4Pass) { log('  Gate 4 PASS'); break }
   log('  Gate 4 not yet PASS — retry round ' + (round + 1))
+}
+if (gate4Blocked) {
+  return { session_limit_blocked: true, gate: 4, message: 'Agent hit session/rate limit during Gate 4 evaluation. Resume after quota reset — GUARD checks will skip completed FRs.' }
 }
 if (!gate4Pass) {
   return { error: 'Gate 4 did not PASS in 3 rounds (HR-08; write deferred_fixes.md + escalate to human)', raw: String(gate4Report ?? '').slice(-600) }

@@ -249,7 +249,7 @@ if (!(typeof huntReport === 'string' && /BUG-HUNT:\s*PASS/.test(huntReport))) {
 // ════════════════════════════════════════════════════════════════════════
 phase('Gate 3')
 log('Gate 3 exit (composite ≥80, 15 dims: 12 self-scored + traceability/architecture/adversarial_review framework-owned)')
-let gate3Pass = false, gate3Report = ''
+let gate3Pass = false, gate3Report = '', gate3Blocked = false
 for (let round = 1; round <= 3; round++) {
   log('  Gate 3 round ' + round + '/3')
   gate3Report = await agent(
@@ -270,9 +270,18 @@ for (let round = 1; round <= 3; round++) {
     + 'SCOPE RULES:\n- DO NOT run advance-phase.\n- DO NOT edit gate3_result.json to fake scores — fix the code.\n- DO NOT modify harness/ (HR-17).\n- ONLY run-gate/eval/finalize/spec-coverage + code fixes.',
     { label: 'gate3-r' + round, phase: 'Gate 3', agentType: 'general-purpose' },
   )
+  // Detect session-limit / rate-limit failures: agent returns null or empty when blocked.
+  if (gate3Report === null || gate3Report === undefined || (typeof gate3Report === 'string' && gate3Report.length < 10)) {
+    gate3Blocked = true
+    log('  Gate 3 agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
+    break
+  }
   gate3Pass = typeof gate3Report === 'string' && /GATE3:\s*PASS/.test(gate3Report)
   if (gate3Pass) { log('  Gate 3 PASS'); break }
   log('  Gate 3 not yet PASS — retry round ' + (round + 1))
+}
+if (gate3Blocked) {
+  return { session_limit_blocked: true, gate: 3, message: 'Agent hit session/rate limit during Gate 3 evaluation. Resume after quota reset — GUARD checks will skip completed FRs.' }
 }
 if (!gate3Pass) {
   return { error: 'Gate 3 did not PASS in 3 rounds (HR-08; write deferred_fixes.md + escalate to human)', raw: String(gate3Report ?? '').slice(-600) }
