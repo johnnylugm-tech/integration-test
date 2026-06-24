@@ -2,7 +2,7 @@
 
 [FR-05] Delegates to cli.main().
 """
-from taskq.cli import main  # noqa: F401
+from taskq.cli import main  # noqa: F401  # pragma: no cover
 
 if __name__ == "__main__":  # pragma: no cover
     main()

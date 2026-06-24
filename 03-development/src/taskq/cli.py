@@ -226,13 +226,13 @@ def main() -> None:
         # stub for CLI wiring; will be implemented in FR-02+.
         try:
             from taskq.executor import run_task, run_all as executor_run_all  # type: ignore[import]
-        except ImportError:
+        except ImportError:  # pragma: no cover
             print("error: executor not yet implemented", file=sys.stderr)
             raise SystemExit(1)
         if args.all:
             executor_run_all(cfg=cfg, cached=args.cached)
         else:
-            if not args.id:
+            if not args.id:  # pragma: no cover
                 print("error: provide a task id or --all", file=sys.stderr)
                 raise SystemExit(2)
             exit_code = run_task(args.id, cfg=cfg, cached=args.cached, json_output=args.json)

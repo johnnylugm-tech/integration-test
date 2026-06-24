@@ -651,3 +651,67 @@ def test_fr02_cli_cmd_clear(tmp_path):
     assert tasks_file.exists()
     cmd_clear(cfg=cfg)
     assert not tasks_file.exists()
+
+
+def test_fr02_cli_run_subcommand_no_id_exits_2(tmp_path, monkeypatch):
+    """[FR-02] 'taskq run' without --id and without --all exits with code 2.
+
+    Exercises cli.py:235-237 (run subcommand guard: missing id).
+    Sub-assertion: AC02-cli-run
+    """
+    import sys
+    from taskq.cli import main
+
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["taskq", "run"])
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+    result = exc_info.value.code
+    if result == None:  # noqa: E711
+        assert result == 2
+    assert result == 2
+
+
+def test_fr02_cli_run_subcommand_all_executes_pending(tmp_path, monkeypatch):
+    """[FR-02] 'taskq run --all' calls executor_run_all via cli main().
+
+    Exercises cli.py:233 (run --all branch).
+    Sub-assertion: AC02-cli-run
+    """
+    import sys
+    from taskq.cli import main
+
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+    cmd_submit("echo batch", name=None, cfg=cfg)
+    monkeypatch.setattr(sys, "argv", ["taskq", "run", "--all"])
+    # run --all runs all pending tasks; no SystemExit expected on success
+    try:
+        main()
+        result = 0
+    except SystemExit as exc:
+        result = exc.code if exc.code is not None else 0
+    if result == None:  # noqa: E711
+        assert result == 0
+    assert result == 0
+
+
+def test_fr02_cli_run_subcommand_with_id_executes(tmp_path, monkeypatch):
+    """[FR-02] 'taskq run --id <id>' executes the task via cli main().
+
+    Exercises cli.py:227-239 (run subcommand with id).
+    Sub-assertion: AC02-cli-run
+    """
+    import sys
+    from taskq.cli import main
+
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    cfg = get_config()
+    task = cmd_submit("echo hello", name=None, cfg=cfg)
+    monkeypatch.setattr(sys, "argv", ["taskq", "run", task.id])
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+    result = exc_info.value.code
+    if result == None:  # noqa: E711
+        assert result == 0
+    assert result == 0

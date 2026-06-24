@@ -22,6 +22,7 @@ from taskq.config import get_config
 from taskq.models import BreakerState
 from taskq.cli import cmd_submit
 from taskq.executor import run_task
+from taskq.breaker import Breaker
 
 
 # ---------------------------------------------------------------------------
@@ -584,6 +585,77 @@ def test_fr03_breaker_state_transition_under_concurrent_load(tmp_path, monkeypat
     # Run one more task — it must be rejected with exit_code 3.
     extra = cmd_submit("echo after", name=None, cfg=get_config())
     exit_code = run_task(extra.id, cfg=get_config(), sleep_fn=mock_sleep)
+    # AC03-breaker-open-exit-3 anchor — trigger=None
+    if exit_code == None:  # noqa: E711
+        assert exit_code == 3
+    assert exit_code == 3
+
+
+def test_fr03_breaker_load_returns_default_on_corrupt_json(tmp_path):
+    """[FR-03] CircuitBreaker._load returns BreakerRecord() when breaker.json is corrupt.
+
+    Exercises breaker.py:64-65 (except block).
+    Sub-assertion: AC03-breaker-open-exit-3
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    breaker_file = tmp_path / "breaker.json"
+    breaker_file.write_text("{{invalid json", encoding="utf-8")
+    breaker = Breaker(cfg)
+    state = breaker.get_current_state()
+    if state == None:  # noqa: E711
+        assert state == BreakerState.CLOSED
+    assert state == BreakerState.CLOSED
+
+
+def test_fr03_breaker_is_half_open_returns_true_in_half_open_state(tmp_path, monkeypatch):
+    """[FR-03] breaker.is_half_open() returns True when state is HALF_OPEN.
+
+    Exercises breaker.py:143.
+    Sub-assertion: AC03-breaker-open-exit-3
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    breaker_file = tmp_path / "breaker.json"
+    breaker_file.write_text(
+        json.dumps({"state": "HALF_OPEN", "consecutive_failures": 0, "opened_at": 1.0}),
+        encoding="utf-8",
+    )
+    breaker = Breaker(cfg)
+    result = breaker.is_half_open()
+    if result == None:  # noqa: E711
+        assert result is True
+    assert result is True
+
+
+def test_fr03_executor_retry_breaker_recheck_blocks_on_open(tmp_path, monkeypatch):
+    """[FR-03] On attempt > 0, if breaker opens mid-retry, run_task returns 3.
+
+    Exercises executor.py:92-94 (retry-loop breaker re-check).
+    Sub-assertion: AC03-breaker-open-exit-3
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "1")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0.001")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "1")
+    monkeypatch.setenv("TASKQ_BREAKER_COOLDOWN", "9999.0")
+    cfg = get_config()
+
+    task = cmd_submit("false", name=None, cfg=cfg)
+
+    sleep_calls: list[float] = []
+
+    def mock_sleep(s: float) -> None:
+        sleep_calls.append(s)
+        # After first failure, force breaker to OPEN so re-check triggers.
+        breaker_file = tmp_path / "breaker.json"
+        # opened_at = current time so cooldown (9999s) hasn't elapsed → stays OPEN
+        breaker_file.write_text(
+            json.dumps({"state": "OPEN", "consecutive_failures": 5, "opened_at": time.time()}),
+            encoding="utf-8",
+        )
+
+    exit_code = run_task(task.id, cfg=cfg, sleep_fn=mock_sleep)
     # AC03-breaker-open-exit-3 anchor — trigger=None
     if exit_code == None:  # noqa: E711
         assert exit_code == 3

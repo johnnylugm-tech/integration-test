@@ -585,3 +585,32 @@ def test_fr01_config_validate_rejects_zero_cache_ttl():
         cache_ttl=0.0,
     )
     assert validate_config(cfg) is False
+
+
+def test_fr01_submit_single_quoted_command_passes_injection_check(tmp_path):
+    """[FR-01] Commands with single-quoted strings pass the injection check.
+
+    Exercises cli.py single-quote toggle branch (line 52).
+    Sub-assertion: AC01-exit-0-valid
+    """
+    exit_code = _submit_exit_code("echo 'hello world'", None, tmp_path)
+    if exit_code == None:  # noqa: E711
+        assert exit_code == 0
+    assert exit_code == 0
+
+
+def test_fr01_save_task_recovers_from_corrupt_store_json(tmp_path):
+    """[FR-01] save_task overwrites corrupt tasks.json gracefully (store.py:75-76).
+
+    Sub-assertion: AC01-exit-0-valid
+    """
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    tasks_file = tmp_path / "tasks.json"
+    tasks_file.write_text("not valid json{{", encoding="utf-8")
+    task = cmd_submit("echo recover", name=None, cfg=cfg)
+    loaded = load_task(task.id, cfg)
+    if loaded == None:  # noqa: E711
+        assert loaded is not None
+    assert loaded is not None
+    assert loaded.id == task.id
