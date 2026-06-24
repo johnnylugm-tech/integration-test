@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "2aa087f2956d441a87c6ad7e861214fc2ae5d683",
-  "content_sha256": "c31597150aec14acf4a1261dc16a7ef0c50f63cee266f9e1993aba509655eafb",
+  "git_sha": "b558a0a70dfb625698b5804389eb800b3e7d2b01",
+  "content_sha256": "02899325cdcab652d00d09541301d901641c8967aa49da2c4b3a764b19a54577",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -14,7 +14,7 @@
       "code_coverage": "100.0%",
       "test_coverage": "100.0%",
       "verification_rate": "100.0%",
-      "total_links": 56,
+      "total_links": 57,
       "missing_mappings": {
         "fr_without_srs": [],
         "fr_without_code": [],
@@ -123,6 +123,7 @@
           "03-development/src/taskq/cli.py",
           "03-development/src/taskq/config.py",
           "03-development/src/taskq/models.py",
+          "03-development/src/taskq/parser.py",
           "03-development/tests/integration/test_integration_e2e.py",
           "03-development/tests/test_fr05.py"
         ],

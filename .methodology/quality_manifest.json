@@ -127,11 +127,15 @@
       "overall_score": 95.65
     },
     "gate3": {
-      "score": 94.60879120879117,
-      "quality_complete": false,
-      "rounds_used": 1,
+      "score": 100.0,
+      "quality_complete": true,
+      "rounds_used": 2,
       "open_critical": 0,
-      "open_high": 0
+      "open_high": 0,
+      "phase": 4,
+      "gate": 3,
+      "fr_scope": "all",
+      "overall_score": 100.0
     },
     "gate4": null
   }

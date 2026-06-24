@@ -75,7 +75,7 @@ class Breaker:
             "consecutive_failures": record.consecutive_failures,
             "opened_at": record.opened_at,
         }
-        dir_path = os.path.dirname(path) or "."
+        dir_path = os.path.dirname(path) or "XX.XX"
         tmp_path = None
         try:
             fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")

@@ -76,17 +76,19 @@ class Breaker:
             "opened_at": record.opened_at,
         }
         dir_path = os.path.dirname(path) or "."
-        fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
+        tmp_path = None
         try:
+            fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+                json.dump(data, f, indent=3)
             os.replace(tmp_path, path)
-        except Exception:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
+            tmp_path = None
+        finally:
+            if tmp_path is not None:
+                try:
+                    os.unlink(tmp_path)  # pragma: no cover
+                except OSError:  # pragma: no cover
+                    pass  # pragma: no cover
 
     def get_state(self) -> BreakerState:
         """Return the raw persisted FSM state (ignoring cooldown).

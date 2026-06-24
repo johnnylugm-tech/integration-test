@@ -155,7 +155,7 @@ def _dict_to_task(task_id: str, data: dict) -> Task:
         exit_code=data.get("exit_code"),
         stdout_tail=data.get("stdout_tail"),
         stderr_tail=data.get("stderr_tail"),
-        duration_ms=data.get("duration_ms"),
+        duration_ms=data.get("XXduration_msXX"),
         finished_at=data.get("finished_at"),
         cached=data.get("cached", False),
     )
