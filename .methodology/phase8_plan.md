@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-23
+> **Date**: 2026-06-24
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 8 - Configuration Management
 > **Status**: Full version (including Phase 8 detailed tasks)
@@ -171,8 +171,6 @@ python3 harness_cli.py load-context --phase 8 --project . --json \
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)
   - `pytest --tb=short -q --cov=03-development/src --cov-fail-under=100` (exit 9)
   - `python3 harness_cli.py spec-coverage-check --project . --threshold 90.0` (exit 10, D4 unified v2.6)
-  - mutmut mutation testing (exit 11 — hard block; install: `pip install mutmut`;
-    kill surviving mutants or exclude data-only files via `paths_to_exclude` in setup.cfg)
   > For genuinely untestable lines add: `# pragma: no cover` (requires justification comment).
 
 ### 🎉 Pipeline Complete

@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P3-pre-gate2-20260623`  
+**Checkpoint**: `P3-mid-20260624`  
 **Phase**: P3 — Implementation  
-**Generated**: 2026-06-23T16:40:38Z
+**Generated**: 2026-06-24T06:50:11Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -48,13 +48,21 @@ cat .methodology/phase3_plan.md
 
 ## 任務背景
 
-P3 Implementation complete. Gate 2 not yet executed.
+P3 Implementation in progress (≥50% milestone). 3/5 FRs done.
 
 ## 目前執行狀況
 
-All 5 FR(s) Gate 1 PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 2 evaluation not yet started.
+3/5 FRs Gate 1 PASS [FR-01,FR-02,FR-03]. TDD cycles complete for passing FRs.
 
 **Recently Committed Files:**
+  - `.claude/workflows/phase3-implementation.js`
+  - `.claude/workflows/phase4-testing.js`
+  - `.claude/workflows/phase5-verification.js`
+  - `.claude/workflows/phase6-quality.js`
+  - `.claude/workflows/phase7-risk.js`
+  - `.claude/workflows/phase8-config.js`
+  - `.methodology/trace/attestation.json`
+  - `HANDOVER.md`
   - `.methodology/.gate1_scores.json`
   - `.methodology/decision_logs/2026-06-23/GATE_3_008.yaml`
   - `.methodology/effort_metrics.db`
@@ -66,21 +74,13 @@ All 5 FR(s) Gate 1 PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 2 evaluation not y
   - `.methodology/trace/attestation.latest.json`
   - `00-summary/Phase3_STAGE_PASS.md`
   - `CLAUDE.md`
-  - `.methodology/trace/attestation.json`
   - `03-development/tests/test_fr05.py`
-  - `03-development/src/taskq/cli.py`
-  - `.methodology/decision_logs/2026-06-23/GATE_3_007.yaml`
-  - `.methodology/gap_report.json`
-  - `03-development/tests/test_fr04.py`
-  - `03-development/src/taskq/cache.py`
-  - `03-development/src/taskq/executor.py`
-  - `HANDOVER.md`
 
 ## 接下來的工作
 
-1. Run Gate 2 evaluation (target score ≥ 75)
-2. Fix any failures during evaluation
-3. On Gate 2 PASS → `finalize-gate --gate 2` handles push + HANDOVER
+1. Complete remaining 2 FR(s): FR-04, FR-05
+2. Ensure each FR has passing unit tests (TDD)
+3. When all FRs done → `push-milestone --type p3-pre-gate2`
 
 ## 注意事項
 
@@ -90,7 +90,9 @@ All 5 FR(s) Gate 1 PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 2 evaluation not y
 
 ## 附加資訊
 
-- **fr_count**: 5
+- **fr_done**: 3
+- **fr_total**: 5
+- **remaining_frs**: FR-04, FR-05
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*

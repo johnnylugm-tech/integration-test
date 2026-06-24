@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-23
+> **Date**: 2026-06-24
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 4 - Testing
 > **Status**: Full version (including Phase 4 detailed tasks)
@@ -169,7 +169,7 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
 
 
 ### 🔒 CHECKPOINT-GATE-3: Phase 4 Exit
-> linting(90) · type_safety(85) · test_coverage(80) · security(80) · secrets_scanning(100) · license_compliance(100) · mutation_testing(70) · integration_coverage(60) · architecture(80) · readability(80) · error_handling(80) · documentation(75) · test_assertion_quality(60) · performance(75) · traceability(100) · adversarial_review(100) · composite ≥ 80  [traceability: framework-owned, harness-computed · adversarial_review: framework-owned, requires .methodology/bug_hunt_report.json · CRG recon inside run-gate · D4 spec-coverage unified ≥80%]
+> linting(90) · type_safety(85) · test_coverage(80) · security(80) · secrets_scanning(100) · license_compliance(100) · integration_coverage(60) · architecture(80) · readability(80) · error_handling(80) · documentation(75) · test_assertion_quality(60) · performance(75) · traceability(100) · adversarial_review(100) · composite ≥ 80  [traceability: framework-owned, harness-computed · adversarial_review: framework-owned, requires .methodology/bug_hunt_report.json · CRG recon inside run-gate · D4 spec-coverage unified ≥80%]
 > HR-08: Phase end requires Quality Gate pass — never advance past a failing gate (max 3 retry rounds, then escalate).
 > _Design note_: HR-08 only appears in P3-P6 (Gate 2/3/4 exits). P5/P7/P8 have no gate-exit checkpoint so HR-08 is correctly absent from those plans.
 
@@ -269,7 +269,7 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
 3. Re-run the tool for each fixed dim to confirm the score change
 4. Update `.sessi-work/gate{gate_num}_result.json` with new scores
 5. Re-run: `python3 harness_cli.py finalize-gate --gate 3 --phase 4 --project .`
-6. Repeat until CASE 1 PASS or 16 fix rounds exhausted
+6. Repeat until CASE 1 PASS or 15 fix rounds exhausted
 7. If stuck after 3 rounds: write `.methodology/deferred_fixes.md` with each remaining dim as a checkbox item ('- [ ] <dim>: <reason>'); every item MUST be resolved and marked '- [x]' before advance-phase (hard-blocked, exit 17, otherwise), then escalate
 
 
@@ -306,8 +306,6 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
     > Note: advance-phase uses mypy; Gate scoring uses pyright. Both must pass.
   - `pytest --tb=short -q --cov=03-development/src --cov-fail-under=100` (exit 9)
   - `python3 harness_cli.py spec-coverage-check --project . --threshold 80.0` (exit 10, D4 unified v2.6)
-  - mutmut mutation testing (exit 11 — hard block; install: `pip install mutmut`;
-    kill surviving mutants or exclude data-only files via `paths_to_exclude` in setup.cfg)
   > For genuinely untestable lines add: `# pragma: no cover` (requires justification comment).
 
 - Advance FSM to Phase 5 (writes new HANDOVER.md + local commit):

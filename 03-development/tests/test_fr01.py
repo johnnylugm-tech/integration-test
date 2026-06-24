@@ -328,6 +328,54 @@ def test_fr01_store_dict_to_task_invalid_status(tmp_path):
     assert task.status == TaskStatus.pending
 
 
+def test_fr01_store_dict_to_task_reads_command_field(tmp_path):
+    """[FR-01] _dict_to_task reads 'command' key from dict; returns empty string on miss."""
+    from taskq.store import _dict_to_task
+    data = {
+        "command": "echo hello",
+        "name": None,
+        "status": "pending",
+        "created_at": "2026-01-01T00:00:00",
+    }
+    task = _dict_to_task("abc12345", data)
+    assert task.command == "echo hello"
+
+
+def test_fr01_store_dict_to_task_reads_created_at_field(tmp_path):
+    """[FR-01] _dict_to_task reads 'created_at' key; returns empty string on miss."""
+    from taskq.store import _dict_to_task
+    ts = "2026-01-01T12:34:56"
+    data = {"command": "echo x", "name": None, "status": "pending", "created_at": ts}
+    task = _dict_to_task("abc12345", data)
+    assert task.created_at == ts
+
+
+def test_fr01_store_roundtrip_preserves_command_and_created_at(tmp_path):
+    """[FR-01] save_task + load_task roundtrip preserves command and created_at."""
+    os.environ["TASKQ_HOME"] = str(tmp_path)
+    cfg = get_config()
+    task = cmd_submit("echo roundtrip", name=None, cfg=cfg)
+    loaded = load_task(task.id, cfg=cfg)
+    assert loaded.command == "echo roundtrip"
+    assert loaded.created_at == task.created_at
+
+
+def test_fr01_store_redact_exact_output_format(tmp_path):
+    """[FR-01] _redact preserves non-sensitive lines exactly; no separator between lines."""
+    from taskq.store import _redact
+    text = "line one\nline two\n"
+    result = _redact(text)
+    assert result == "line one\nline two\n"
+
+
+def test_fr01_store_redact_multiline_mixed_output(tmp_path):
+    """[FR-01] _redact with sk-* lines replaces only those lines; separator is empty string."""
+    from taskq.store import _redact
+    text = "safe output\nsk-secret123\nnormal line\n"
+    result = _redact(text)
+    assert result == "safe output\n[REDACTED]\nnormal line\n"
+
+
 # ---------------------------------------------------------------------------
 # cli.py coverage — cmd_status, cmd_list, cmd_clear, _fmt_submit
 # ---------------------------------------------------------------------------

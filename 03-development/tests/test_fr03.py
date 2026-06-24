@@ -14,14 +14,13 @@ import os
 import json
 import time
 import threading
-from unittest.mock import patch, call, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from taskq.config import get_config, Config
-from taskq.models import TaskStatus, BreakerState
+from taskq.config import get_config
+from taskq.models import BreakerState
 from taskq.cli import cmd_submit
-from taskq.store import load_tasks, load_task
 from taskq.executor import run_task
 
 
@@ -266,7 +265,7 @@ def test_fr03_breaker_open_period_run_exits_3_no_subprocess(tmp_path, monkeypatc
 
     # AC03-no-subprocess-when-open anchor — trigger=None
     if subprocess_called == None:  # noqa: E711
-        assert subprocess_called == False
+        assert subprocess_called == False  # noqa: E712
     assert subprocess_called == False  # noqa: E712
 
 
@@ -460,7 +459,7 @@ def test_fr03_e2e_three_failures_then_run_exits_3(tmp_path, monkeypatch):
 
     # AC03-no-subprocess-when-open anchor — trigger=None
     if subprocess_called == None:  # noqa: E711
-        assert subprocess_called == False
+        assert subprocess_called == False  # noqa: E712
     assert subprocess_called == False  # noqa: E712
 
 

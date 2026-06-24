@@ -1,0 +1,11 @@
+# gitleaks configuration — allowlisted known-false-positives (test/doc data)
+title = "integration-test gitleaks config"
+
+[allowlist]
+description = "Test data and documentation examples are not real secrets"
+regexes = [
+    # Truncated placeholder in ADR.md documentation example
+    "sk-live-abc123\\.\\.\\.",
+    # Test fixture fake API key pattern used in test_fr03.py (redaction tests)
+    "sk-abcdef1234567890",
+]

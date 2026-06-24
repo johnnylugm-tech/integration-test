@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "e9f03417419f2fbaef230148191cd34569f00d52",
-  "content_sha256": "10513ea093cca1c98e85864e2070cd78f317dd3361b9039f1c25c0f678241684",
+  "git_sha": "93f745f5b90d4ea3174178c6679d76f79b421470",
+  "content_sha256": "2259ba13ca4e7b3c9f942fb13cbbe38df64fdfec9337ce93562fdfaa5280eb5f",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -14,7 +14,7 @@
       "code_coverage": "100.0%",
       "test_coverage": "100.0%",
       "verification_rate": "100.0%",
-      "total_links": 42,
+      "total_links": 52,
       "missing_mappings": {
         "fr_without_srs": [],
         "fr_without_code": [],
@@ -37,9 +37,11 @@
           "03-development/src/taskq/config.py",
           "03-development/src/taskq/models.py",
           "03-development/src/taskq/store.py",
+          "03-development/tests/integration/test_integration_e2e.py",
           "03-development/tests/test_fr01.py"
         ],
         "test_files": [
+          "tests/integration/test_integration_e2e.py",
           "tests/test_fr01.py"
         ],
         "sad_module": "—",
@@ -56,9 +58,11 @@
           "03-development/src/taskq/executor.py",
           "03-development/src/taskq/models.py",
           "03-development/src/taskq/store.py",
+          "03-development/tests/integration/test_integration_e2e.py",
           "03-development/tests/test_fr02.py"
         ],
         "test_files": [
+          "tests/integration/test_integration_e2e.py",
           "tests/test_fr02.py"
         ],
         "sad_module": "—",
@@ -75,9 +79,11 @@
           "03-development/src/taskq/config.py",
           "03-development/src/taskq/executor.py",
           "03-development/src/taskq/models.py",
+          "03-development/tests/integration/test_integration_e2e.py",
           "03-development/tests/test_fr03.py"
         ],
         "test_files": [
+          "tests/integration/test_integration_e2e.py",
           "tests/test_fr03.py"
         ],
         "sad_module": "—",
@@ -93,9 +99,11 @@
           "03-development/src/taskq/cli.py",
           "03-development/src/taskq/config.py",
           "03-development/src/taskq/models.py",
+          "03-development/tests/integration/test_integration_e2e.py",
           "03-development/tests/test_fr04.py"
         ],
         "test_files": [
+          "tests/integration/test_integration_e2e.py",
           "tests/test_fr04.py"
         ],
         "sad_module": "—",
@@ -111,9 +119,11 @@
           "03-development/src/taskq/cli.py",
           "03-development/src/taskq/config.py",
           "03-development/src/taskq/models.py",
+          "03-development/tests/integration/test_integration_e2e.py",
           "03-development/tests/test_fr05.py"
         ],
         "test_files": [
+          "tests/integration/test_integration_e2e.py",
           "tests/test_fr05.py"
         ],
         "sad_module": "—",
