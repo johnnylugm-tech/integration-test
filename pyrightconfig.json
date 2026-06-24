@@ -1,0 +1,5 @@
+{
+  "pythonPath": "03-development/src",
+  "pythonVersion": "3.12",
+  "exclude": ["harness", "tests", ".git"]
+}
