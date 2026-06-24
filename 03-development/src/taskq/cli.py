@@ -1,4 +1,4 @@
-"""taskq CLI — argparse subcommands and output formatting.
+"""taskq CLI — subcommands and output formatting.
 
 [FR-01] [FR-02] [FR-03] [FR-04] [FR-05]
 Entry: python -m taskq <subcommand> [options]
@@ -7,7 +7,6 @@ Exit codes: 0 success / 2 input validation / 3 breaker open / 4 timeout / 1 inte
 """
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 import uuid
@@ -22,29 +21,40 @@ from taskq.store import load_tasks, save_task, load_task
 _INJECTION_CHARS: frozenset[str] = frozenset(";|&$><`")
 
 
-def cmd_submit(command: str, name: Optional[str], cfg: Config) -> Task:
-    """Validate and submit a new task to the queue.
+def _get_status_value(status) -> str:
+    """Extract status string from Task.status enum or string.
 
-    [FR-01] Validates the command against non-empty, length, injection-char,
-    and name-uniqueness rules. On pass, writes a pending task atomically to
-    $TASKQ_HOME/tasks.json and returns the Task object.
-
-    Raises SystemExit(2) on any validation failure (no storage write occurs).
+    Handles both enum.value and direct string representations.
     """
-    _ = validate_config(cfg)
+    return status.value if hasattr(status, "value") else status
 
-    # Non-empty check
-    if not command or not command.strip():
-        print("error: command must not be empty", file=sys.stderr)
-        raise SystemExit(2)
 
-    # Length check
-    if len(command) > 1000:
-        print("error: command exceeds 1000 characters", file=sys.stderr)
-        raise SystemExit(2)
+def _format_task_dict(task: Task) -> dict:
+    """Convert a Task object to a dictionary for display/JSON.
 
-    # Injection-character check (NFR-02)
-    # Scan characters outside quoted strings only (single or double quotes).
+    [FR-05] Serializes all task fields including status normalization.
+    """
+    return {
+        "id": task.id,
+        "command": task.command,
+        "name": task.name,
+        "status": _get_status_value(task.status),
+        "created_at": task.created_at,
+        "exit_code": task.exit_code,
+        "stdout_tail": task.stdout_tail,
+        "stderr_tail": task.stderr_tail,
+        "duration_ms": task.duration_ms,
+        "finished_at": task.finished_at,
+        "cached": task.cached,
+    }
+
+
+def _check_injection(command: str) -> None:
+    """Raise SystemExit(2) if command contains injection characters outside quotes.
+
+    [FR-01] [NFR-02] Scans single-quoted and double-quoted spans, rejecting
+    characters in _INJECTION_CHARS found in unquoted regions.
+    """
     in_single = False
     in_double = False
     for ch in command:
@@ -56,22 +66,47 @@ def cmd_submit(command: str, name: Optional[str], cfg: Config) -> Task:
             print(f"error: command contains forbidden character {ch!r}", file=sys.stderr)
             raise SystemExit(2)
 
-    # Name-uniqueness check (pending/running tasks)
-    if name is not None:
-        tasks = load_tasks(cfg)
-        for task in tasks.values():
-            if task.name == name and task.status in (
-                TaskStatus.pending,
-                TaskStatus.running,
-            ):
-                print(
-                    f"error: a task named {name!r} already exists with status"
-                    f" {task.status.value}",
-                    file=sys.stderr,
-                )
-                raise SystemExit(2)
 
-    # Generate task id: uuid4 first 8 hex chars
+def _check_name_unique(name: str, cfg: Config) -> None:
+    """Raise SystemExit(2) if a pending/running task with the same name exists.
+
+    [FR-01] Prevents duplicate names among active tasks.
+    """
+    tasks = load_tasks(cfg)
+    for task in tasks.values():
+        if task.name == name and task.status in (TaskStatus.pending, TaskStatus.running):
+            print(
+                f"error: a task named {name!r} already exists with status"
+                f" {task.status.value}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+
+
+def cmd_submit(command: str, name: Optional[str], cfg: Config) -> Task:
+    """Validate and submit a new task to the queue.
+
+    [FR-01] Validates the command against non-empty, length, injection-char,
+    and name-uniqueness rules. On pass, writes a pending task atomically to
+    $TASKQ_HOME/tasks.json and returns the Task object.
+
+    Raises SystemExit(2) on any validation failure (no storage write occurs).
+    """
+    _ = validate_config(cfg)
+
+    if not command or not command.strip():
+        print("error: command must not be empty", file=sys.stderr)
+        raise SystemExit(2)
+
+    if len(command) > 1000:
+        print("error: command exceeds 1000 characters", file=sys.stderr)
+        raise SystemExit(2)
+
+    _check_injection(command)
+
+    if name is not None:
+        _check_name_unique(name, cfg)
+
     task_id = uuid.uuid4().hex[:8]
     created_at = datetime.now(tz=timezone.utc).isoformat()
 
@@ -94,34 +129,12 @@ def cmd_status(task_id: str, cfg: Config, json_output: bool = False) -> None:
     """
     _ = validate_config(cfg)
     task = load_task(task_id, cfg)
+    data = _format_task_dict(task)
     if json_output:
-        data = {
-            "id": task.id,
-            "command": task.command,
-            "name": task.name,
-            "status": task.status.value if hasattr(task.status, "value") else task.status,
-            "created_at": task.created_at,
-            "exit_code": task.exit_code,
-            "stdout_tail": task.stdout_tail,
-            "stderr_tail": task.stderr_tail,
-            "duration_ms": task.duration_ms,
-            "finished_at": task.finished_at,
-            "cached": task.cached,
-        }
         print(json.dumps(data))
     else:
-        print(f"id:          {task.id}")
-        print(f"command:     {task.command}")
-        print(f"name:        {task.name}")
-        status_val = task.status.value if hasattr(task.status, "value") else task.status
-        print(f"status:      {status_val}")
-        print(f"created_at:  {task.created_at}")
-        print(f"exit_code:   {task.exit_code}")
-        print(f"stdout_tail: {task.stdout_tail}")
-        print(f"stderr_tail: {task.stderr_tail}")
-        print(f"duration_ms: {task.duration_ms}")
-        print(f"finished_at: {task.finished_at}")
-        print(f"cached:      {task.cached}")
+        for key, value in data.items():
+            print(f"{key:12} {value}")
 
 
 def cmd_list(status_filter: Optional[str], cfg: Config, json_output: bool = False) -> None:
@@ -133,7 +146,7 @@ def cmd_list(status_filter: Optional[str], cfg: Config, json_output: bool = Fals
     tasks = load_tasks(cfg)
     results = []
     for task in tasks.values():
-        status_val = task.status.value if hasattr(task.status, "value") else task.status
+        status_val = _get_status_value(task.status)
         if status_filter is None or status_val == status_filter:
             results.append(
                 {
@@ -175,74 +188,87 @@ def _fmt_submit(task: Task, json_output: bool) -> str:
     """
     _ = validate_config(get_config())
     if json_output:
-        status_val = task.status.value if hasattr(task.status, "value") else task.status
-        return json.dumps({"id": task.id, "status": status_val})
+        return json.dumps({"id": task.id, "status": _get_status_value(task.status)})
     return task.id
+
+
+def _dispatch_run(args, cfg: Config) -> None:
+    """Handle run subcommand — dispatch to executor.run_task or run_all.
+
+    [FR-02] [FR-03] [FR-04] Executor imported dynamically; stub for FR-01.
+    Raises SystemExit on error or with task exit code.
+    """
+    try:
+        from taskq.executor import run_task, run_all as executor_run_all  # type: ignore[import]
+    except ImportError:  # pragma: no cover
+        print("error: executor not yet implemented", file=sys.stderr)
+        raise SystemExit(1)
+    if args.all:
+        executor_run_all(cfg=cfg, cached=args.cached)
+    else:
+        if not args.id:  # pragma: no cover
+            print("error: provide a task id or --all", file=sys.stderr)
+            raise SystemExit(2)
+        exit_code = run_task(args.id, cfg=cfg, cached=args.cached, json_output=args.json)
+        raise SystemExit(exit_code)
+
+
+def _handler_submit(args, cfg: Config) -> None:
+    """Handle submit subcommand."""
+    task = cmd_submit(args.command, name=args.name, cfg=cfg)
+    print(_fmt_submit(task, args.json))
+
+
+def _handler_status(args, cfg: Config) -> None:
+    """Handle status subcommand."""
+    cmd_status(args.id, cfg=cfg, json_output=args.json)
+
+
+def _handler_list(args, cfg: Config) -> None:
+    """Handle list subcommand."""
+    cmd_list(args.status_filter, cfg=cfg, json_output=args.json)
+
+
+def _handler_clear(args, cfg: Config) -> None:
+    """Handle clear subcommand."""
+    cmd_clear(cfg=cfg)
+
+
+_DISPATCH_TABLE = {
+    "submit": _handler_submit,
+    "run": _dispatch_run,
+    "status": _handler_status,
+    "list": _handler_list,
+    "clear": _handler_clear,
+}
+
+
+def _dispatch_subcommand(args, cfg: Config) -> None:
+    """Router: dispatch parsed args via dispatch table.
+
+    [FR-05] Routes submit, run, status, list, clear to their handlers.
+    """
+    handler = _DISPATCH_TABLE.get(args.subcommand)
+    if handler:
+        handler(args, cfg)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build ArgumentParser with all subcommands.
+
+    [FR-05] Delegates to parser module.
+    """
+    from taskq.parser import build_parser
+    return build_parser()
 
 
 def main() -> None:
     """CLI entry point — parse args and dispatch subcommands.
 
-    [FR-05] Dispatches submit / run / status / list / clear.
+    [FR-05] Parses arguments and routes to _dispatch_subcommand.
     """
     _ = validate_config(get_config())
-
-    parser = argparse.ArgumentParser(prog="taskq", description="Local task queue CLI")
-    parser.add_argument("--json", action="store_true", default=False, help="Machine-readable JSON output")
-    sub = parser.add_subparsers(dest="subcommand", required=True)
-
-    # submit
-    p_submit = sub.add_parser("submit", help="Submit a new task")
-    p_submit.add_argument("command", help="Shell command to queue")
-    p_submit.add_argument("--name", default=None, help="Optional task name (must be unique)")
-
-    # run
-    p_run = sub.add_parser("run", help="Execute a task or all pending tasks")
-    p_run_group = p_run.add_mutually_exclusive_group(required=True)
-    p_run_group.add_argument("id", nargs="?", default=None, help="Task id to run")
-    p_run_group.add_argument("--all", action="store_true", default=False, help="Run all pending tasks")
-    p_run.add_argument("--cached", action="store_true", default=False, help="Use TTL cache if available")
-
-    # status
-    p_status = sub.add_parser("status", help="Show all fields for a task")
-    p_status.add_argument("id", help="Task id")
-
-    # list
-    p_list = sub.add_parser("list", help="List tasks")
-    p_list.add_argument("--status", default=None, dest="status_filter", help="Filter by status")
-
-    # clear
-    sub.add_parser("clear", help="Clear all data files")
-
+    parser = _build_parser()
     args = parser.parse_args()
     cfg = get_config()
-
-    if args.subcommand == "submit":
-        task = cmd_submit(args.command, name=args.name, cfg=cfg)
-        print(_fmt_submit(task, args.json))
-
-    elif args.subcommand == "run":
-        # FR-02/03/04 — executor not implemented in FR-01 scope;
-        # stub for CLI wiring; will be implemented in FR-02+.
-        try:
-            from taskq.executor import run_task, run_all as executor_run_all  # type: ignore[import]
-        except ImportError:  # pragma: no cover
-            print("error: executor not yet implemented", file=sys.stderr)
-            raise SystemExit(1)
-        if args.all:
-            executor_run_all(cfg=cfg, cached=args.cached)
-        else:
-            if not args.id:  # pragma: no cover
-                print("error: provide a task id or --all", file=sys.stderr)
-                raise SystemExit(2)
-            exit_code = run_task(args.id, cfg=cfg, cached=args.cached, json_output=args.json)
-            raise SystemExit(exit_code)
-
-    elif args.subcommand == "status":
-        cmd_status(args.id, cfg=cfg, json_output=args.json)
-
-    elif args.subcommand == "list":
-        cmd_list(args.status_filter, cfg=cfg, json_output=args.json)
-
-    elif args.subcommand == "clear":
-        cmd_clear(cfg=cfg)
+    _dispatch_subcommand(args, cfg)
