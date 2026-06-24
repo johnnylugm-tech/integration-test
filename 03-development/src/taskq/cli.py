@@ -192,6 +192,26 @@ def _fmt_submit(task: Task, json_output: bool) -> str:
     return task.id
 
 
+def _handle_run_subcommand(args, cfg: Config) -> None:
+    """Handle run subcommand with --all or single task id.
+
+    [FR-02] [FR-03] Routes to executor.run_all or executor.run_task.
+    """
+    try:
+        from taskq.executor import run_task, run_all as executor_run_all  # type: ignore[import]
+    except ImportError:  # pragma: no cover
+        print("error: executor not yet implemented", file=sys.stderr)
+        raise SystemExit(1)
+    if args.all:
+        executor_run_all(cfg=cfg, cached=args.cached)
+    else:
+        if not args.id:  # pragma: no cover
+            print("error: provide a task id or --all", file=sys.stderr)
+            raise SystemExit(2)
+        exit_code = run_task(args.id, cfg=cfg, cached=args.cached, json_output=args.json)
+        raise SystemExit(exit_code)
+
+
 def _dispatch_subcommand(args, cfg: Config) -> None:
     """Router: dispatch parsed args.
 
@@ -201,19 +221,7 @@ def _dispatch_subcommand(args, cfg: Config) -> None:
         task = cmd_submit(args.command, name=args.name, cfg=cfg)
         print(_fmt_submit(task, args.json))
     elif args.subcommand == "run":
-        try:
-            from taskq.executor import run_task, run_all as executor_run_all  # type: ignore[import]
-        except ImportError:  # pragma: no cover
-            print("error: executor not yet implemented", file=sys.stderr)
-            raise SystemExit(1)
-        if args.all:
-            executor_run_all(cfg=cfg, cached=args.cached)
-        else:
-            if not args.id:  # pragma: no cover
-                print("error: provide a task id or --all", file=sys.stderr)
-                raise SystemExit(2)
-            exit_code = run_task(args.id, cfg=cfg, cached=args.cached, json_output=args.json)
-            raise SystemExit(exit_code)
+        _handle_run_subcommand(args, cfg)
     elif args.subcommand == "status":
         cmd_status(args.id, cfg=cfg, json_output=args.json)
     elif args.subcommand == "list":
