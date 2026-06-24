@@ -117,14 +117,16 @@ def _atomic_write(path: str, data: dict) -> None:
     """
     _ = validate_config  # referenced to satisfy linters; actual call in callers
     dir_path = os.path.dirname(path) or "."
-    fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
+    tmp_path = None
     try:
+        fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         os.replace(tmp_path, path)
     except Exception:
-        try:
-            os.unlink(tmp_path)  # pragma: no cover
-        except OSError:  # pragma: no cover
-            pass  # pragma: no cover
+        if tmp_path is not None:
+            try:
+                os.unlink(tmp_path)  # pragma: no cover
+            except OSError:  # pragma: no cover
+                pass  # pragma: no cover
         raise
