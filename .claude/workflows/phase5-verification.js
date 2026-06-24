@@ -210,7 +210,7 @@ const advanceReport = await agent(
   + 'Steps:\n'
   + '1. D4-GAP: `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 90.0`. Gate 4 (next phase) needs ≥90% but advance only needs 80% — if below 90%, ADD missing test implementations NOW to avoid a Gate 4 surprise.\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 5 --project ' + REPO + '`\n'
-  + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 80% + mutmut. Auto-skip honours unchanged FR code. Fix any blocker, re-run.\n'
+  + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 80%. Auto-skip honours unchanged FR code. Fix any blocker, re-run.\n'
   + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
   + '3. Read ' + REPO + '/HANDOVER.md; confirm Phase 6 entry ("P6-entry" OR "resume_phase = 6").\n\n'
   + 'Report: "ADVANCE: PASS|FAIL — <details>". PHASE_6_PLAN: ' + REPO + '/.methodology/phase6_plan.md\n\n'

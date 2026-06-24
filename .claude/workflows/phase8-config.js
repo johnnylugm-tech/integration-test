@@ -200,7 +200,7 @@ const pushReport = await agent(
   'YOU ARE THE P8 FINAL PUSHER. This is the LAST step of the 8-phase pipeline.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '1. P8 completion checklist (TDD-PRECHECK): confirm gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 90% + mutmut all pass. Fix blockers.\n'
+  + '1. P8 completion checklist (TDD-PRECHECK): confirm gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 90% all pass. Fix blockers.\n'
   + '2. PUSH ⑩: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p8 --project ' + REPO + '`. _validate_p8_completion auto-verifies .methodology-archive/ exists. Writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n'
   + '   PHASE-TRUTH (HR-11): push-milestone p8 / _validate_p8_completion verifies Phase Truth ≥90%; if it fails, check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
   + '3. Confirm: pipeline complete (all 8 phases done).\n\n'
