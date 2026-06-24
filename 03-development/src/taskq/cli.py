@@ -4,6 +4,19 @@
 Entry: python -m taskq <subcommand> [options]
 
 Exit codes: 0 success / 2 input validation / 3 breaker open / 4 timeout / 1 internal error.
+
+CLI Architecture:
+  - cmd_submit: Submits a task to the queue with validation.
+  - cmd_status: Displays the full status of a task.
+  - cmd_list: Lists all tasks, optionally filtered by status.
+  - cmd_clear: Clears all task data (tasks.json, breaker.json, cache.json).
+  - _dispatch_subcommand: Routes parsed CLI arguments to handlers.
+  - main: Entry point; parses arguments and dispatches.
+
+Command validation rules:
+  - Command must be non-empty and <= 1000 characters (FR-01).
+  - Command cannot contain shell injection chars outside quotes (NFR-02).
+  - Task names must be unique among pending/running tasks (FR-01).
 """
 from __future__ import annotations
 
