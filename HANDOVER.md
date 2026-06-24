@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P4-mid-20260624`  
+**Checkpoint**: `P4-pre-gate3-20260624`  
 **Phase**: P4 — Testing  
-**Generated**: 2026-06-24T12:15:58Z
+**Generated**: 2026-06-24T16:21:14Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -48,42 +48,42 @@ cat .methodology/phase4_plan.md
 
 ## 任務背景
 
-P4 Testing in progress (≥50% milestone). 3/5 FRs done.
+P4 Testing complete. Gate 3 not yet executed.
 
 ## 目前執行狀況
 
-3/5 FRs Gate 1 PASS [FR-01,FR-02,FR-03]. Test cycles complete for passing FRs.
+All 5 FR(s) Gate 1 re-eval PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 3 (14 dims) not yet started.
 
 **A/B Session Results:**
   - ? / developer: **COMPLETED**
 
 **Recently Committed Files:**
-  - `.methodology/SAB.json`
-  - `.methodology/trace/attestation.json`
-  - `03-development/src/taskq/breaker.py`
-  - `03-development/src/taskq/cache.py`
   - `03-development/src/taskq/store.py`
-  - `setup.cfg`
-  - `.claude/workflows/phase3-implementation.js`
-  - `.methodology/fr_progress.json`
-  - `.methodology/state.json`
-  - `03-development/src/taskq/__main__.py`
-  - `03-development/src/taskq/cli.py`
-  - `03-development/tests/test_fr01.py`
-  - `03-development/tests/test_fr02.py`
-  - `03-development/tests/test_fr03.py`
-  - `CLAUDE.md`
-  - `HANDOVER.md`
+  - `.methodology/effort_metrics.db`
+  - `.methodology/quality_manifest.json`
   - `.methodology/trace/attestation.latest.json`
-  - `03-development/tests/test_nfr.py`
-  - `.methodology/decision_logs/2026-06-24/GATE_3_001.yaml`
-  - `.methodology/decision_logs/2026-06-24/GATE_3_002.yaml`
+  - `03-development/src/taskq/breaker.py`
+  - `03-development/src/taskq/breaker.py.bak`
+  - `04-testing/COVERAGE_REPORT.md`
+  - `04-testing/TEST_RESULTS.md`
+  - `.methodology/trace/attestation.json`
+  - `03-development/src/taskq/cli.py`
+  - `.methodology/gate_timestamps.jsonl`
+  - `.methodology/state.json`
+  - `03-development/src/taskq/config.py`
+  - `03-development/src/taskq/executor.py`
+  - `03-development/src/taskq/models.py`
+  - `03-development/src/taskq/parser.py`
+  - `harness`
+  - `.claude/workflows/phase4-testing.js`
+  - `.claude/workflows/phase5-verification.js`
+  - `.claude/workflows/phase6-quality.js`
 
 ## 接下來的工作
 
-1. Complete remaining 2 FR(s): FR-04, FR-05
-2. Ensure each FR has ≥80% branch coverage
-3. When all FRs done → `push-milestone --type p4-pre-gate3`
+1. Run Gate 3 evaluation (14 dims, target score ≥ 80)
+2. Fix any failures during evaluation
+3. On Gate 3 PASS → `finalize-gate --gate 3` handles push + HANDOVER
 
 ## 注意事項
 
@@ -93,8 +93,7 @@ P4 Testing in progress (≥50% milestone). 3/5 FRs done.
 
 ## 附加資訊
 
-- **fr_done**: 3
-- **fr_total**: 5
+- **fr_count**: 5
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*

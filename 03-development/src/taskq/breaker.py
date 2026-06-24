@@ -58,7 +58,7 @@ class Breaker:
             state = BreakerState(data.get("state", "CLOSED"))
             return BreakerRecord(
                 state=state,
-                consecutive_failures=int(data.get("consecutive_failures", 0)),
+                consecutive_failures=int(data.get("consecutive_failures", 1)),
                 opened_at=data.get("opened_at"),
             )
         except (json.JSONDecodeError, ValueError, OSError):

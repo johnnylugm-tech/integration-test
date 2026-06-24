@@ -1,0 +1,133 @@
+{
+  "generated_at": "2026-06-24T12:27:51Z",
+  "git_sha": "df110876b50d2c88a7e30eff61a24e195df4a738",
+  "targets_manifest": ".methodology/bug_hunt_targets.json",
+  "lenses": ["correctness", "concurrency", "resilience", "general"],
+  "raw_count": 6,
+  "confirmed_count": 2,
+  "refuted_count": 4,
+  "findings": [
+    {
+      "id": "executor#1",
+      "module": "taskq.executor",
+      "lens": "resilience",
+      "severity": "high",
+      "title": "Un-spawnable command raises uncaught OSError (crash / batch abort / stuck 'running')",
+      "description": "run_task only catches subprocess.TimeoutExpired. Any command that subprocess.run cannot spawn (nonexistent executable, non-executable target, or empty argv such as shlex.split(\"''\") -> ['']) raises FileNotFoundError/PermissionError that escapes run_task. Single-task mode leaves the task stuck in 'running', never notifies the breaker, and crashes the caller; the CLI (`raise SystemExit(run_task(...))`) dumps a raw Python traceback instead of a defined exit code, violating SPEC §7 ('其他未預期例外 -> exit 1, 不得裸 except 吞噬'). In run_all the exception propagates through future.result() and aborts the entire batch, stranding sibling tasks in 'running'. A typo'd command name is the most common real-world trigger.",
+      "file": "03-development/src/taskq/executor.py",
+      "line_start": 97,
+      "line_end": 134,
+      "code_snippet": "        try:\n            result = subprocess.run(\n                shlex.split(task.command),\n                capture_output=True, text=True, timeout=cfg.task_timeout,\n            )\n            ...\n        except subprocess.TimeoutExpired:\n            ...",
+      "reasoning": "Verified by executable repro at HEAD df11087: `cmd_submit('nonexistent_program_xyz')` then run_task raised FileNotFoundError (task left status='running'); run_all with [echo,nonexistent,echo] aborted with FileNotFoundError leaving one task 'running'; CLI main() propagated the traceback (no SystemExit). shlex.split(\"''\") -> [''] and 'echo' typos pass cmd_submit validation (non-empty, <=1000, no injection chars outside quotes), so the bad command is reachable through the normal submit path. Only line 124 catches an exception (TimeoutExpired); OSError was unhandled. No test in the suite exercised a command-not-found path.",
+      "suggested_fix": "Add `except OSError as exc:` that records a terminal 'failed' result (exit_code=127, stderr_tail=str(exc)), mirroring the non-zero-exit failed branch so the breaker is notified and run_all continues.",
+      "confidence": "high",
+      "confirmed": true,
+      "verify_evidence": "Confirmer repro: run_task('nonexistent_program_xyz') at executor.py:97-103 raised FileNotFoundError; only executor.py:124 (except subprocess.TimeoutExpired) existed, so OSError escaped. run_all future.result() (executor.py:187 pre-fix) re-raised it, aborting the batch. Refuter could not show any surrounding guard: there is no try/except around the run_all dispatch and no OSError handler in run_task.",
+      "resolution": {
+        "status": "resolved",
+        "repro_test": "03-development/tests/test_bughunt_regressions.py"
+      }
+    },
+    {
+      "id": "executor#2",
+      "module": "taskq.executor",
+      "lens": "concurrency",
+      "severity": "high",
+      "title": "HALF_OPEN admits all pending tasks via run_all instead of exactly one trial",
+      "description": "SPEC FR-03 requires HALF_OPEN to admit exactly ONE trial task ('放行一個任務'). run_all dispatches every pending task in parallel through ThreadPoolExecutor; each run_task calls breaker.is_open(), which returns False in HALF_OPEN, so all tasks pass the gate simultaneously and execute. The circuit breaker's load-shedding guarantee (its core purpose during downstream failure) is defeated: N concurrent tasks stampede the single trial slot.",
+      "file": "03-development/src/taskq/executor.py",
+      "line_start": 167,
+      "line_end": 187,
+      "code_snippet": "    with ThreadPoolExecutor(max_workers=cfg.max_workers) as executor:\n        futures = [\n            executor.submit(run_task, task.id, cfg, cached, False, sleep_fn)\n            for task in pending\n        ]\n        for f in futures:\n            f.result()",
+      "reasoning": "Verified by executable repro at HEAD df11087: opened the breaker, forced effective state to HALF_OPEN (cooled-down OPEN), submitted 5 pending tasks, and ran run_all with a subprocess.run spy. With 5 FAILING tasks, all 5 executed (expected 1) before re-OPEN. breaker.is_open() returns False in HALF_OPEN (confirmed by direct call), so the per-task gate at executor.py (is_open check) does not restrict to a single trial. No test asserts single-trial admission under concurrency (grep of tests/ for HALF_OPEN + one/single/trial/concurrent returned nothing).",
+      "suggested_fix": "In run_all, when the breaker is HALF_OPEN at dispatch, run one pending task synchronously as the trial; let its CLOSED/OPEN verdict gate the remainder before fanning out the rest.",
+      "confidence": "high",
+      "confirmed": true,
+      "verify_evidence": "Confirmer repro: HALF_OPEN + run_all with 5 failing tasks executed 5 subprocesses pre-fix (executor.py:181-187), violating the single-trial rule; is_open() in HALF_OPEN == False (breaker.py:132-138) proves the gate cannot block the stampede. Refuter could not cite any single-trial enforcement in run_all or the breaker: the only HALF_OPEN handling is the read-only cooldown transition in get_current_state (breaker.py:103-121), which does not limit concurrency.",
+      "resolution": {
+        "status": "resolved",
+        "repro_test": "03-development/tests/test_bughunt_regressions.py"
+      }
+    },
+    {
+      "id": "executor#3",
+      "module": "taskq.executor",
+      "lens": "correctness",
+      "severity": "low",
+      "title": "run_task returns 0 for a task that ends 'failed' after retries",
+      "description": "Initial reading suspected that a failed task returning exit 0 was a bug. The failed branch sets final_exit_code=0 and run_task returns it, so `taskq run <id>` on a failing command exits 0.",
+      "file": "03-development/src/taskq/executor.py",
+      "line_start": 120,
+      "line_end": 122,
+      "code_snippet": "            else:\n                task.status = TaskStatus.failed\n                final_exit_code = 0",
+      "reasoning": "REFUTED. SPEC §3 FR-05 defines the exit-code table as 0=success, 2=validation, 3=breaker, 4=timeout, 1=internal-error — it deliberately defines NO distinct exit code for a 'failed' (non-zero subprocess) task in single-task mode. The run_task docstring documents the contract explicitly: 'In single-task mode, returns 4 if task ends as timeout, else 0' and 'Returns: 0 on done, 3 if breaker is OPEN, 4 on final timeout, else 0'. The task IS correctly recorded as 'failed' in the store (status persisted), which `status <id>` surfaces. The assignment is redundant-but-correct, not a defect.",
+      "confidence": "high",
+      "confirmed": false,
+      "verify_evidence": "Refuter: SPEC.md:92 exit-code table has no 'failed' code; executor.py:43-51 docstring states 'else 0'. The status field is set to TaskStatus.failed (executor.py:121) so no information is lost. No SPEC clause is violated by exit 0.",
+      "resolution": {
+        "status": "refuted",
+        "refute_evidence": "SPEC.md:92 (FR-05 exit codes: 0/2/3/4/1 only — no dedicated 'failed' code) and executor.py:43-51 docstring ('else 0') document exit 0 for a failed task as the intended contract; the task is still persisted as status='failed' (executor.py:121)."
+      }
+    },
+    {
+      "id": "store#1",
+      "module": "taskq.store",
+      "lens": "general",
+      "severity": "low",
+      "title": "Secret redaction regex does not match uppercase TOKEN= / sub-8-char sk-",
+      "description": "Suspected that _redact misses uppercase 'TOKEN=' and 'sk-' tokens shorter than 8 chars.",
+      "file": "03-development/src/taskq/store.py",
+      "line_start": 21,
+      "line_end": 21,
+      "code_snippet": "_REDACT_PATTERN = re.compile(r\"(sk-[A-Za-z0-9_-]{8,}|token=\\S+)\")",
+      "reasoning": "REFUTED. SPEC NFR-04 specifies the redaction regex VERBATIM as `(sk-[A-Za-z0-9_-]{8,}|token=\\S+)`. Lowercase 'token=' and the {8,} length floor are the exact specification, not an oversight. Repro confirmed 'token=abc' and 'sk-ABCDEFGH' (8 chars) ARE redacted, while 'TOKEN=abc' and 'sk-ABCDEFG' (7 chars) are not — exactly matching the spec'd pattern.",
+      "confidence": "high",
+      "confirmed": false,
+      "verify_evidence": "Refuter: SPEC.md:103 (NFR-04) and TEST_SPEC.md:280-296 define the literal regex; store.py:21 matches it character-for-character. Behavior is spec-compliant.",
+      "resolution": {
+        "status": "refuted",
+        "refute_evidence": "SPEC.md:103 NFR-04 pins the regex literally to `(sk-[A-Za-z0-9_-]{8,}|token=\\S+)`; store.py:21 is an exact match, so case-sensitivity and the 8-char floor are specified behavior, not a defect."
+      }
+    },
+    {
+      "id": "breaker#1",
+      "module": "taskq.breaker",
+      "lens": "correctness",
+      "severity": "low",
+      "title": "Suspected consecutive-failure counter not reset on intervening success",
+      "description": "Checked whether record_success correctly resets the consecutive-failure counter so non-consecutive failures do not trip the breaker.",
+      "file": "03-development/src/taskq/breaker.py",
+      "line_start": 147,
+      "line_end": 185,
+      "code_snippet": "            if record.state in (BreakerState.HALF_OPEN, BreakerState.CLOSED):\n                record = BreakerRecord(state=BreakerState.CLOSED, consecutive_failures=0, opened_at=None)",
+      "reasoning": "REFUTED. Repro of sequence F,F,S,F,F with threshold=3 ended CLOSED (count 2) — the intervening success reset the consecutive counter exactly as SPEC FR-03 requires ('連續最終失敗'). Threshold boundary verified: failures #1,#2 -> CLOSED, #3 -> OPEN (count>=threshold). Timeout path also notifies the breaker correctly (rc=4, OPEN at threshold=1).",
+      "confidence": "high",
+      "confirmed": false,
+      "verify_evidence": "Refuter: breaker.py:155-161 resets counter to 0 on success; repro F,F,S,F,F -> CLOSED count=2; threshold repro opens exactly at the threshold-th consecutive failure. Matches SPEC FR-03.",
+      "resolution": {
+        "status": "refuted",
+        "refute_evidence": "Executable repro confirms record_success (breaker.py:155-161) zeroes the consecutive counter, and the OPEN transition fires exactly at threshold (breaker.py:172); consecutive-failure semantics are correct per SPEC FR-03."
+      }
+    },
+    {
+      "id": "config#1",
+      "module": "taskq.config",
+      "lens": "correctness",
+      "severity": "low",
+      "title": "get_config() cache only invalidates on TASKQ_HOME change",
+      "description": "get_config() recomputes only when TASKQ_HOME changes; other TASKQ_* env changes within a live process are ignored (stale config).",
+      "file": "03-development/src/taskq/config.py",
+      "line_start": 41,
+      "line_end": 45,
+      "code_snippet": "    current_home = os.environ.get(\"TASKQ_HOME\", \".taskq\")\n    if _cached_config is None or _cached_config.home != current_home:\n        _cached_config = _parse_env()\n    return _cached_config",
+      "reasoning": "Reproduced: after caching, setting TASKQ_RETRY_LIMIT=9 leaves get_config().retry_limit at the original value. However taskq is a one-shot CLI process (`python -m taskq <cmd>`) that builds config once per invocation, so the stale-config window is not reachable in the product's actual execution model; tests set TASKQ_HOME per-test (fresh home) and never hit it. Recorded as low / not gate-blocking.",
+      "confidence": "medium",
+      "confirmed": false,
+      "verify_evidence": "Refuter: the only documented entry point is the one-shot CLI (SPEC.md:11, §6 `python -m taskq`); config is read once and the process exits, so intra-process env mutation does not occur in production. Reachability is test-harness-only.",
+      "resolution": {
+        "status": "refuted",
+        "refute_evidence": "taskq runs as a one-shot CLI process (SPEC.md §1/§6); config.py:34-45 is invoked once per invocation and the process exits, so the cache-staleness path is unreachable in the product execution model."
+      }
+    }
+  ]
+}
