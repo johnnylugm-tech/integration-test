@@ -606,7 +606,21 @@ jobs:
       - name: Install harness dependencies
         run: pip install -r harness/requirements.txt || true
 
+      - name: Check CRG feature flag
+        id: crg-flag
+        run: |
+          python3 -c "
+          import json
+          try:
+            cfg = json.load(open('.methodology/harness_config.json'))
+            enabled = cfg.get('features', {}).get('crg_architecture', True)
+          except Exception:
+            enabled = True
+          print(f'enabled={str(enabled).lower()}')
+          " >> $GITHUB_OUTPUT
+
       - name: Install code-review-graph
+        if: steps.crg-flag.outputs.enabled == 'true'
         run: pip install code-review-graph
 
       - name: Detect phase
@@ -622,7 +636,7 @@ jobs:
           echo "PHASE=$PHASE" >> $GITHUB_OUTPUT
 
       - name: CRG architecture check (absolute score P3+, drift regression when P4 baseline exists)
-        if: fromJSON(steps.phase.outputs.PHASE) >= 3
+        if: fromJSON(steps.phase.outputs.PHASE) >= 3 && steps.crg-flag.outputs.enabled == 'true'
         run: |
           BASELINE=""
           if [ -f ".methodology/crg_baseline_p4.json" ]; then

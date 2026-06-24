@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "features": {
+    "mutation_testing": false,
+    "crg_architecture": true,
+    "phase4_llm_review": true
+  }
+}
