@@ -182,7 +182,8 @@ log('push-milestone p7 (after risk register complete)')
 const milestoneReport = await agent(
   'YOU ARE THE P7 MILESTONE PUSHER.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-  + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p7 --project ' + REPO + '`\n'
+  + '0. GUARD: `git -C ' + REPO + ' log --oneline --grep="p7" -1`. If exists, report "MILESTONE: PASS (already pushed)" and stop.\n'
+  + '1. Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p7 --project ' + REPO + '`\n'
   + 'Writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n\n'
   + 'Report: "MILESTONE: PASS|FAIL — <details>".\n\n'
   + 'SCOPE RULES:\n- DO NOT run advance-phase.\n- ONLY push-milestone p7.',
@@ -201,6 +202,7 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-7 EXIT ORCHESTRATOR. Advance to Phase 8.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
+  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?8\\|P8-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. If Phase 8 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 7 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 90%. Auto-skip honours unchanged FR code. Fix any blocker, re-run.\n'
   + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
@@ -210,12 +212,15 @@ const advanceReport = await agent(
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },
 )
 
+if (!advanceReport || !/ADVANCE:\s*PASS/.test(advanceReport)) {
+  return { error: 'Advance phase did not confirm PASS — check HANDOVER.md + state.json. If Phase 8 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-400) }
+}
 log('Phase 7 workflow complete. Open .methodology/phase8_plan.md to continue.')
 return {
   phase: 7,
   fr_count: frIds.length,
   gate1_pass: gate1Pass,
-  advance_status: typeof advanceReport === 'string' && /ADVANCE:\s*PASS/.test(advanceReport) ? 'PASS' : 'unknown',
+  advance_status: 'PASS',
   artifacts: ['07-risk/RISK_REGISTER.md', '07-risk/RISK_MITIGATION_PLANS.md', '07-risk/RISK_STATUS_REPORT.md', 'HANDOVER.md'],
   notes: 'Phase 7 complete per phase7_plan.md v2.12.0. Phase 8 (Configuration Management) ready.',
 }

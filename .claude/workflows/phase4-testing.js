@@ -1,6 +1,6 @@
 // Phase 4 — Testing (faithful to .methodology/phase4_plan.md v2.12.0)
 //
-// Structure: FR-loop型 + adversarial bug hunt + Gate 3 (16 dims) exit.
+// Structure: FR-loop型 + adversarial bug hunt + Gate 3 (15 dims) exit.
 // CHECKPOINT-0 TEST_PLAN → per-FR GATE1-DELTA → TEST_RESULTS/COVERAGE →
 // Step 4b bug hunt (adversarial_review is a Gate 3 dim, needs bug_hunt_report.json)
 // → Gate 3 → p4-pre-gate3 milestone + advance.
@@ -10,7 +10,7 @@
 
 export const meta = {
   name: 'phase4-testing',
-  description: 'Phase 4 Testing — TEST_PLAN + per-FR GATE1-DELTA + adversarial bug hunt + Gate 3 (16 dims) exit (phase4_plan.md v2.12.0)',
+  description: 'Phase 4 Testing — TEST_PLAN + per-FR GATE1-DELTA + adversarial bug hunt + Gate 3 (15 dims) exit (phase4_plan.md v2.12.0)',
   phases: [
     { title: 'Entry & Preflight' },
     { title: 'Test Plan' },
@@ -185,7 +185,8 @@ for (const frId of frIds) {
     await agent(
       'YOU ARE THE P4 MID-MILESTONE PUSHER (≥50% FRs Gate 1 PASS).\n'
       + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-      + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p4-mid --project ' + REPO
+      + '0. GUARD: `git -C ' + REPO + ' log --oneline --grep="p4-mid" -1`. If exists, report "MILESTONE: PASS (already pushed)" and stop.\n'
+      + '1. Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p4-mid --project ' + REPO
       + ' --fr-done ' + gate1Pass.length + ' --fr-total ' + frIds.length + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
       + 'Writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n\n'
       + 'Report: "MILESTONE: PASS|FAIL — <details>".\n\n'
@@ -244,10 +245,10 @@ if (!(typeof huntReport === 'string' && /BUG-HUNT:\s*PASS/.test(huntReport))) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Phase: Gate 3 (run-gate → eval 16 dims → finalize → D4 80%; HR-08)
+// Phase: Gate 3 (run-gate → eval 15 dims → finalize → D4 80%; HR-08)
 // ════════════════════════════════════════════════════════════════════════
 phase('Gate 3')
-log('Gate 3 exit (composite ≥80, 16 dims incl. architecture + adversarial_review)')
+log('Gate 3 exit (composite ≥80, 15 dims: 12 self-scored + traceability/architecture/adversarial_review framework-owned)')
 let gate3Pass = false, gate3Report = ''
 for (let round = 1; round <= 3; round++) {
   log('  Gate 3 round ' + round + '/3')
@@ -255,6 +256,7 @@ for (let round = 1; round <= 3; round++) {
     'YOU ARE THE GATE-3 ORCHESTRATOR (Phase 4 exit). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
     + 'Steps:\n'
+    + '0. TRACE-PRECHECK: `' + PY + ' ' + REPO + '/harness_cli.py build-trace-attestation --project ' + REPO + ' --write 2>&1 | tail -4`. If output contains "wrote canonical", commit immediately: `git -C ' + REPO + ' add .methodology/trace/attestation.json && git -C ' + REPO + ' commit -m "trace: regen attestation before Gate 3"`. Prevents trace_dirt from blocking finalize-gate.\n'
     + '1. G3a: `' + PY + ' ' + REPO + '/harness_cli.py run-gate --gate 3 --phase 4 --project ' + REPO + '` (CRG recon runs inside automatically). Read the printed evaluation prompt.\n'
     + '2. G3b: Evaluate ALL Gate 3 dimensions inline per ' + REPO + '/harness/ssi/prompts/evaluate_dimension.md. Write ' + REPO + '/.sessi-work/gate3_result.json.\n'
     + '   15 dims: linting(90) type_safety(85) test_coverage(80) security(80) secrets_scanning(100) license_compliance(100) integration_coverage(60) architecture(80) readability(80) error_handling(80) documentation(75) test_assertion_quality(60) performance(75).\n'
@@ -285,6 +287,7 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-4 EXIT ORCHESTRATOR. Advance to Phase 5.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
+  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?5\\|P5-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. If Phase 5 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. PUSH ⑥ p4-pre-gate3 (if not already pushed): `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p4-pre-gate3 --project ' + REPO + ' --fr-ids ' + gate1Pass.join(',') + '`. (Idempotent; skip if already snapshotted.)\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 4 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 80%. Fix any blocker, re-run.\n'
@@ -295,13 +298,16 @@ const advanceReport = await agent(
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },
 )
 
+if (!advanceReport || !/ADVANCE:\s*PASS/.test(advanceReport)) {
+  return { error: 'Advance phase did not confirm PASS — check HANDOVER.md + state.json. If Phase 5 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-400) }
+}
 log('Phase 4 workflow complete. Open .methodology/phase5_plan.md to continue.')
 return {
   phase: 4,
   fr_count: frIds.length,
   gate1_pass: gate1Pass,
   gate3_status: gate3Pass ? 'PASS' : 'unknown',
-  advance_status: typeof advanceReport === 'string' && /ADVANCE:\s*PASS/.test(advanceReport) ? 'PASS' : 'unknown',
+  advance_status: 'PASS',
   artifacts: ['04-testing/TEST_PLAN.md', '04-testing/TEST_RESULTS.md', '04-testing/COVERAGE_REPORT.md', '.methodology/bug_hunt_report.json', '.methodology/gate3_result.json', 'HANDOVER.md'],
   notes: 'Phase 4 complete per phase4_plan.md v2.12.0. All FRs Gate 1 PASS + bug hunt done + Gate 3 PASS. Phase 5 (Verification) ready.',
 }

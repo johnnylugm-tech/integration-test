@@ -189,7 +189,8 @@ log('push-milestone p5-baseline (after BASELINE.md generated)')
 const milestoneReport = await agent(
   'YOU ARE THE P5 MILESTONE PUSHER.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-  + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p5-baseline --project ' + REPO + '`\n'
+  + '0. GUARD: `git -C ' + REPO + ' log --oneline --grep="p5-baseline" -1`. If exists, report "MILESTONE: PASS (already pushed)" and stop.\n'
+  + '1. Command: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p5-baseline --project ' + REPO + '`\n'
   + 'Writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n\n'
   + 'Report: "MILESTONE: PASS|FAIL — <details>".\n\n'
   + 'SCOPE RULES:\n- DO NOT run advance-phase.\n- ONLY push-milestone p5-baseline.',
@@ -208,6 +209,7 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-5 EXIT ORCHESTRATOR. Advance to Phase 6.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
+  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?6\\|P6-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. If Phase 6 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. D4-GAP: `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 90.0`. Gate 4 (next phase) needs ≥90% but advance only needs 80% — if below 90%, ADD missing test implementations NOW to avoid a Gate 4 surprise.\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 5 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 80%. Auto-skip honours unchanged FR code. Fix any blocker, re-run.\n'
@@ -218,12 +220,15 @@ const advanceReport = await agent(
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },
 )
 
+if (!advanceReport || !/ADVANCE:\s*PASS/.test(advanceReport)) {
+  return { error: 'Advance phase did not confirm PASS — check HANDOVER.md + state.json. If Phase 6 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-400) }
+}
 log('Phase 5 workflow complete. Open .methodology/phase6_plan.md to continue.')
 return {
   phase: 5,
   fr_count: frIds.length,
   gate1_pass: gate1Pass,
-  advance_status: typeof advanceReport === 'string' && /ADVANCE:\s*PASS/.test(advanceReport) ? 'PASS' : 'unknown',
+  advance_status: 'PASS',
   artifacts: ['05-verification/BASELINE.md', '05-verification/VERIFICATION_REPORT.md', 'HANDOVER.md'],
   notes: 'Phase 5 complete per phase5_plan.md v2.12.0. Phase 6 (Quality Assurance) ready. Reminder: Gate 4 needs spec-coverage ≥90%.',
 }

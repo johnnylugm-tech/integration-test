@@ -1,6 +1,6 @@
 // Phase 6 — Quality Assurance (faithful to .methodology/phase6_plan.md v2.12.0)
 //
-// Structure: NO FR loop. Gate 4 (15 dims, tool-scored + artifact-backed DA
+// Structure: NO FR loop. Gate 4 (14 dims, tool-scored + artifact-backed DA
 // challenge for Tier 3 dims) PLUS Agent B peer review of the QA deliverables
 // (both required to exit). Then release notes + final sign-off + git tag + advance.
 //
@@ -9,7 +9,7 @@
 
 export const meta = {
   name: 'phase6-quality',
-  description: 'Phase 6 Quality — Gate 4 (15 dims + DA challenge) + Agent B peer review + release notes/sign-off + git tag (phase6_plan.md v2.12.0)',
+  description: 'Phase 6 Quality — Gate 4 (14 dims + DA challenge) + Agent B peer review + release notes/sign-off + git tag (phase6_plan.md v2.12.0)',
   phases: [
     { title: 'Entry & Preflight' },
     { title: 'Gate 4' },
@@ -83,10 +83,10 @@ if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightR
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Phase: Gate 4 (run-gate → DA challenge A3 → eval 15 dims → finalize → D4 90%; HR-08)
+// Phase: Gate 4 (run-gate → DA challenge A3 → eval 14 dims → finalize → D4 90%; HR-08)
 // ════════════════════════════════════════════════════════════════════════
 phase('Gate 4')
-log('Gate 4 full-project eval (composite ≥85, 15 dims + artifact-backed DA challenge)')
+log('Gate 4 full-project eval (composite ≥85, 14 dims: 13 self-scored + traceability/architecture framework-owned)')
 let gate4Pass = false, gate4Report = ''
 for (let round = 1; round <= 3; round++) {
   log('  Gate 4 round ' + round + '/3')
@@ -95,6 +95,7 @@ for (let round = 1; round <= 3; round++) {
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
     + 'Pre-Gate: confirm all FRs merged to main + no open critical/high from Gate 3.\n\n'
     + 'Steps:\n'
+    + '0. TRACE-PRECHECK: `' + PY + ' ' + REPO + '/harness_cli.py build-trace-attestation --project ' + REPO + ' --write 2>&1 | tail -4`. If output contains "wrote canonical", commit immediately: `git -C ' + REPO + ' add .methodology/trace/attestation.json && git -C ' + REPO + ' commit -m "trace: regen attestation before Gate 4"`. Prevents trace_dirt from blocking finalize-gate.\n'
     + '1. G4a: `' + PY + ' ' + REPO + '/harness_cli.py run-gate --gate 4 --phase 6 --project ' + REPO + '` (CRG recon runs inside). Read the printed prompt.\n'
     + '2. A3 DA CHALLENGE (artifact-backed — finalize-gate validates this BEFORE scoring): for EACH Tier 3 dim (architecture, readability, error_handling, documentation, performance), dispatch a Claude sub-agent (you have the Agent tool) with a CHALLENGER persona that critiques the design/score, then record its critique + your defence. Write into .sessi-work/gate4_result.json:\n'
     + '   "devil_advocate": {"architecture":true,"readability":true,"error_handling":true,"documentation":true,"performance":true},\n'
@@ -171,6 +172,7 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-6 EXIT ORCHESTRATOR. Tag the Gate 4 release + advance to Phase 7.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
+  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?7\\|P7-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. Also check: `git -C ' + REPO + ' tag -l "harness-v4-*" | head -1`. If Phase 7 is confirmed OR tag already exists, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. GIT-TAG: read composite_score from .sessi-work/gate4_result.json, then:\n'
   + '   `git -C ' + REPO + ' tag -a "harness-v4-$(date +%Y%m%d)-score<SCORE>" -m "Gate 4 PASS (score <SCORE>)" && git -C ' + REPO + ' push origin --tags`\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 6 --project ' + REPO + '`\n'
@@ -182,12 +184,15 @@ const advanceReport = await agent(
   { label: 'tag-advance', phase: 'Tag & Advance', agentType: 'general-purpose' },
 )
 
+if (!advanceReport || !/ADVANCE:\s*PASS/.test(advanceReport)) {
+  return { error: 'Advance phase did not confirm PASS — check HANDOVER.md + state.json. If Phase 7 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-400) }
+}
 log('Phase 6 workflow complete. Open .methodology/phase7_plan.md to continue.')
 return {
   phase: 6,
   gate4_status: gate4Pass ? 'PASS' : 'unknown',
   peer_review_status: typeof peerReport === 'string' && /PEER-REVIEW:\s*PASS/.test(peerReport) ? 'PASS' : 'unknown',
-  advance_status: typeof advanceReport === 'string' && /ADVANCE:\s*PASS/.test(advanceReport) ? 'PASS' : 'unknown',
+  advance_status: 'PASS',
   artifacts: ['06-quality/QUALITY_REPORT.md', 'RELEASE_NOTES.md', 'FINAL_SIGN_OFF.md', '.methodology/agent_b_approvals/', '.sessi-work/gate4_result.json', 'HANDOVER.md'],
   notes: 'Phase 6 complete per phase6_plan.md v2.12.0. Gate 4 PASS + Agent B peer review APPROVE. Phase 7 (Risk Management) ready.',
 }
