@@ -222,22 +222,14 @@ def _dispatch_subcommand(args, cfg: Config) -> None:
         cmd_clear(cfg=cfg)
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    """Build ArgumentParser with all subcommands.
-
-    [FR-05] Delegates to parser module.
-    """
-    from taskq.parser import build_parser
-    return build_parser()
-
-
 def main() -> None:
     """CLI entry point — parse args and dispatch subcommands.
 
     [FR-05] Parses arguments and routes to _dispatch_subcommand.
     """
     _ = validate_config(get_config())
-    parser = _build_parser()
+    from taskq.parser import build_parser
+    parser = build_parser()
     args = parser.parse_args()
     cfg = get_config()
     _dispatch_subcommand(args, cfg)
