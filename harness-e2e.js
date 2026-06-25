@@ -133,7 +133,12 @@ export const meta = {
   ],
 }
 
-const REPO = (args && args.repo) || process.cwd()
+// REPO resolution order: args.repo > HARNESS_REPO env > canonical default.
+// harness-e2e.js is a Node driver (not a workflow JS), so process.* is OK
+// here — workflow JS files (.claude/workflows/phase*.js) cannot read
+// process.* per .methodology/workflow-playbook.md §4.
+const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+const REPO = (args && args.repo) || process.env.HARNESS_REPO || DEFAULT_REPO
 const START = (args && args.startPhase) || 0
 const MODEL = (args && args.model) || 'claude-haiku-4-5-20251001'
 process.env.ANTHROPIC_MODEL = MODEL // nested dispatch/hunter children inherit

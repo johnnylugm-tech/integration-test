@@ -57,6 +57,10 @@ export const meta = {
 // Accept args.repo if provided; otherwise default to the canonical project root.
 // The default is the intended deployment target for this workflow, so missing args
 // is not a hard error — we just use the known location.
+// REPO precedence: args.repo override wins, then DEFAULT_REPO canonical path.
+// process.env.HARNESS_REPO cannot be read here — playbook §4 forbids process.*
+// in workflow JS. Caller scripts (run-e2e.mjs / harness-e2e.js /
+// phase1-workflow.mjs) read HARNESS_REPO and inject it via args.repo.
 const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
 let REPO = DEFAULT_REPO
 if (typeof args === 'string') {

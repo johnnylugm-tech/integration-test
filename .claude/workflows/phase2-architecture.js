@@ -35,6 +35,10 @@ export const meta = {
 }
 
 // ---- args / REPO (playbook §5.7 — args may be undefined; default fallback) ----
+// REPO precedence: args.repo override wins, then DEFAULT_REPO canonical path.
+// process.env.HARNESS_REPO cannot be read here — playbook §4 forbids process.*
+// in workflow JS. Caller scripts (run-e2e.mjs / harness-e2e.js /
+// phase1-workflow.mjs) read HARNESS_REPO and inject it via args.repo.
 const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
 let REPO = DEFAULT_REPO
 if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }

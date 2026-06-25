@@ -14,7 +14,13 @@ import path from 'node:path'
 import { execSync, spawnSync } from 'node:child_process'
 
 // === Config ===
-const REPO = '/Users/johnny/projects/integration-test'
+// REPO resolution: caller-script env wins, then canonical default.
+// Workflow JS files (.claude/workflows/phase*.js) cannot read process.*
+// (per .methodology/workflow-playbook.md §4 hard rule), so the env
+// injection MUST happen here in the driver — the workflow then receives
+// the path via args.repo or inherits the same default.
+const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+const REPO = process.env.HARNESS_REPO || DEFAULT_REPO
 const VENV_PY = path.join(REPO, '.venv/bin/python')
 const MODEL = process.env.MODEL ?? 'claude-haiku-4-5-20251001'
 const MAX_B_ROUNDS = 5

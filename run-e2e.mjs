@@ -44,7 +44,13 @@ import { execSync, spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
 
 // === Config ===
-const REPO = '/Users/johnny/projects/integration-test'
+// REPO resolution: caller-script env wins, then canonical default.
+// Workflow JS files (.claude/workflows/phase*.js) cannot read process.*
+// (per .methodology/workflow-playbook.md §4 hard rule), so the env
+// injection MUST happen here in the driver — the workflow then receives
+// the path via args.repo or inherits the same default.
+const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+const REPO = process.env.HARNESS_REPO || DEFAULT_REPO
 const HARNESS_E2E = path.join(REPO, 'harness-e2e.js')
 const PY = '/opt/homebrew/bin/python3.11'
 const VENV_PY = path.join(REPO, '.venv/bin/python')
