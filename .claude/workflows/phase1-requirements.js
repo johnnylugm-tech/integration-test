@@ -675,7 +675,7 @@ const advanceReport = await agent(
   + 'Step 1 (Bash): ' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 1 --project ' + REPO + '\n\n'
   + 'Step 2: Read ' + REPO + '/HANDOVER.md via Read tool and confirm:\n'
   + '  - File exists\n'
-  + '  - Contains "P2-entry" OR "resume_phase = 2" OR equivalent Phase 2 marker\n'
+  + '  - .methodology/state.json current_phase = 2 (advance-phase atomically writes state.json)\n'
   + '  - Lists Phase 1 artifacts (01-requirements/SRS.md, SPEC_TRACKING.md, TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml)\n\n'
   + 'Step 3: Report (plain text):\n'
   + 'ADVANCE: PASS|FAIL — <details>\n'

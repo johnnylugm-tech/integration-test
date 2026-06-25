@@ -202,11 +202,11 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-7 EXIT ORCHESTRATOR. Advance to Phase 8.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?8\\|P8-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. If Phase 8 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
+  + '0. GUARD — already advanced? `PHASE=$(jq -r '.current_phase // 0' ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 8 ]`. If Phase 8 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 7 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 90%. Auto-skip honours unchanged FR code. Fix any blocker, re-run.\n'
   + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
-  + '2. Read ' + REPO + '/HANDOVER.md; confirm Phase 8 entry ("P8-entry" OR "resume_phase = 8").\n\n'
+  + '2. Read ' + REPO + '/.methodology/state.json; confirm current_phase = 8 (advance-phase atomically writes state.json when complete).\n\n'
   + 'Report: "ADVANCE: PASS|FAIL — <details>". PHASE_8_PLAN: ' + REPO + '/.methodology/phase8_plan.md\n\n'
   + 'SCOPE RULES:\n- DO NOT re-do P7 docs.\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY advance-phase + verify HANDOVER.md.',
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },

@@ -181,13 +181,13 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-6 EXIT ORCHESTRATOR. Tag the Gate 4 release + advance to Phase 7.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?7\\|P7-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. Also check: `git -C ' + REPO + ' tag -l "harness-v4-*" | head -1`. If Phase 7 is confirmed OR tag already exists, report "ADVANCE: PASS (already advanced)" and stop.\n'
+  + '0. GUARD — already advanced? `PHASE=$(jq -r '.current_phase // 0' ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 7 ]`. Also check: `git -C ' + REPO + ' tag -l "harness-v4-*" | head -1`. If Phase 7 is confirmed OR tag already exists, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. GIT-TAG: read composite_score from .sessi-work/gate4_result.json, then:\n'
   + '   `git -C ' + REPO + ' tag -a "harness-v4-$(date +%Y%m%d)-score<SCORE>" -m "Gate 4 PASS (score <SCORE>)" && git -C ' + REPO + ' push origin --tags`\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 6 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 90%. Fix blockers, re-run.\n'
   + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
-  + '3. Read ' + REPO + '/HANDOVER.md; confirm Phase 7 entry ("P7-entry" OR "resume_phase = 7").\n\n'
+  + '3. Read ' + REPO + '/.methodology/state.json; confirm current_phase = 7 (advance-phase atomically writes state.json when complete).\n\n'
   + 'Report: "ADVANCE: PASS|FAIL — <details>". PHASE_7_PLAN: ' + REPO + '/.methodology/phase7_plan.md\n\n'
   + 'SCOPE RULES:\n- DO NOT re-do Gate 4 / release docs.\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY git tag + advance-phase + verify HANDOVER.md.',
   { label: 'tag-advance', phase: 'Tag & Advance', agentType: 'general-purpose' },

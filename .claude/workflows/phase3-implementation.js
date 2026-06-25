@@ -268,13 +268,13 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-3 EXIT ORCHESTRATOR. Push formal exit + advance to Phase 4.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?4\\|P4-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. If Phase 4 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
+  + '0. GUARD — already advanced? `PHASE=$(jq -r '.current_phase // 0' ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 4 ]`. If Phase 4 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. GUARD + PUSH ⑤ p3-post-gate2: `git -C ' + REPO + ' log --oneline --grep="p3-post-gate2" -1`. If a commit exists, skip the push. Else: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-post-gate2 --project ' + REPO + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
   + '   Pre-flight (enforced): gate2_result.json composite ≥75 + per-FR Gate 1 sentinel .sessi-work/sentinels/g1_<fr>.flag exists for every FR. If BLOCKED, read the error list and fix.\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 3 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 60%. Fix any blocker, re-run.\n'
   + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
-  + '3. Read ' + REPO + '/HANDOVER.md; confirm Phase 4 entry ("P4-entry" OR "resume_phase = 4").\n\n'
+  + '3. Read ' + REPO + '/.methodology/state.json; confirm current_phase = 4 (advance-phase atomically writes state.json when complete).\n\n'
   + 'Report: "ADVANCE: PASS|FAIL — <details>". PHASE_4_PLAN: ' + REPO + '/.methodology/phase4_plan.md\n\n'
   + 'SCOPE RULES:\n- DO NOT re-implement FRs.\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY push-milestone p3-post-gate2 + advance-phase + verify HANDOVER.md.',
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },

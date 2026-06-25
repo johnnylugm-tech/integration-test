@@ -209,12 +209,12 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-5 EXIT ORCHESTRATOR. Advance to Phase 6.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '0. GUARD — already advanced? `grep -i "resume_phase\\|phase.\\?6\\|P6-entry" ' + REPO + '/HANDOVER.md 2>/dev/null | head -3`. If Phase 6 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
+  + '0. GUARD — already advanced? `PHASE=$(jq -r '.current_phase // 0' ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 6 ]`. If Phase 6 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. D4-GAP: `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 90.0`. Gate 4 (next phase) needs ≥90% but advance only needs 80% — if below 90%, ADD missing test implementations NOW to avoid a Gate 4 surprise.\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 5 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 80%. Auto-skip honours unchanged FR code. Fix any blocker, re-run.\n'
   + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
-  + '3. Read ' + REPO + '/HANDOVER.md; confirm Phase 6 entry ("P6-entry" OR "resume_phase = 6").\n\n'
+  + '3. Read ' + REPO + '/.methodology/state.json; confirm current_phase = 6 (advance-phase atomically writes state.json when complete).\n\n'
   + 'Report: "ADVANCE: PASS|FAIL — <details>". PHASE_6_PLAN: ' + REPO + '/.methodology/phase6_plan.md\n\n'
   + 'SCOPE RULES:\n- DO NOT re-do P5 docs.\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY spec-coverage-check + advance-phase + verify HANDOVER.md.',
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },

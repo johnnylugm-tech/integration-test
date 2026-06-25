@@ -424,7 +424,7 @@ const advanceReport = await agent(
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Step 1 (Bash): `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 2 --project ' + REPO + '`\n'
   + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
-  + 'Step 2: Read ' + REPO + '/HANDOVER.md; confirm it contains a Phase 3 entry marker ("P3-entry" OR "resume_phase = 3").\n'
+  + 'Step 2: Read ' + REPO + '/.methodology/state.json; confirm current_phase = 3 (advance-phase writes atomically).\n'
   + 'Report: "ADVANCE: PASS|FAIL — <details>". PHASE_3_PLAN: ' + REPO + '/.methodology/phase3_plan.md\n\n'
   + 'SCOPE RULES:\n- DO NOT re-do P2.\n- DO NOT modify harness/ (HR-17).\n- ONLY advance-phase + verify HANDOVER.md.',
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },
