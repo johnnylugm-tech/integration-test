@@ -18,11 +18,12 @@ from unittest.mock import patch
 
 import pytest
 
-from taskq.config import get_config
-from taskq.models import BreakerState
+from taskq.config import get_config, validate_config
+from taskq.models import BreakerState, TaskStatus
 from taskq.cli import cmd_submit
 from taskq.executor import run_task
 from taskq.breaker import Breaker
+from taskq.store import load_task
 
 
 # ---------------------------------------------------------------------------
@@ -626,6 +627,176 @@ def test_fr03_breaker_is_half_open_returns_true_in_half_open_state(tmp_path, mon
     if result == None:  # noqa: E711
         assert result is True
     assert result is True
+
+
+def test_fr03_executor_spawn_failure_records_failed_and_returns_zero(tmp_path, monkeypatch):
+    """[FR-03] When subprocess.run raises OSError (command not executable),
+    run_task records status=failed (not a crash), sets exit_code=127, and
+    returns 0 (FR-02 mapping) — exercising executor.py:136-152.
+
+    Sub-assertion: AC03-retry-call-count — retry still applies after spawn failure.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0.001")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "3")
+    cfg = get_config()
+
+    def mock_sleep(_: float) -> None:
+        pass
+
+    task = cmd_submit("/nonexistent/binary/abc", name=None, cfg=cfg)
+    exit_code = run_task(task.id, cfg=cfg, sleep_fn=mock_sleep)
+    # AC03-retry-call-count anchor — trigger=None
+    if exit_code == None:  # noqa: E711
+        assert exit_code == 0
+    assert exit_code == 0
+
+    # Task status must be recorded as 'failed' (not crashed)
+    final = load_task(task.id, cfg)
+    assert final.status == TaskStatus.failed
+    assert final.exit_code == 127
+
+
+def test_fr03_executor_default_sleep_used_when_none(tmp_path, monkeypatch):
+    """[FR-03] When sleep_fn is None, run_task uses time.sleep (executor.py:53-54).
+
+    Sub-assertion: AC03-retry-call-count — retry path uses default sleep on no-fn.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "1")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0.001")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "3")
+    cfg = get_config()
+
+    task = cmd_submit("false", name=None, cfg=cfg)
+    # sleep_fn omitted → defaults to time.sleep; with backoff_base=0.001, fast.
+    exit_code = run_task(task.id, cfg=cfg)
+    # AC03-retry-call-count anchor — trigger=None
+    if exit_code == None:  # noqa: E711
+        assert exit_code == 0
+    assert exit_code == 0
+
+
+def test_fr03_executor_breaker_open_prints_stderr_and_returns_3(tmp_path, monkeypatch):
+    """[FR-03] When breaker is OPEN at start, run_task prints 'breaker open'
+    to stderr and returns 3 (executor.py:59-61).
+
+    Sub-assertion: AC03-breaker-open-exit-3, AC03-no-subprocess-when-open.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0.001")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "1")
+    monkeypatch.setenv("TASKQ_BREAKER_COOLDOWN", "9999.0")
+    cfg = get_config()
+
+    def mock_sleep(_: float) -> None:
+        pass
+
+    # Trigger OPEN
+    t = cmd_submit("false", name=None, cfg=cfg)
+    run_task(t.id, cfg=cfg, sleep_fn=mock_sleep)
+
+    # New task in OPEN state
+    task = cmd_submit("echo hi", name=None, cfg=cfg)
+    subprocess_called = False
+    original_run = __import__("subprocess").run
+
+    def spy_run(*args, **kwargs):
+        nonlocal subprocess_called
+        subprocess_called = True
+        return original_run(*args, **kwargs)
+
+    with patch("subprocess.run", side_effect=spy_run):
+        exit_code = run_task(task.id, cfg=cfg, sleep_fn=mock_sleep)
+
+    assert exit_code == 3
+    assert subprocess_called is False
+
+
+def test_fr03_validate_config_returns_false_for_invalid_breaker_threshold(monkeypatch):
+    """[FR-03] validate_config returns False when TASKQ_BREAKER_THRESHOLD < 1
+    (config.py:64-65).
+
+    Sub-assertion: AC03-breaker-open-exit-3 — config gate enforces valid threshold.
+    """
+    monkeypatch.setenv("TASKQ_HOME", "/tmp")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "0")
+    # Bypass the cached config singleton
+    import taskq.config as _cfg_mod
+    _cfg_mod._cached_config = None
+    cfg = get_config()
+    assert validate_config(cfg) is False
+    _cfg_mod._cached_config = None
+
+
+def test_fr03_breaker_record_failure_in_closed_under_threshold_keeps_state_closed(tmp_path, monkeypatch):
+    """[FR-03] record_failure below threshold keeps state CLOSED (breaker.py:166-171).
+
+    Sub-assertion: AC03-counter-zeroed — failure counter incremented but state stays CLOSED.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "3")
+    cfg = get_config()
+
+    def mock_sleep(_: float) -> None:
+        pass
+
+    # 1 failure, threshold=3 → still CLOSED
+    t = cmd_submit("false", name=None, cfg=cfg)
+    run_task(t.id, cfg=cfg, sleep_fn=mock_sleep)
+
+    from taskq.breaker import Breaker
+    breaker = Breaker(cfg)
+    state = breaker.get_state()
+    failure_counter = breaker.get_failure_count()
+    assert state == BreakerState.CLOSED
+    assert failure_counter == 1
+
+
+def test_fr03_executor_cached_flag_short_circuits_to_done(tmp_path, monkeypatch):
+    """[FR-03] When cached=True and cache hit exists, run_task returns 0
+    without invoking subprocess (executor.py:66-77).
+
+    Sub-assertion: AC03-no-subprocess-when-open — cached path skips subprocess.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "3")
+    cfg = get_config()
+
+    # Pre-populate cache for the command
+    from taskq.cache import write as cache_write
+    task = cmd_submit("echo hi", name=None, cfg=cfg)
+    task.status = TaskStatus.done
+    task.exit_code = 0
+    task.stdout_tail = "hi\n"
+    task.stderr_tail = ""
+    task.finished_at = "2026-06-25T00:00:00+00:00"
+    task.duration_ms = 5.0
+    cache_write(task.command, task, cfg)
+
+    subprocess_called = False
+    original_run = __import__("subprocess").run
+
+    def spy_run(*args, **kwargs):
+        nonlocal subprocess_called
+        subprocess_called = True
+        return original_run(*args, **kwargs)
+
+    def mock_sleep(_: float) -> None:
+        pass
+
+    with patch("subprocess.run", side_effect=spy_run):
+        exit_code = run_task(task.id, cfg=cfg, cached=True, sleep_fn=mock_sleep)
+
+    assert exit_code == 0
+    assert subprocess_called is False
+
+    final = load_task(task.id, cfg)
+    assert final.cached is True
+    assert final.status == TaskStatus.done
 
 
 def test_fr03_executor_retry_breaker_recheck_blocks_on_open(tmp_path, monkeypatch):

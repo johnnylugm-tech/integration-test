@@ -1,31 +1,31 @@
 {
   "gate": 1,
   "phase": 7,
-  "fr_id": "FR-02",
-  "overall_score": 95.58,
+  "fr_id": "FR-04",
+  "overall_score": 100.0,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "All checks passed!"
+      "tool_evidence": "ruff check 03-development/src/ --extend-ignore RUF001,RUF002,RUF003\nexit=0\nAll checks passed!"
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1782384972088\",\n    \"generalDiagnostics\": [],\n    \"summary\": {\n        \"filesAnalyzed\": 12,\n        \"errorCount\": 0,\n        \"warningCount\": 0,\n        \"informationCount\": 0,\n        \"timeInSec\": 0.312\n    }\n}"
+      "tool_evidence": "pyright 03-development/src/ --outputjson\nexit=0\n{\"version\":\"1.1.409\",\"generalDiagnostics\":[],\"summary\":{\"filesAnalyzed\":12,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.33}}"
     },
     "test_coverage": {
-      "score": 87,
+      "score": 100,
       "threshold": 80,
-      "tests_passed": 37,
+      "tests_passed": 15,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "============================== 37 passed in 5.32s ==============================\n\nName                                   Stmts   Miss  Cover\n----------------------------------------------------------\n03-development/src/taskq/cli.py          100     12    88%\n03-development/src/taskq/config.py        39      1    97%\n03-development/src/taskq/executor.py     101     27    73%\n03-development/src/taskq/models.py        38      0   100%\n03-development/src/taskq/store.py         66      4    94%\n----------------------------------------------------------\nTOTAL                                    344     44    87%"
+      "tool_evidence": "coverage run -m pytest 03-development/tests/test_fr04.py && coverage report --include=\"03-development/src/taskq/cache.py\"\nexit=0\n============================= 15 passed in 0.14s ==============================\nName                                Stmts   Miss  Cover\n-------------------------------------------------------\n03-development/src/taskq/cache.py      50      0   100%\n-------------------------------------------------------\nTOTAL                                  50      0   100%\nFR-scoped coverage (cache.py only): 100%\nspec_cov_pct: 11/11 -> 100%; score = min(100, 100) = 100"
     }
   },
-  "composite_score": 95.58,
+  "composite_score": 100.0,
   "verdict": "PASS",
   "passed": true
 }
