@@ -13,11 +13,11 @@ import threading
 from typing import Optional
 
 from taskq._atomic import atomic_write
+from taskq.config import Config, validate_config
+from taskq.models import Task, TaskStatus
 
 # Backward-compat alias: previous code/tests imported _atomic_write from store.
 _atomic_write = atomic_write
-from taskq.config import Config, validate_config
-from taskq.models import Task, TaskStatus
 
 _LOCK = threading.Lock()
 
