@@ -1,14 +1,20 @@
 {
   "summary": {
-    "total": 29,
+    "total": 31,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 29,
+    "orphaned": 31,
     "critical": 0,
     "major": 0,
-    "minor": 29
+    "minor": 31
   },
   "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'atomic_write' has no corresponding specification in SPEC.md",
+      "action": "Add spec for atomic_write or remove if unnecessary"
+    },
     {
       "type": "ORPHANED",
       "severity": "minor",
@@ -128,6 +134,12 @@
       "severity": "minor",
       "reason": "'run_all' has no corresponding specification in SPEC.md",
       "action": "Add spec for run_all or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'check_injection' has no corresponding specification in SPEC.md",
+      "action": "Add spec for check_injection or remove if unnecessary"
     },
     {
       "type": "ORPHANED",
