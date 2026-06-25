@@ -8,7 +8,8 @@
       "name": "cli",
       "modules": [
         "03-development/src/taskq/cli.py",
-        "03-development/src/taskq/__main__.py"
+        "03-development/src/taskq/__main__.py",
+        "03-development/src/taskq/parser.py"
       ],
       "allowed_dependencies": [
         "core",
@@ -21,7 +22,9 @@
         "03-development/src/taskq/executor.py",
         "03-development/src/taskq/breaker.py",
         "03-development/src/taskq/cache.py",
-        "03-development/src/taskq/store.py"
+        "03-development/src/taskq/store.py",
+        "03-development/src/taskq/injection_guard.py",
+        "03-development/src/taskq/_atomic.py"
       ],
       "allowed_dependencies": [
         "infra"

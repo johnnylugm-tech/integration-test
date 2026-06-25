@@ -68,7 +68,7 @@ Each FR gets a Gate 1 config-aware re-evaluation (CHECKPOINT). No harness run-ga
   ```bash
   python3 harness_cli.py validate-handoff --from-phase 7 --project .
   ```
-  > Verifies P7 deliverables are present and well-formed (e.g. P1 TEST_INVENTORY.yaml non-empty + covers all FRs; P2 TEST_SPEC.md has parseable named test cases; P3 all FRs have per-FR Gate 1 sentinels; P4 VERIFICATION_REPORT.md non-trivial; P5 BASELINE.md exists; P6 06-quality/QUALITY_REPORT.md + RELEASE_NOTES.md + FINAL_SIGN_OFF.md + .sessi-work/gate4_result.json verdict=PASS; P7 07-risk/RISK_REGISTER.md + RISK_MITIGATION_PLANS.md + RISK_STATUS_REPORT.md).
+  > Verifies P7 deliverables are present and well-formed (e.g. P1 TEST_INVENTORY.yaml non-empty + covers all FRs; P2 TEST_SPEC.md has parseable named test cases; P3 all FRs have per-FR Gate 1 sentinels; P4 TEST_RESULTS.md non-trivial; P5 VERIFICATION_REPORT.md non-trivial; P6 06-quality/QUALITY_REPORT.md + RELEASE_NOTES.md + FINAL_SIGN_OFF.md + .methodology/quality_manifest.json gate_results.gate4.quality_complete=true; P7 07-risk/RISK_REGISTER.md + RISK_MITIGATION_PLANS.md + RISK_STATUS_REPORT.md).
   > If exit 1: read the error list, fix the upstream deliverable, re-run until exit 0. Do NOT proceed with Phase 8 work on a BLOCKED handoff.
 
 - **[PREFLIGHT-CI]** Confirm CI wiring unchanged (should be set since P1):

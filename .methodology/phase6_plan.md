@@ -70,7 +70,7 @@ Agent B peer review of the QA deliverables (HR-01) — both are required to exit
   ```bash
   python3 harness_cli.py validate-handoff --from-phase 5 --project .
   ```
-  > Verifies P5 deliverables are present and well-formed (e.g. P1 TEST_INVENTORY.yaml non-empty + covers all FRs; P2 TEST_SPEC.md has parseable named test cases; P3 all FRs have per-FR Gate 1 sentinels; P4 VERIFICATION_REPORT.md non-trivial; P5 BASELINE.md exists; P6 06-quality/QUALITY_REPORT.md + RELEASE_NOTES.md + FINAL_SIGN_OFF.md + .sessi-work/gate4_result.json verdict=PASS; P7 07-risk/RISK_REGISTER.md + RISK_MITIGATION_PLANS.md + RISK_STATUS_REPORT.md).
+  > Verifies P5 deliverables are present and well-formed (e.g. P1 TEST_INVENTORY.yaml non-empty + covers all FRs; P2 TEST_SPEC.md has parseable named test cases; P3 all FRs have per-FR Gate 1 sentinels; P4 TEST_RESULTS.md non-trivial; P5 VERIFICATION_REPORT.md non-trivial; P6 06-quality/QUALITY_REPORT.md + RELEASE_NOTES.md + FINAL_SIGN_OFF.md + .methodology/quality_manifest.json gate_results.gate4.quality_complete=true; P7 07-risk/RISK_REGISTER.md + RISK_MITIGATION_PLANS.md + RISK_STATUS_REPORT.md).
   > If exit 1: read the error list, fix the upstream deliverable, re-run until exit 0. Do NOT proceed with Phase 6 work on a BLOCKED handoff.
 
 - **[PREFLIGHT-CI]** Confirm CI wiring unchanged (should be set since P1):
@@ -285,6 +285,8 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
   ```bash
   python3 harness_cli.py advance-phase --completed 6 --project .
   ```
+  > **Note**: `advance-phase` will automatically check for harness submodule drift.
+  > If it prints a warning that you are behind `origin/main`, it is non-blocking and for your information only.
 - Confirm `HANDOVER.md` reflects Phase 7 entry (`P7-entry` checkpoint, correct plan path)
 - Open `phase7_plan.md` and follow from the top.
 - If session crashes during Phase 7: read `HANDOVER.md` or run `generate-next-plan`
