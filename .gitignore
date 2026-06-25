@@ -1,5 +1,8 @@
 
 # harness-methodology runtime (auto-added by git_strategy)
+# .sessi-work/tmp/ — J: convention sandbox for LLM agent debug artifacts
+# (debug_*.py, coverage_*.html, exploration scripts). All workflow JS
+# SCOPE RULES instruct agents to write here, not to source tree.
 .sessi-work/
 .methodology/last_block.md
 .methodology/steering_history.json

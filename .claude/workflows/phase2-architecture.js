@@ -48,6 +48,22 @@ const PY = REPO + '/.venv/bin/python'
 const MAX_B_ROUNDS = 5
 log('REPO = ' + REPO + ' | PY = ' + PY)
 
+// ---- J: WRITE SCOPE convention for LLM agent debug artifacts ----
+// All agent-generated debug scripts, coverage reports, and exploration
+// artifacts MUST go under ${REPO}/.sessi-work/tmp/<random_id>/. This
+// directory is gitignored and gets cleaned automatically. Direct writes
+// to 03-development/, scripts/, .claude/, harness/, .methodology/, or
+// .github/ require explicit user approval per agent scope rules.
+//
+// Why this matters: debug_* scripts (fr04_cov.py, show_cov.py, etc.)
+// otherwise pollute the source tree and require manual cleanup before
+// commit. Sandboxing them keeps the working tree clean by default.
+//
+// Self-audit (add to agent prompt end): "List every Write/Edit file
+// path used in this task; confirm all paths start with .sessi-work/tmp/."
+const WRITE_SCOPE_TMP = REPO + '/.sessi-work/tmp'
+log('WRITE SCOPE: debug artifacts → ' + WRITE_SCOPE_TMP)
+
 // ---- JSON parsing (balanced-brace; playbook §5.2 — NOT schema:) ----
 function balancedJsonAt(text, start) {
   if (text[start] !== '{' && text[start] !== '[') return null
