@@ -113,7 +113,7 @@ const preflightReport = await agent(
   + '3. SETUP-CFG: `grep -A 5 "^\\[mutmut\\]" ' + REPO + '/setup.cfg`. If missing, FAIL (no paths_to_mutate configured).\n'
   + '4. SCOPE-RESOLVE: extract paths_to_mutate= line. If `args.mutmut_target` was provided via prompt, use it instead; else use setup.cfg value. Print "SCOPE: <comma-separated paths>".\n'
   + '5. FILES-EXIST: for each path in resolved scope, run `test -f <REPO-relative path> && echo OK || echo MISSING:<path>`. Any MISSING → FAIL.\n'
-  + '6. SOURCE-PRESENT (only if scope includes 03-development/src/taskq/*): `test -d ' + REPO + '/03-development/src/taskq && echo TASKQ_OK || echo TASKQ_MISSING`. TASKQ_MISSING is FAIL for default scope (workflow needs FR implementations).\n'
+  + '6. SOURCE-PRESENT (only if scope includes any path under `03-development/src/`): `test -d ' + REPO + '/03-development/src && echo SOURCE_OK || echo SOURCE_MISSING`. SOURCE_MISSING is FAIL for default scope (workflow needs FR implementations under `03-development/src/`).\n'
   + '7. PRIOR-RUN: if `find ' + REPO + ' -maxdepth 3 -name ".mutmut-cache" -type d 2>/dev/null | head -3` shows an existing cache, print "PRIOR-RUN: <path>" (informational; framework handles cache reuse).\n\n'
   + 'Return a JSON object on the LAST line of your output (no other JSON elsewhere):\n'
   + '{"preflight":"PASS","mutmut_version":"<x.y.z>","scope":["<path1>","<path2>"],"venv":"<path>","mutmut_executable":"<path>","prior_cache":"<path|null>","warnings":["<optional>"]}\n'
