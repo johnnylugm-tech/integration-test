@@ -1,1 +1,38 @@
-{"review_status":"APPROVE","reason":"quality_manifest.json is schema-conformant (schema_version 1.0) and self-consistent: fr_ids = [FR-01..FR-05]; nfr_dimension_mapping covers NFR-01..NFR-05 (NFR-06 absent from dimension mapping but present in nfr_traceability — consistent with prior phases); fr_module_traceability maps each FR to its module matching the per-FR Gate-1 fr_id keys; architecture_constraints = [no_circular_dependencies, no_shell_true, atomic_writes_only]; high_risk_modules = [executor, breaker, store]. Per-FR Gate 1 scores (FR-01 96.94 / FR-02 94.22 / FR-03 99.66 / FR-04 99.36 / FR-05 95.92) exactly match 05-verification/BASELINE.md §3-§5 and 05-verification/VERIFICATION_REPORT.md §2.1-§2.5. Gate 2 score 95.65 / Gate 3 100.0 / Gate 4 90.22 all carry quality_complete=true, da_waiver_applied=[architecture], da_waiver_needs_human_review=true — the human-review flag is the framework's documented safety net for hub-and-spoke orchestrator waiver and is appropriately set. Gate 4 score 90.22 is ≥85 release threshold.","citations":[".methodology/quality_manifest.json:4-10",".methodology/quality_manifest.json:11-17",".methodology/quality_manifest.json:19-50",".methodology/quality_manifest.json:57-62",".methodology/quality_manifest.json:63-67",".methodology/quality_manifest.json:69-72",".methodology/quality_manifest.json:81-117",".methodology/quality_manifest.json:118-128",".methodology/quality_manifest.json:129-138",".methodology/quality_manifest.json:139-155","05-verification/BASELINE.md:113-123","05-verification/VERIFICATION_REPORT.md:175-187"],"gaps":[{"severity":"medium","message":"Composite drift: .methodology/quality_manifest.json::gate_results.gate4.score (90.22) and .methodology/gate4_result.json::composite_score (90.2222) carry the agent-raw pre-finalize value, while QUALITY_REPORT.md / RELEASE_NOTES.md / FINAL_SIGN_OFF.md cite 91.92 reading from .sessi-work/gate4_result.json (the post-finalize source). harness_cli.py:3201 patches the persistent file on finalize-gate — but the persistent file shows it was never refreshed. Both numbers are ≥85 release threshold (not a blocker), but advance-phase / PhaseAuditor C10 reads the persistent file. Recommend re-running 'python harness_cli.py finalize-gate --gate 4 --phase 6 --project .' to synchronise composite_score across all four artefacts before tag/release.","fr_id":null},{"severity":"low","message":"da_waiver_needs_human_review=true on architecture dimension (quality_manifest.json:149) — this is the framework's documented safety net for hub-and-spoke orchestrator waiver; final sign-off should explicitly record the human reviewer who accepted the da_waiver for taskq/cli.py. RELEASE_NOTES.md §8.1 documents the rationale but does not name a reviewer.","fr_id":null}]}
+{
+  "review_status": "APPROVE",
+  "reason": "quality_manifest.json is schema-conformant (schema_version 1.0) and self-consistent: fr_ids = [FR-01..FR-05]; nfr_dimension_mapping covers NFR-01..NFR-05 (NFR-06 absent from dimension mapping but present in nfr_traceability \u2014 consistent with prior phases); fr_module_traceability maps each FR to its module matching the per-FR Gate-1 fr_id keys; architecture_constraints = [no_circular_dependencies, no_shell_true, atomic_writes_only]; high_risk_modules = [executor, breaker, store]. Per-FR Gate 1 scores (FR-01 96.94 / FR-02 94.22 / FR-03 99.66 / FR-04 99.36 / FR-05 95.92) exactly match 05-verification/BASELINE.md \u00a73-\u00a75 and 05-verification/VERIFICATION_REPORT.md \u00a72.1-\u00a72.5. Gate 2 score 95.65 / Gate 3 100.0 / Gate 4 90.22 all carry quality_complete=true, da_waiver_applied=[architecture], da_waiver_needs_human_review=true \u2014 the human-review flag is the framework's documented safety net for hub-and-spoke orchestrator waiver and is appropriately set. Gate 4 score 90.22 is \u226585 release threshold.",
+  "citations": [
+    ".methodology/quality_manifest.json:4-10",
+    ".methodology/quality_manifest.json:11-17",
+    ".methodology/quality_manifest.json:19-50",
+    ".methodology/quality_manifest.json:57-62",
+    ".methodology/quality_manifest.json:63-67",
+    ".methodology/quality_manifest.json:69-72",
+    ".methodology/quality_manifest.json:81-117",
+    ".methodology/quality_manifest.json:118-128",
+    ".methodology/quality_manifest.json:129-138",
+    ".methodology/quality_manifest.json:139-155",
+    "05-verification/BASELINE.md:113-123",
+    "05-verification/VERIFICATION_REPORT.md:175-187"
+  ],
+  "gaps": [
+    {
+      "severity": "medium",
+      "message": "Composite drift: .methodology/quality_manifest.json::gate_results.gate4.score (90.22) and .methodology/gate4_result.json::composite_score (90.2222) carry the agent-raw pre-finalize value, while QUALITY_REPORT.md / RELEASE_NOTES.md / FINAL_SIGN_OFF.md cite 91.92 reading from .sessi-work/gate4_result.json (the post-finalize source). harness_cli.py:3201 patches the persistent file on finalize-gate \u2014 but the persistent file shows it was never refreshed. Both numbers are \u226585 release threshold (not a blocker), but advance-phase / PhaseAuditor C10 reads the persistent file. Recommend re-running 'python harness_cli.py finalize-gate --gate 4 --phase 6 --project .' to synchronise composite_score across all four artefacts before tag/release.",
+      "fr_id": null
+    },
+    {
+      "severity": "low",
+      "message": "da_waiver_needs_human_review=true on architecture dimension (quality_manifest.json:149) \u2014 this is the framework's documented safety net for hub-and-spoke orchestrator waiver; final sign-off should explicitly record the human reviewer who accepted the da_waiver for taskq/cli.py. RELEASE_NOTES.md \u00a78.1 documents the rationale but does not name a reviewer.",
+      "fr_id": null
+    }
+  ],
+  "docs_embedded": [
+    "QUALITY_REPORT.md",
+    "RELEASE_NOTES.md",
+    "FINAL_SIGN_OFF.md",
+    "VERIFICATION_REPORT.md"
+  ],
+  "confidence": 0.95,
+  "fr": "PHASE-6"
+}
