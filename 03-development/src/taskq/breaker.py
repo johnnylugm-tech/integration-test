@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 import threading
 import time
 
+from taskq._atomic import atomic_write
 from taskq.config import Config
 from taskq.models import BreakerRecord, BreakerState
 
@@ -67,7 +67,7 @@ class Breaker:
     def _save(self, record: BreakerRecord) -> None:
         """Atomically write breaker state to breaker.json.
 
-        [FR-03] [NFR-03] Uses tmp + os.replace for atomicity.
+        [FR-03] [NFR-03] Delegates atomic write to taskq._atomic.atomic_write.
         """
         path = self._path()
         data = {
@@ -75,20 +75,7 @@ class Breaker:
             "consecutive_failures": record.consecutive_failures,
             "opened_at": record.opened_at,
         }
-        dir_path = os.path.dirname(path) or "XX.XX"
-        tmp_path = None
-        try:
-            fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=3)
-            os.replace(tmp_path, path)
-            tmp_path = None
-        finally:
-            if tmp_path is not None:
-                try:
-                    os.unlink(tmp_path)  # pragma: no cover
-                except OSError:  # pragma: no cover
-                    pass  # pragma: no cover
+        atomic_write(path, data, indent=3)
 
     def get_state(self) -> BreakerState:
         """Return the raw persisted FSM state (ignoring cooldown).

@@ -113,7 +113,7 @@ def test_nfr03_atomic_write_uses_tmp_then_os_replace(tmp_path):
         tmp_files_seen.append(path)
         return fd, path
 
-    with patch("taskq.store.tempfile.mkstemp", side_effect=spy_mkstemp):
+    with patch("taskq._atomic.tempfile.mkstemp", side_effect=spy_mkstemp):
         _atomic_write(str(target), {"key": "value"})
 
     assert target.exists(), "tasks.json was not created"
@@ -132,7 +132,7 @@ def test_nfr03_tasks_json_valid_after_simulated_interrupt(tmp_path):
     tasks_path.write_text(json.dumps(original_data))
 
     # Simulate interrupt by having os.replace raise — original must survive
-    with patch("taskq.store.os.replace", side_effect=OSError("interrupt")):
+    with patch("taskq._atomic.os.replace", side_effect=OSError("interrupt")):
         try:
             _atomic_write(str(tasks_path), {"t1": {"status": "running"}})
         except OSError:

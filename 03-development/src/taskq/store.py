@@ -9,10 +9,13 @@ from __future__ import annotations
 import json
 import os
 import re
-import tempfile
 import threading
 from typing import Optional
 
+from taskq._atomic import atomic_write
+
+# Backward-compat alias: previous code/tests imported _atomic_write from store.
+_atomic_write = atomic_write
 from taskq.config import Config, validate_config
 from taskq.models import Task, TaskStatus
 
@@ -76,7 +79,7 @@ def save_task(task: Task, cfg: Config) -> None:
                 existing = {}
         # Merge
         existing[task.id] = _task_to_dict(task)
-        _atomic_write(path, existing)
+        atomic_write(path, existing)
 
 
 def _redact(text: Optional[str]) -> Optional[str]:
@@ -94,27 +97,6 @@ def _redact(text: Optional[str]) -> Optional[str]:
         else:
             result.append(line)
     return "".join(result)
-
-
-def _atomic_write(path: str, data: dict) -> None:
-    """Write data as JSON to path atomically using tmp + os.replace.
-
-    [NFR-03] Ensures the file is always valid JSON even on process interrupt.
-    """
-    dir_path = os.path.dirname(path) or "."
-    tmp_path = None
-    try:
-        fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp_path, path)
-        tmp_path = None
-    finally:
-        if tmp_path is not None:
-            try:
-                os.unlink(tmp_path)  # pragma: no cover
-            except OSError:  # pragma: no cover
-                pass  # pragma: no cover
 
 
 def _task_to_dict(task: Task) -> dict:

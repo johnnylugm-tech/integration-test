@@ -13,11 +13,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import tempfile
 import threading
 import time
 from typing import Optional
 
+from taskq._atomic import atomic_write
 from taskq.config import Config, validate_config
 from taskq.models import Task, TaskStatus
 
@@ -107,26 +107,5 @@ def write(command: str, task: Task, cfg: Config) -> None:
     with _LOCK:
         data = _load(cfg)
         data[cache_key] = entry
-        _atomic_write(path, data)
+        atomic_write(path, data)
 
-
-def _atomic_write(path: str, data: dict) -> None:
-    """Write data as JSON to path atomically using tmp + os.replace.
-
-    [FR-04] [NFR-03] Ensures cache.json is always valid JSON even on interrupt.
-    """
-    _ = validate_config  # referenced to satisfy linters; actual call in callers
-    dir_path = os.path.dirname(path) or "."
-    tmp_path = None
-    try:
-        fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp_path, path)
-        tmp_path = None
-    finally:
-        if tmp_path is not None:
-            try:
-                os.unlink(tmp_path)  # pragma: no cover
-            except OSError:  # pragma: no cover
-                pass  # pragma: no cover

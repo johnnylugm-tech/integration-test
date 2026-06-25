@@ -137,6 +137,20 @@
       "fr_scope": "all",
       "overall_score": 100.0
     },
-    "gate4": null
+    "gate4": {
+      "score": 90.22,
+      "quality_complete": true,
+      "rounds_used": 2,
+      "open_critical": 0,
+      "open_high": 0,
+      "da_waiver_applied": [
+        "architecture"
+      ],
+      "da_waiver_needs_human_review": true,
+      "phase": 6,
+      "gate": 4,
+      "fr_scope": "all",
+      "overall_score": 90.22
+    }
   }
 }
