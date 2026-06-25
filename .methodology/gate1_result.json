@@ -1,8 +1,8 @@
 {
   "gate": 1,
   "phase": 7,
-  "fr_id": "FR-01",
-  "overall_score": 96.78,
+  "fr_id": "FR-02",
+  "overall_score": 95.58,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
@@ -14,18 +14,18 @@
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "{\"version\": \"1.1.409\", \"summary\": {\"filesAnalyzed\": 12, \"errorCount\": 0, \"warningCount\": 0, \"informationCount\": 0, \"timeInSec\": 0.353}}"
+      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1782384972088\",\n    \"generalDiagnostics\": [],\n    \"summary\": {\n        \"filesAnalyzed\": 12,\n        \"errorCount\": 0,\n        \"warningCount\": 0,\n        \"informationCount\": 0,\n        \"timeInSec\": 0.312\n    }\n}"
     },
     "test_coverage": {
-      "score": 90.53,
+      "score": 87,
       "threshold": 80,
-      "tests_passed": 43,
+      "tests_passed": 37,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "============================== 43 passed in 0.08s ==============================\n\nFR-scoped coverage (cli.py, config.py, models.py, store.py):\n  cli.py: 77% (100 stmts, 23 miss: 209-221, 229-239, 247-252)\n  config.py: 100% (39/39)\n  models.py: 100% (38/38)\n  store.py: 100% (66/66)\n  Weighted: 220/243 = 90.53%\n  spec_cov_pct: 13/13 = 100% (all required tests present)\n  score = min(90.53, 100) = 90.53"
+      "tool_evidence": "============================== 37 passed in 5.32s ==============================\n\nName                                   Stmts   Miss  Cover\n----------------------------------------------------------\n03-development/src/taskq/cli.py          100     12    88%\n03-development/src/taskq/config.py        39      1    97%\n03-development/src/taskq/executor.py     101     27    73%\n03-development/src/taskq/models.py        38      0   100%\n03-development/src/taskq/store.py         66      4    94%\n----------------------------------------------------------\nTOTAL                                    344     44    87%"
     }
   },
-  "composite_score": 96.78,
+  "composite_score": 95.58,
   "verdict": "PASS",
   "passed": true
 }
