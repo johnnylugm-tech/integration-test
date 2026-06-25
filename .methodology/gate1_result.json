@@ -1,35 +1,31 @@
 {
   "gate": 1,
-  "phase": 5,
-  "fr_id": "FR-05",
-  "overall_score": 95.92,
+  "phase": 7,
+  "fr_id": "FR-01",
+  "overall_score": 96.78,
   "quality_complete": true,
   "rounds_used": 1,
-  "notes": "run-gate blocked by Architecture Amendment Protocol (SAB.json does not yet register taskq.parser / __main__ — framework-level, not source). Fell back to evaluate_dimension.md default tool commands scoped to FR-05 (cli.py, __main__.py, parser.py + supporting core modules). ruff: 0 violations -> 100. pyright: 0 errors -> 100. pytest: 28 passed (18/18 SPEC tests present, all green), coverage 88% on FR-05 scope (cli.py 86%, parser.py 100%) -> score = min(88,100)=88. overall = 100*0.33 + 100*0.33 + 88*0.34 = 95.92.",
-  "block_reason": null,
   "breakdown": {
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "ruff check 03-development/src/taskq/cli.py 03-development/src/taskq/__main__.py 03-development/src/taskq/parser.py 03-development/src/taskq/executor.py 03-development/src/taskq/breaker.py 03-development/src/taskq/store.py 03-development/src/taskq/cache.py 03-development/src/taskq/models.py 03-development/src/taskq/config.py --output-format=concise\n\nAll checks passed!"
+      "tool_evidence": "All checks passed!"
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "pyright 03-development/src/taskq/cli.py 03-development/src/taskq/__main__.py 03-development/src/taskq/parser.py 03-development/src/taskq/executor.py 03-development/src/taskq/breaker.py 03-development/src/taskq/store.py 03-development/src/taskq/cache.py 03-development/src/taskq/models.py 03-development/src/taskq/config.py --outputjson\n\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1782334585253\",\n    \"generalDiagnostics\": [],\n    \"summary\": {\n        \"filesAnalyzed\": 9,\n        \"errorCount\": 0,\n        \"warningCount\": 0,\n        \"informationCount\": 0,\n        \"timeInSec\": 0.305\n    }\n}"
+      "tool_evidence": "{\"version\": \"1.1.409\", \"summary\": {\"filesAnalyzed\": 12, \"errorCount\": 0, \"warningCount\": 0, \"informationCount\": 0, \"timeInSec\": 0.353}}"
     },
     "test_coverage": {
-      "score": 88,
+      "score": 90.53,
       "threshold": 80,
-      "tests_passed": 28,
+      "tests_passed": 43,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "coverage_pct": 88,
-      "spec_cov_pct": 100,
-      "required_tests_present": 18,
-      "required_tests_total": 18,
-      "tool_evidence": "28 passed in 1.76s\nName                                 Stmts   Miss  Cover\n--------------------------------------------------------\n03-development/src/taskq/cli.py        111     15    86%\n03-development/src/taskq/parser.py      19      0   100%\n--------------------------------------------------------\nTOTAL                                  130     15    88%"
+      "tool_evidence": "============================== 43 passed in 0.08s ==============================\n\nFR-scoped coverage (cli.py, config.py, models.py, store.py):\n  cli.py: 77% (100 stmts, 23 miss: 209-221, 229-239, 247-252)\n  config.py: 100% (39/39)\n  models.py: 100% (38/38)\n  store.py: 100% (66/66)\n  Weighted: 220/243 = 90.53%\n  spec_cov_pct: 13/13 = 100% (all required tests present)\n  score = min(90.53, 100) = 90.53"
     }
   },
-  "composite_score": 95.92
+  "composite_score": 96.78,
+  "verdict": "PASS",
+  "passed": true
 }
