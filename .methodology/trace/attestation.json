@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "0c662224111b973603da72d9e8540304717e45b3",
-  "content_sha256": "02899325cdcab652d00d09541301d901641c8967aa49da2c4b3a764b19a54577",
+  "git_sha": "174549d2da2efca4b8066310141381cd57776ec6",
+  "content_sha256": "cf48ab8cb3df3ea42fe55d543fcf4a74eca1d29715385594c0f4851ea71609ef",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -14,7 +14,7 @@
       "code_coverage": "100.0%",
       "test_coverage": "100.0%",
       "verification_rate": "100.0%",
-      "total_links": 57,
+      "total_links": 58,
       "missing_mappings": {
         "fr_without_srs": [],
         "fr_without_code": [],
@@ -35,6 +35,7 @@
           "03-development/src/taskq/__init__.py",
           "03-development/src/taskq/cli.py",
           "03-development/src/taskq/config.py",
+          "03-development/src/taskq/injection_guard.py",
           "03-development/src/taskq/models.py",
           "03-development/src/taskq/store.py",
           "03-development/tests/integration/test_integration_e2e.py",
