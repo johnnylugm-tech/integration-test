@@ -2,9 +2,10 @@
 //
 // Structure: FR-loop型, NO harness run-gate (P5 cleared by Gate 3 at P4 exit).
 // Per-FR GATE1-DELTA re-eval (auto-triggers full TDD on code change), then
-// generate BASELINE.md + VERIFICATION_REPORT.md, p5-baseline milestone push,
-// advance (advance-phase still enforces TDD-PRECHECK + D4 ≥80%, and Gate 4
-// next phase needs ≥90% so we warn-check here).
+// generate VERIFICATION_REPORT.md (P5 no longer emits a separate BASELINE.md;
+// the BASELINE content was merged into VERIFICATION_REPORT.md per phase5_plan.md
+// v2.12.0), p5-baseline milestone push, advance (advance-phase still enforces
+// TDD-PRECHECK + D4 ≥80%, and Gate 4 next phase needs ≥90% so we warn-check here).
 //
 // Playbook lessons: NO import/fs/process/schema:, Bash CLI, SCOPE RULES,
 // PY = .venv/bin/python, scriptPath launch.
@@ -210,21 +211,23 @@ if (gate1Fail.length) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Phase: Verification Docs (BASELINE.md + VERIFICATION_REPORT.md + re-checks)
+// Phase: Verification Docs (VERIFICATION_REPORT.md + re-checks)
 // ════════════════════════════════════════════════════════════════════════
+// Per phase5_plan.md v2.12.0: P5 emits ONLY VERIFICATION_REPORT.md. BASELINE.md
+// was merged into VERIFICATION_REPORT.md; there is no separate BASELINE.md
+// artifact. Phase 6 entry-check (line 121 of phase6-quality.js) reflects this.
 phase('Verification Docs')
-log('Generate BASELINE.md + VERIFICATION_REPORT.md; re-run integration + security')
+log('Generate VERIFICATION_REPORT.md; re-run integration + security')
 const docsReport = await agent(
   'YOU ARE THE P5 VERIFICATION AUTHOR. Generate the verification deliverables.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '1. BASELINE: write ' + REPO + '/05-verification/BASELINE.md (create dir if missing). Document: current version, test results summary, coverage %, Gate 3 composite score. Reference 04-testing/TEST_RESULTS.md + the 03-development/src/ module list.\n'
-  + '2. VERIFICATION_REPORT: write ' + REPO + '/05-verification/VERIFICATION_REPORT.md. For each FR (' + frIds.join(', ') + '): verification status, acceptance-criteria result (PASS/FAIL), evidence. Include coverage %, mutation score, deferred Gate 3 issues. Certify all Gate 3 open issues addressed or deferred-with-justification. Must be NON-trivial (validate-handoff checks this).\n'
-  + '3. Re-run integration tests: `' + PY + ' -m pytest ' + REPO + '/tests/integration/ -q` (skip gracefully if dir absent).\n'
-  + '4. Confirm performance NFRs: review benchmark entries in 04-testing/TEST_RESULTS.md.\n'
-  + '5. Security clean: `bandit -r ' + REPO + '/03-development/src/ -ll` + `gitleaks detect --source ' + REPO + '`.\n\n'
+  + '1. VERIFICATION_REPORT: write ' + REPO + '/05-verification/VERIFICATION_REPORT.md. Include: current version, test results summary, coverage %, Gate 3 composite score, the 03-development/src/ module list (BASELINE content merged here per phase5_plan.md v2.12.0), AND for each FR (' + frIds.join(', ') + '): verification status, acceptance-criteria result (PASS/FAIL), evidence. Include coverage %, mutation score, deferred Gate 3 issues. Certify all Gate 3 open issues addressed or deferred-with-justification. Must be NON-trivial (validate-handoff checks this). Reference 04-testing/TEST_RESULTS.md.\n'
+  + '2. Re-run integration tests: `' + PY + ' -m pytest ' + REPO + '/tests/integration/ -q` (skip gracefully if dir absent).\n'
+  + '3. Confirm performance NFRs: review benchmark entries in 04-testing/TEST_RESULTS.md.\n'
+  + '4. Security clean: `bandit -r ' + REPO + '/03-development/src/ -ll` + `gitleaks detect --source ' + REPO + '`.\n\n'
   + 'Report: "VERIFY-DOCS: PASS" or "VERIFY-DOCS: FAIL — <reason>".\n\n'
-  + 'SCOPE RULES:\n- DO NOT run advance-phase / push-milestone.\n- DO NOT modify harness/.\n- DO NOT re-implement FRs (only document verification + re-run existing checks).\n- ONLY generate the 2 docs + re-run checks.',
+  + 'SCOPE RULES:\n- DO NOT run advance-phase / push-milestone.\n- DO NOT modify harness/.\n- DO NOT re-implement FRs (only document verification + re-run existing checks).\n- DO NOT write a separate BASELINE.md file — content goes into VERIFICATION_REPORT.md.\n- ONLY generate VERIFICATION_REPORT.md + re-run checks.',
   { label: 'verification-docs', phase: 'Verification Docs', agentType: 'general-purpose' },
 )
 if (!(typeof docsReport === 'string' && /VERIFY-DOCS:\s*PASS/.test(docsReport))) {
@@ -235,7 +238,7 @@ if (!(typeof docsReport === 'string' && /VERIFY-DOCS:\s*PASS/.test(docsReport)))
 // Phase: Milestone (p5-baseline push)
 // ════════════════════════════════════════════════════════════════════════
 phase('Milestone')
-log('push-milestone p5-baseline (after BASELINE.md generated)')
+log('push-milestone p5-baseline (after VERIFICATION_REPORT.md generated)')
 const milestoneReport = await agent(
   'YOU ARE THE P5 MILESTONE PUSHER.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
@@ -279,6 +282,6 @@ return {
   fr_count: frIds.length,
   gate1_pass: gate1Pass,
   advance_status: 'PASS',
-  artifacts: ['05-verification/BASELINE.md', '05-verification/VERIFICATION_REPORT.md', 'HANDOVER.md'],
+  artifacts: ['05-verification/VERIFICATION_REPORT.md', 'HANDOVER.md'],
   notes: 'Phase 5 complete per phase5_plan.md v2.12.0. Phase 6 (Quality Assurance) ready. Reminder: Gate 4 needs spec-coverage ≥90%.',
 }
