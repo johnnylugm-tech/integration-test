@@ -27,11 +27,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from taskq.config import Config, get_config, validate_config
+from taskq.injection_guard import check_injection as _check_injection
 from taskq.models import Task, TaskStatus
 from taskq.store import load_tasks, save_task, load_task
-
-# FR-01 injection character blacklist (NFR-02)
-_INJECTION_CHARS: frozenset[str] = frozenset(";|&$><`")
 
 
 def _get_status_value(status) -> str:
@@ -60,24 +58,6 @@ def _format_task_dict(task: Task) -> dict:
         "finished_at": task.finished_at,
         "cached": task.cached,
     }
-
-
-def _check_injection(command: str) -> None:
-    """Raise SystemExit(2) if command contains injection characters outside quotes.
-
-    [FR-01] [NFR-02] Scans single-quoted and double-quoted spans, rejecting
-    characters in _INJECTION_CHARS found in unquoted regions.
-    """
-    in_single = False
-    in_double = False
-    for ch in command:
-        if ch == "'" and not in_double:
-            in_single = not in_single
-        elif ch == '"' and not in_single:
-            in_double = not in_double
-        elif not in_single and not in_double and ch in _INJECTION_CHARS:
-            print(f"error: command contains forbidden character {ch!r}", file=sys.stderr)
-            raise SystemExit(2)
 
 
 def _check_name_unique(name: str, cfg: Config) -> None:
