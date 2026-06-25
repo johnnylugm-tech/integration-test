@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-24
+> **Date**: 2026-06-25
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 6 - Quality Assurance
 > **Status**: Full version (including Phase 6 detailed tasks)
@@ -262,22 +262,6 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
 - `RELEASE_NOTES.md` - Release notes
 - `FINAL_SIGN_OFF.md` - Final sign-off
 - [x] `.methodology/sessions_spawn.log` — auto-populated by AgentSpawner (non-blocking debug trail)
-
-### Retry & Stall Mechanism (workflow JS)
-
-Phase 6 orchestrator (`.claude/workflows/phase6-quality.js`) includes session-limit / stall detection
-in Gate 4 retry loops. When an LLM agent stalls (no progress > 600s) or returns null/empty
-(session limit / rate limit), the workflow aborts retries and returns `session_limit_blocked`
-instead of wasting further turns. Resume after quota reset — GUARD checks (advance-phase) skip
-already-completed FRs.
-
-**Observed during integration-test run 2026-06-25**: Gate 4 R2 stalled at 868s, retried
-automatically, succeeded on first retry. No operator intervention required.
-
-**Operator guidance**:
-- If workflow reports `session_limit_blocked: true`, wait for quota reset and re-run phase6-quality.js.
-- Do NOT increase retry count above 3 — stall usually indicates quota exhaustion, not transient failure.
-- Each retry consumes ~50–100k tokens; budget accordingly when running other workflows in parallel.
 
 ### Phase 6 → Phase 7: Risk Management
 
