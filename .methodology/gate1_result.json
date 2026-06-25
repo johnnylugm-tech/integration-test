@@ -1,7 +1,7 @@
 {
   "gate": 1,
   "phase": 7,
-  "fr_id": "FR-04",
+  "fr_id": "FR-03",
   "overall_score": 100.0,
   "quality_complete": true,
   "rounds_used": 1,
@@ -14,15 +14,15 @@
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "pyright 03-development/src/ --outputjson\nexit=0\n{\"version\":\"1.1.409\",\"generalDiagnostics\":[],\"summary\":{\"filesAnalyzed\":12,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.33}}"
+      "tool_evidence": "pyright 03-development/src/ --outputjson\nexit=0\n{\"version\":\"1.1.409\",\"generalDiagnostics\":[],\"summary\":{\"filesAnalyzed\":12,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.321}}"
     },
     "test_coverage": {
       "score": 100,
       "threshold": 80,
-      "tests_passed": 15,
+      "tests_passed": 23,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "coverage run -m pytest 03-development/tests/test_fr04.py && coverage report --include=\"03-development/src/taskq/cache.py\"\nexit=0\n============================= 15 passed in 0.14s ==============================\nName                                Stmts   Miss  Cover\n-------------------------------------------------------\n03-development/src/taskq/cache.py      50      0   100%\n-------------------------------------------------------\nTOTAL                                  50      0   100%\nFR-scoped coverage (cache.py only): 100%\nspec_cov_pct: 11/11 -> 100%; score = min(100, 100) = 100"
+      "tool_evidence": "PYTHONPATH=. python3 -m pytest 03-development/tests/test_fr03.py\nexit=0\ncollected 23 items\n03-development/tests/test_fr03.py .......................                [100%]\n============================== 23 passed in 1.15s ==============================\n\nPYTHONPATH=. python3 -m coverage report --include=\"03-development/src/taskq/breaker.py\"\nName                                  Stmts   Miss  Cover\n---------------------------------------------------------\n03-development/src/taskq/breaker.py      65      0   100%\n---------------------------------------------------------\nTOTAL                                    65      0   100%\nFR-scoped coverage (breaker.py only): 100%\nspec_cov_pct: 14/14 -> 100%; score = min(100, 100) = 100"
     }
   },
   "composite_score": 100.0,
