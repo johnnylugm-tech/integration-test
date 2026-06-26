@@ -99,6 +99,12 @@ function hasHighGap(gaps) {
 // Per plan A-2: A returns compact JSON; orchestrator reads content from disk.
 // Per playbook §9.5/§8.2: Bash cat is more reliable than Read tool.
 // expectPrefix catches cross-file fabrication.
+//
+// v14 fix (port from phase2-architecture): substring indexOf is too strict
+// for H1 variants like `# ADR — Architecture Decision Records: taskq` (em-dash
+// separator between short prefix and distinctive spec name). Use regex to
+// tolerate `# <short-prefix> <sep> ` (sep ∈ em-dash U+2014 / hyphen / colon /
+// space) BEFORE the distinctive anchor. Still rejects cross-file fabrication.
 async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
   opts = opts || {}
   const maxAttempts = opts.maxAttempts || 5
@@ -126,12 +132,21 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
       log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + text.length + ')')
       continue
     }
-    // v11: use contains() instead of startsWith() — file first lines may have
-    // variations (em-dash vs hyphen, trailing spaces, BOM). Anchor check is
-    // "does the expected distinctive string appear anywhere in the first 500 chars?"
+    // v14: tolerate H1 variants like `# ADR — Architecture Decision Records: taskq`
+    // or `# Architecture Decision Records: taskq` (no prefix). Match an optional
+    // `# <short-prefix> <sep> ` (sep ∈ em-dash U+2014 / hyphen / colon / space)
+    // BEFORE the distinctive anchor string. Anchor must appear on an H1 line.
     if (expectPrefix) {
       const head = text.slice(0, 500)
-      if (head.indexOf(expectPrefix) === -1) {
+      // v14: anchor must appear on an H1 line (`# `) — tolerate arbitrary prefix
+      // text BEFORE the anchor on that line. Handles variants like
+      // `# ADR — Architecture Decision Records: taskq` (em-dash prefix) and
+      // `# Architecture Decision Records: taskq` (bare). Strip leading "# " from
+      // expectPrefix if present so we don't double-match the H1 marker.
+      const stripped = expectPrefix.replace(/^#\s*/, '')
+      const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
+      if (!anchorRe.test(head)) {
         log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' content-mismatch (expected anchor "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
         continue
       }

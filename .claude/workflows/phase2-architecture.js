@@ -245,6 +245,15 @@ async function abLoop(cfg) {
 // variations (em-dash vs hyphen, trailing spaces, BOM). Anchor check is
 // "does the expected distinctive string appear anywhere in the first 500
 // chars?" Plus maxAttempts=5 retry for cross-file fabrication resilience.
+//
+// v14 fix: substring indexOf is too strict for H1 variants like
+// `# ADR — Architecture Decision Records: taskq` (em-dash separator between
+// short prefix and distinctive spec name). Real failure observed in P2
+// Sub-Task 2 — anchor `# Architecture Decision Records` did NOT match the
+// loaded ADR.md because `# ADR — ` was in between. Fix: regex allows an
+// optional `# <short-prefix> — ` (em-dash, hyphen, colon, or space) BEFORE
+// the distinctive anchor substring. Still rejects cross-file fabrication
+// (anchor must appear on H1 line within first 500 chars).
 async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
   opts = opts || {}
   const maxAttempts = opts.maxAttempts || 5
@@ -271,7 +280,15 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
     }
     if (expectPrefix) {
       const head = content.slice(0, 500)
-      if (head.indexOf(expectPrefix) === -1) {
+      // v14: anchor must appear on an H1 line (`# `) — tolerate arbitrary prefix
+      // text BEFORE the anchor on that line. Handles variants like
+      // `# ADR — Architecture Decision Records: taskq` (em-dash prefix) and
+      // `# Architecture Decision Records: taskq` (bare). Strip leading "# " from
+      // expectPrefix if present so we don't double-match the H1 marker.
+      const stripped = expectPrefix.replace(/^#\s*/, '')
+      const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
+      if (!anchorRe.test(head)) {
         log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' content-mismatch (expected anchor "' + expectPrefix + '", got: ' + content.slice(0, 80) + ')')
         continue
       }
