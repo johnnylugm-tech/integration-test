@@ -148,18 +148,47 @@ async function abLoop(cfg) {
 }
 
 // ---- Bash file loader (playbook §8.2 — cat, not Read; defensive validation) ----
+// v4 BUG FIX (2026-06-26): haiku agents frequently hallucinate final text
+// ("Acknowledged. The code-review-graph MCP server...") instead of cat stdout.
+// Reinforce prompt + retry up to 3 times + detect hallucination patterns.
 async function loadFileViaBash(relPath, expectPrefix, phaseName) {
-  const res = await agent(
-    'Use ONLY the Bash tool. Run EXACTLY: cat ' + REPO + '/' + relPath + '\n'
-    + 'Do NOT use the Read tool. Return the EXACT stdout as your final message — the file content IS your response.\n'
-    + 'If the file does not exist, return exactly: ERROR: ' + relPath + ' not found',
-    { label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-'), phase: phaseName, agentType: 'general-purpose', model: 'haiku' },
-  )
-  const content = (typeof res === 'string' ? res : String(res ?? '')).trim()
-  if (expectPrefix && content.length > 50 && !content.startsWith(expectPrefix) && !content.startsWith('ERROR:')) {
-    return 'ERROR: content-mismatch — expected prefix "' + expectPrefix + '", got: ' + content.slice(0, 120)
+  const fullPath = REPO + '/' + relPath
+  const prompt = 'YOU ARE THE CAT AGENT (haiku). Your ONLY job: dump raw file content.\n'
+    + 'PATH: ' + fullPath + '\n\n'
+    + 'Run EXACTLY ONE bash command: cat ' + fullPath + '\n'
+    + 'Your final message MUST be the COMPLETE raw stdout — every character, every line, in order.\n'
+    + 'If the file does not exist, return EXACTLY this single line: ERROR: ' + relPath + ' not found\n\n'
+    + 'CRITICAL — DO NOT add any commentary, preamble, or acknowledgment.\n'
+    + 'Do NOT describe what you see. Do NOT summarize. Do NOT start with "Acknowledged", "I will", or "Sure".\n'
+    + 'Your final message = file content. Nothing else.'
+  const isHallucinated = function (text) {
+    if (text.length < 100) return true
+    if (/Acknowledged\./i.test(text)) return true
+    if (/code-review-graph/i.test(text)) return true
+    if (/tree-sitter/i.test(text)) return true
+    if (/token-efficient/i.test(text)) return true
+    return false
   }
-  return content
+  let lastAttempt = ''
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await agent(prompt, {
+      label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-') + '-a' + attempt,
+      phase: phaseName,
+      agentType: 'general-purpose',
+      model: 'haiku',
+    })
+    lastAttempt = (typeof res === 'string' ? res : String(res ?? '')).trim()
+    if (lastAttempt.startsWith('ERROR:')) return lastAttempt
+    if (isHallucinated(lastAttempt)) {
+      log('  [load-' + relPath + '] attempt ' + attempt + '/3 hallucinated (len=' + lastAttempt.length + ')')
+      continue
+    }
+    if (expectPrefix && lastAttempt.length > 50 && !lastAttempt.startsWith(expectPrefix)) {
+      return 'ERROR: content-mismatch — expected prefix "' + expectPrefix + '", got: ' + lastAttempt.slice(0, 120)
+    }
+    return lastAttempt
+  }
+  return 'ERROR: loader-failed-after-3-attempts (' + relPath + ') — last attempt: ' + lastAttempt.slice(0, 120)
 }
 
 // ════════════════════════════════════════════════════════════════════════

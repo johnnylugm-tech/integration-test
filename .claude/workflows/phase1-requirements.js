@@ -249,14 +249,53 @@ log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars | 
 
 // ---- loadDeliverable: load file content from disk via Bash cat ----
 // Use after Agent A writes a deliverable — avoids JSON truncation for large files.
+//
+// v4 BUG FIX (2026-06-26): haiku agents (the cheap model used here) frequently
+// hallucinate their final text — emitting "Acknowledged. The code-review-graph
+// MCP server is available..." instead of the cat stdout. The agent's `Bash` tool
+// DID execute correctly (tool_result contains the real content); the bug is that
+// the workflow JS receives the agent's final *text* message, not the tool_result.
+// Per playbook §7 (Read tool hallucination) and §8.2 (defensive validation),
+// we now (a) reinforce the prompt to forbid any preamble/postamble, (b) retry up
+// to 3 times, (c) detect known haiku hallucination patterns and re-dispatch.
+// If all 3 attempts fail, return a sentinel string that downstream code will
+// fail-fast on (matches the existing FILE_MISSING length-50 check).
 async function loadDeliverable(filePath, label, phaseName) {
-  const res = await agent(
-    'Use ONLY the Bash tool. Run EXACTLY: cat ' + filePath + '\n'
-    + 'Your ENTIRE response must be the raw file content — no commentary, no summary, no headers.\n'
-    + 'If the file does not exist, return exactly: FILE_MISSING: ' + filePath,
-    { label: label, phase: phaseName, agentType: 'general-purpose', model: 'haiku' },
-  )
-  return (typeof res === 'string' ? res : '').trim()
+  const prompt = 'YOU ARE THE CAT AGENT (haiku). Your ONLY job: dump raw file content.\n'
+    + 'PATH: ' + filePath + '\n\n'
+    + 'Run EXACTLY ONE bash command: cat ' + filePath + '\n'
+    + 'Your final message MUST be the COMPLETE raw stdout — every character, every line, in order.\n'
+    + 'If the file does not exist, return EXACTLY this single line: FILE_MISSING: ' + filePath + '\n\n'
+    + 'CRITICAL — DO NOT add any commentary, preamble, or acknowledgment.\n'
+    + 'Do NOT describe what you see. Do NOT summarize. Do NOT apologize.\n'
+    + 'Do NOT start with phrases like "Acknowledged", "I will", "Certainly", or "Sure".\n'
+    + 'Your final message = file content. Nothing else.'
+  // Known haiku hallucination patterns (defensive validation; playbook §7)
+  const isHallucinated = function (text) {
+    if (text.length < 100) return true
+    if (/Acknowledged\./i.test(text)) return true
+    if (/code-review-graph/i.test(text)) return true
+    if (/tree-sitter/i.test(text)) return true
+    if (/token-efficient/i.test(text)) return true
+    if (/I'll run|certainly|sure[, ]/i.test(text) && text.length < 300) return true
+    return false
+  }
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await agent(prompt, {
+      label: label + '-a' + attempt,
+      phase: phaseName,
+      agentType: 'general-purpose',
+      model: 'haiku',
+    })
+    const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
+    if (text.startsWith('FILE_MISSING')) return text
+    if (isHallucinated(text)) {
+      log('  [' + label + '] attempt ' + attempt + '/3 hallucinated (len=' + text.length + '): ' + text.slice(0, 80))
+      continue
+    }
+    return text
+  }
+  return 'LOADER_FAILED_AFTER_3_ATTEMPTS: ' + filePath
 }
 
 // ---- Sub-Task 1/4: SRS.md ----
