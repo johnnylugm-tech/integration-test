@@ -147,6 +147,31 @@ are not re-opened. This bounds backtracking to a single step.
     > If round 5 REJECT: escalate to human — orchestrator cannot self-resolve.
     > Human fix → re-dispatch Agent B (same prompt + updated content) → `APPROVE` required before continuing.
 
+- **[B-2.5] B SELF-VERIFY (v2.12.0; X1 mitigation against reviewer hallucination)**:
+  > **Why**: in late rounds (R4/R5) B sometimes rejects deliverables on fabricated
+  > premises (e.g. claiming the deliverable describes a different product, or
+  > citing non-existent keywords). Survey consensus (arxiv 2509.18970, arxiv
+  > 2510.24476, MasterOfCode 2026) shows **self-verification** is the most
+  > cost-effective hallucination mitigation for reviewer agents.
+  >
+  > **What it does**: After B-2 returns, dispatch B (same STATELESS context,
+  > fresh prompt) to verify its OWN citations and atomic claims via Bash
+  > (sed/grep). Returns `b2.verify = {verified_gaps, unverified_reason_claims,
+  > recalibrated_review, confidence}`.
+  >
+  > **What it does NOT do**: it does NOT change `b2.review_status` or veto B's
+  > REJECT. The HR-12 escalation rules in **[B-2]** above remain unchanged.
+  > Verify metadata is **observability** — humans reading the workflow log
+  > see `verify=N/M gaps verified` and can judge whether B is unstable. If
+  > majority of citations are unverified, the log warns `[X1: B unstable]`,
+  > which is a strong signal to Johnny that the 5-round loop is fighting a
+  > hallucinated REJECT rather than a real defect — and that HITL may be
+  > warranted even before round 5.
+  >
+  > **Cost**: 1 additional agent call per round (~10k tokens). For a 5-round
+  > loop this is ~50k tokens — acceptable given the cost of converging on a
+  > hallucinated REJECT.
+
   > ⚠️ **BLOCKING**: Do NOT start the next Sub-Task until this sub-task's current
   > round is fully APPROVED (including any required round 2).
   > AgentSpawner records dispatches to `.methodology/sessions_spawn.log` (non-blocking debug trail).
@@ -234,6 +259,31 @@ are not re-opened. This bounds backtracking to a single step.
     > If round 5 REJECT: escalate to human — orchestrator cannot self-resolve.
     > Human fix → re-dispatch Agent B (same prompt + updated content) → `APPROVE` required before continuing.
 
+- **[B-2.5] B SELF-VERIFY (v2.12.0; X1 mitigation against reviewer hallucination)**:
+  > **Why**: in late rounds (R4/R5) B sometimes rejects deliverables on fabricated
+  > premises (e.g. claiming the deliverable describes a different product, or
+  > citing non-existent keywords). Survey consensus (arxiv 2509.18970, arxiv
+  > 2510.24476, MasterOfCode 2026) shows **self-verification** is the most
+  > cost-effective hallucination mitigation for reviewer agents.
+  >
+  > **What it does**: After B-2 returns, dispatch B (same STATELESS context,
+  > fresh prompt) to verify its OWN citations and atomic claims via Bash
+  > (sed/grep). Returns `b2.verify = {verified_gaps, unverified_reason_claims,
+  > recalibrated_review, confidence}`.
+  >
+  > **What it does NOT do**: it does NOT change `b2.review_status` or veto B's
+  > REJECT. The HR-12 escalation rules in **[B-2]** above remain unchanged.
+  > Verify metadata is **observability** — humans reading the workflow log
+  > see `verify=N/M gaps verified` and can judge whether B is unstable. If
+  > majority of citations are unverified, the log warns `[X1: B unstable]`,
+  > which is a strong signal to Johnny that the 5-round loop is fighting a
+  > hallucinated REJECT rather than a real defect — and that HITL may be
+  > warranted even before round 5.
+  >
+  > **Cost**: 1 additional agent call per round (~10k tokens). For a 5-round
+  > loop this is ~50k tokens — acceptable given the cost of converging on a
+  > hallucinated REJECT.
+
   > ⚠️ **BLOCKING**: Do NOT start the next Sub-Task until this sub-task's current
   > round is fully APPROVED (including any required round 2).
   > AgentSpawner records dispatches to `.methodology/sessions_spawn.log` (non-blocking debug trail).
@@ -310,6 +360,31 @@ are not re-opened. This bounds backtracking to a single step.
     > If round 5 REJECT: escalate to human — orchestrator cannot self-resolve.
     > Human fix → re-dispatch Agent B (same prompt + updated content) → `APPROVE` required before continuing.
 
+- **[B-2.5] B SELF-VERIFY (v2.12.0; X1 mitigation against reviewer hallucination)**:
+  > **Why**: in late rounds (R4/R5) B sometimes rejects deliverables on fabricated
+  > premises (e.g. claiming the deliverable describes a different product, or
+  > citing non-existent keywords). Survey consensus (arxiv 2509.18970, arxiv
+  > 2510.24476, MasterOfCode 2026) shows **self-verification** is the most
+  > cost-effective hallucination mitigation for reviewer agents.
+  >
+  > **What it does**: After B-2 returns, dispatch B (same STATELESS context,
+  > fresh prompt) to verify its OWN citations and atomic claims via Bash
+  > (sed/grep). Returns `b2.verify = {verified_gaps, unverified_reason_claims,
+  > recalibrated_review, confidence}`.
+  >
+  > **What it does NOT do**: it does NOT change `b2.review_status` or veto B's
+  > REJECT. The HR-12 escalation rules in **[B-2]** above remain unchanged.
+  > Verify metadata is **observability** — humans reading the workflow log
+  > see `verify=N/M gaps verified` and can judge whether B is unstable. If
+  > majority of citations are unverified, the log warns `[X1: B unstable]`,
+  > which is a strong signal to Johnny that the 5-round loop is fighting a
+  > hallucinated REJECT rather than a real defect — and that HITL may be
+  > warranted even before round 5.
+  >
+  > **Cost**: 1 additional agent call per round (~10k tokens). For a 5-round
+  > loop this is ~50k tokens — acceptable given the cost of converging on a
+  > hallucinated REJECT.
+
   > ⚠️ **BLOCKING**: Do NOT start the next Sub-Task until this sub-task's current
   > round is fully APPROVED (including any required round 2).
   > AgentSpawner records dispatches to `.methodology/sessions_spawn.log` (non-blocking debug trail).
@@ -381,6 +456,31 @@ are not re-opened. This bounds backtracking to a single step.
   - `REJECT` → Agent A fixes gaps → re-dispatch B. Max 5 rounds (HR-12).
     > If round 5 REJECT: escalate to human — orchestrator cannot self-resolve.
     > Human fix → re-dispatch Agent B (same prompt + updated content) → `APPROVE` required before continuing.
+
+- **[B-2.5] B SELF-VERIFY (v2.12.0; X1 mitigation against reviewer hallucination)**:
+  > **Why**: in late rounds (R4/R5) B sometimes rejects deliverables on fabricated
+  > premises (e.g. claiming the deliverable describes a different product, or
+  > citing non-existent keywords). Survey consensus (arxiv 2509.18970, arxiv
+  > 2510.24476, MasterOfCode 2026) shows **self-verification** is the most
+  > cost-effective hallucination mitigation for reviewer agents.
+  >
+  > **What it does**: After B-2 returns, dispatch B (same STATELESS context,
+  > fresh prompt) to verify its OWN citations and atomic claims via Bash
+  > (sed/grep). Returns `b2.verify = {verified_gaps, unverified_reason_claims,
+  > recalibrated_review, confidence}`.
+  >
+  > **What it does NOT do**: it does NOT change `b2.review_status` or veto B's
+  > REJECT. The HR-12 escalation rules in **[B-2]** above remain unchanged.
+  > Verify metadata is **observability** — humans reading the workflow log
+  > see `verify=N/M gaps verified` and can judge whether B is unstable. If
+  > majority of citations are unverified, the log warns `[X1: B unstable]`,
+  > which is a strong signal to Johnny that the 5-round loop is fighting a
+  > hallucinated REJECT rather than a real defect — and that HITL may be
+  > warranted even before round 5.
+  >
+  > **Cost**: 1 additional agent call per round (~10k tokens). For a 5-round
+  > loop this is ~50k tokens — acceptable given the cost of converging on a
+  > hallucinated REJECT.
 
   > ⚠️ **BLOCKING**: Do NOT start the next Sub-Task until this sub-task's current
   > round is fully APPROVED (including any required round 2).

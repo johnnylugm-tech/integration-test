@@ -226,12 +226,58 @@ function scopeRules(singleDeliverable, prevDeliverables) {
   return p
 }
 
+// ---- runBSelfVerify (plan §B-2.5 X1 mitigation) ----
+// Dispatch B (fresh STATELESS context) to verify its OWN citations and
+// atomic claims via Bash (sed/grep). Returns verify metadata to be
+// attached to b2 as `b2.verify`. Does NOT change review_status — purely
+// observability layer so humans can spot B hallucination in the log.
+async function runBSelfVerify(cfg, b2, round) {
+  const prompt =
+    'YOU ARE B SELF-VERIFIER for ' + cfg.name + ' (round ' + round + ').\n'
+    + 'Your task: verify that the previous B review\'s citations and claims '
+    + 'have actual evidence on disk. You are NOT asked to re-review the '
+    + 'deliverable — only to check that what B claimed is true.\n\n'
+    + 'Previous B review JSON:\n' + JSON.stringify(b2, null, 2) + '\n\n'
+    + 'Steps:\n'
+    + '1. For each gap.citation (file:line range): run via Bash '
+    + '`sed -n "A,Bp" <abs_path>`. Compare output to gap.message. '
+    + 'Set verified:true if the cited range supports the claim.\n'
+    + '2. For REJECT.reason: parse into atomic claims. For each claim, '
+    + 'USE Bash grep/cat to confirm. Add unverified fragments to '
+    + 'unverified_reason_claims.\n'
+    + '3. Return compact JSON ONLY (no markdown, no commentary):\n'
+    + '{"verified_gaps":[{"message":"<short>","citation":"<short>","verified":true|false,"evidence":"<1-line or empty>"}],'
+    + '"unverified_reason_claims":["<short fragment>"],'
+    + '"recalibrated_review":"APPROVE"|"REJECT",'
+    + '"confidence":"high|medium|low"}\n'
+  const res = await agent(prompt, {
+    label: 'verify-b-' + cfg.idx + '-r' + round,
+    phase: cfg.phaseName,
+    agentType: 'general-purpose',
+  })
+  try { return parseAgentJson(res, 'verify-' + cfg.idx + '-r' + round) }
+  catch (e) { log('  X1 verify parse failed: ' + e.message.slice(0, 80)); return null }
+}
+
+// Summarize X1 verify result for the workflow log line.
+function summarizeVerify(b2, verify) {
+  if (!verify) return 'verify=skipped'
+  const gaps = b2.gaps ?? []
+  const total = gaps.length
+  const verified = (verify.verified_gaps ?? []).filter(function (g) { return g.verified }).length
+  const unverifiedClaims = (verify.unverified_reason_claims ?? []).length
+  const ratio = total > 0 ? verified / total : 1
+  const flag = ratio < 0.5 ? ' [X1: B UNSTABLE — majority unverified]' : ''
+  return 'verify=' + verified + '/' + total + ' gaps_verified' + (unverifiedClaims > 0 ? ' | ' + unverifiedClaims + ' unverified_reason_claims' : '') + flag
+}
+
 // ---- runSubTask: unified A/B loop per phase1_plan.md B-2 verbatim ----
 // Loop logic EXACT match to phase1_plan.md B-2 rules:
 //   APPROVE + all gaps low        -> break (continue)
 //   APPROVE + any medium/high gap  -> A fixes gaps -> re-dispatch B round 2
 //   REJECT                         -> A fixes gaps -> re-dispatch B (max 5 rounds)
 //   Round 5 still failing          -> ESCALATE (return error from workflow)
+//   + §B-2.5 X1: B self-verify after each B-2 (observability layer, NOT veto).
 async function runSubTask(cfg) {
   // cfg = { idx, name, diskPath, diskPrefix, phaseName, buildAPrompt, buildBDocs, bDocsLabels }
   let content = ''
@@ -272,6 +318,10 @@ async function runSubTask(cfg) {
       continue
     }
     log('  B-2: ' + b2.review_status + ' | gaps=' + (b2.gaps ?? []).length + ' | high=' + (hasHighGap(b2.gaps) ? 'yes' : 'no'))
+
+    // --- B-2.5 X1 self-verify (plan §B-2.5; observability, NOT veto) ---
+    b2.verify = await runBSelfVerify(cfg, b2, round)
+    log('  ' + summarizeVerify(b2, b2.verify))
 
     if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) {
       log('  APPROVED (all gaps low)')
