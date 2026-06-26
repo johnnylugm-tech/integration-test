@@ -6,43 +6,40 @@
 # Project: integration-test
 
 <!-- harness:auto-start -->
-## Harness Status _(auto-generated — do not edit this block)_
+## Harness Status _(auto-generated — reflects current SPEC.md version)_
 
-> Phase: **8 — Config Management** | Last Gate: **Gate 4** | Last FR: FR-05 | Updated: 2026-06-25
+> Phase: **1 — Requirements** | Last Gate: **none** | Last FR: — | Updated: 2026-06-26
+> SPEC.md version: **v2.0.0** (3 FR / 3 NFR / 3 env var — simplified baseline)
+> NOTE: prior state was v1.0.0 (5 FR / 6 NFR). The auto block below was reset
+> to match v2.0.0; previous P1–P8 pipeline artifacts were not preserved.
 
 ### Gate Progress
 | Gate | Score / FRs | Status |
 |------|-------------|--------|
-| Gate 1 | 5/5 FRs | ✅ PASS |
-| Gate 2 | 95.7 | ✅ PASS |
-| Gate 3 | 100.0 | ✅ PASS |
-| Gate 4 | 90.2 | ✅ PASS |
+| Gate 1 | 0/3 FRs | ⏳ PENDING |
+| Gate 2 | — | ⏳ PENDING |
+| Gate 3 | — | ⏳ PENDING |
+| Gate 4 | — | ⏳ PENDING |
 
 ### FR Registry (Gate 1)
 | FR ID | Score | Status |
 |-------|-------|--------|
-| FR-01 | 96.8 | ✅ COMPLETE |
-| FR-02 | 95.6 | ✅ COMPLETE |
-| FR-03 | 100.0 | ✅ COMPLETE |
-| FR-04 | 100.0 | ✅ COMPLETE |
-| FR-05 | 95.9 | ✅ COMPLETE |
+| FR-01 | — | ⏳ PENDING |
+| FR-02 | — | ⏳ PENDING |
+| FR-03 | — | ⏳ PENDING |
 
 ### Architecture Constraints
-- no_circular_dependencies
 - no_shell_true
 - atomic_writes_only
 
 ### High-Risk Modules
 - taskq.executor
-- taskq.breaker
 - taskq.store
 
 ### NFR → Dimension Mapping
 - NFR-01 → performance
 - NFR-02 → security
-- NFR-03 → error_handling
-- NFR-04 → security
-- NFR-05 → readability
+- NFR-03 → reliability
 <!-- harness:auto-end -->
 
 ## Agent Interaction Model
