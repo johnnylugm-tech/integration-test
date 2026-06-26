@@ -471,9 +471,12 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: review previous B-2 review JSON (DOC 1 below). Apply HIGH-severity gap fixes via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
-    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SPEC_TRACKING.md && wc -l ' + REPO + '/01-requirements/SPEC_TRACKING.md`\n'
-    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
+    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SPEC_TRACKING.md && wc -l ' + REPO + '/01-requirements/SPEC_TRACKING.md && wc -c ' + REPO + '/01-requirements/SPEC_TRACKING.md`\n'
+    + '7. CRITICAL — embed FULL file content in your return JSON (v6 redesign):\n'
+    + '   7a. Run Bash: cat ' + REPO + '/01-requirements/SPEC_TRACKING.md (verbatim, every byte including newlines).\n'
+    + '   7b. Compute byte count: wc -c < result.\n'
+    + '   7c. Return this JSON with `content` (verbatim cat stdout) and `bytes`:\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>","content":"<FULL cat stdout, every byte verbatim>","bytes":<exact byte count>}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write SRS.md, TRACEABILITY_MATRIX.md, or TEST_INVENTORY.yaml.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
@@ -490,11 +493,17 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     agentType: 'general-purpose',
   })
   let a
-  try { a = parseAgentJson(aResult, 'A-spec-tracking-r' + round) } catch (e) {
+  try { a = parseAgentADeliverable(aResult, 'A-spec-tracking-r' + round) } catch (e) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'spec-tracking-load-r' + round, 'Sub-Task 2/4 — SPEC_TRACKING.md')
+  // v6: prefer A's embedded content; fall back to loader if missing/length-mismatch
+  if (a && a.content && a.contentSource === 'agent-returned') {
+    stContent = a.content
+    log('  A status=' + (a.status || 'unknown') + ' | content from A.return (' + stContent.length + ' chars)')
+  } else {
+    log('  A status=' + (a && a.status ? a.status : 'unknown') + ' | content source=' + (a && a.contentSource ? a.contentSource : 'n/a') + ' — falling back to loader')
+    stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'spec-tracking-load-r' + round, 'Sub-Task 2/4 — SPEC_TRACKING.md')
   if (stContent.startsWith('FILE_MISSING') || stContent.length < 50) {
     return { error: 'Sub-Task 2/4: SPEC_TRACKING.md not found on disk after A (round ' + round + ')', loader_preview: stContent.slice(0, 200) }
   }
@@ -557,9 +566,12 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
-    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md && wc -l ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md`\n'
-    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
+    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md && wc -l ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md && wc -c ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md`\n'
+    + '7. CRITICAL — embed FULL file content in your return JSON (v6 redesign):\n'
+    + '   7a. Run Bash: cat ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md (verbatim, every byte including newlines).\n'
+    + '   7b. Compute byte count: wc -c < result.\n'
+    + '   7c. Return this JSON with `content` (verbatim cat stdout) and `bytes`:\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>","content":"<FULL cat stdout, every byte verbatim>","bytes":<exact byte count>}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write other P1 deliverables.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
@@ -575,7 +587,12 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'traceability-load-r' + round, 'Sub-Task 3/4 — TRACEABILITY_MATRIX.md')
+  if (a && a.content && a.contentSource === 'agent-returned') {
+    tmContent = a.content
+    log('  A status=' + (a.status || 'unknown') + ' | content from A.return (' + tmContent.length + ' chars)')
+  } else {
+    log('  A status=' + (a && a.status ? a.status : 'unknown') + ' | content source=' + (a && a.contentSource ? a.contentSource : 'n/a') + ' — falling back to loader')
+    tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'traceability-load-r' + round, 'Sub-Task 3/4 — TRACEABILITY_MATRIX.md')
   if (tmContent.startsWith('FILE_MISSING') || tmContent.length < 50) {
     return { error: 'Sub-Task 3/4: TRACEABILITY_MATRIX.md not found on disk after A (round ' + round + ')', loader_preview: tmContent.slice(0, 200) }
   }
@@ -631,9 +648,12 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
-    + '6. Verify YAML parses: ' + PY + ' -c "import yaml; yaml.safe_load(open(\'' + REPO + '/TEST_INVENTORY.yaml\'))".\n'
-    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
+    + '6. Verify YAML parses: ' + PY + ' -c "import yaml; yaml.safe_load(open(\'' + REPO + '/TEST_INVENTORY.yaml\'))". Then `wc -c ' + REPO + '/TEST_INVENTORY.yaml`.\n'
+    + '7. CRITICAL — embed FULL file content in your return JSON (v6 redesign):\n'
+    + '   7a. Run Bash: cat ' + REPO + '/TEST_INVENTORY.yaml (verbatim, every byte including newlines).\n'
+    + '   7b. Compute byte count: wc -c < result.\n'
+    + '   7c. Return this JSON with `content` (verbatim cat stdout) and `bytes`:\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>","content":"<FULL cat stdout, every byte verbatim>","bytes":<exact byte count>}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write other P1 deliverables.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
@@ -645,11 +665,16 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     agentType: 'general-purpose',
   })
   let a
-  try { a = parseAgentJson(aResult, 'A-test-inventory-r' + round) } catch (e) {
+  try { a = parseAgentADeliverable(aResult, 'A-test-inventory-r' + round) } catch (e) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'test-inventory-load-r' + round, 'Sub-Task 4/4 — TEST_INVENTORY.yaml')
+  if (a && a.content && a.contentSource === 'agent-returned') {
+    tiContent = a.content
+    log('  A status=' + (a.status || 'unknown') + ' | content from A.return (' + tiContent.length + ' chars)')
+  } else {
+    log('  A status=' + (a && a.status ? a.status : 'unknown') + ' | content source=' + (a && a.contentSource ? a.contentSource : 'n/a') + ' — falling back to loader')
+    tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'test-inventory-load-r' + round, 'Sub-Task 4/4 — TEST_INVENTORY.yaml')
   if (tiContent.startsWith('FILE_MISSING') || tiContent.length < 50) {
     return { error: 'Sub-Task 4/4: TEST_INVENTORY.yaml not found on disk after A (round ' + round + ')', loader_preview: tiContent.slice(0, 200) }
   }
