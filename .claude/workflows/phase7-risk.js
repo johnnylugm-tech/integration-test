@@ -32,6 +32,10 @@ if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
 if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
 const PY = REPO + '/.venv/bin/python'
 log('REPO = ' + REPO + ' | PY = ' + PY)
+// v15: budget guard (Bug #3 — port from phase2-architecture)
+if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 200000) {
+  log('WARNING: budget low (' + Math.round((budget.remaining() || 0) / 1000) + 'k remaining) — workflow may not complete')
+}
 
 // ---- J: WRITE SCOPE convention for LLM agent debug artifacts ----
 // All agent-generated debug scripts, coverage reports, and exploration
@@ -128,17 +132,21 @@ if (!(typeof envReport === 'string' && /ENV-CHECK:\s*PASS/.test(envReport))) {
 // ════════════════════════════════════════════════════════════════════════
 phase('Load FRs')
 log('load-context --phase 7 → fr_ids')
-const ctxResult = await agent(
-  'Use ONLY the Bash tool. Run:\n'
-  + '1. `mkdir -p ' + REPO + '/.sessi-work`\n'
-  + '2. `' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 7 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase7_ctx.json`\n'
-  + '3. `cat ' + REPO + '/.sessi-work/phase7_ctx.json`\n'
-  + 'Return the EXACT JSON object from step 3 as your final message. No commentary.',
-  { label: 'load-ctx', phase: 'Load FRs', agentType: 'general-purpose' },
-)
-let ctx
-try { ctx = parseAgentJson(ctxResult, 'load-ctx') }
-catch (e) { return { error: 'Load FRs: ctx parse failed', detail: e.message, raw: String(ctxResult ?? '').slice(-400) } }
+// v15: retry loop — agent() + parseAgentJson both wrapped (Bug #2)
+let ctx = null, ctxResult = ''
+for (let attempt = 1; attempt <= 3; attempt++) {
+  try { ctxResult = await agent(
+    'Use ONLY the Bash tool. Run:\n'
+    + '1. `mkdir -p ' + REPO + '/.sessi-work`\n'
+    + '2. `' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 7 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase7_ctx.json`\n'
+    + '3. `cat ' + REPO + '/.sessi-work/phase7_ctx.json`\n'
+    + 'Return the EXACT JSON object from step 3 as your final message. No commentary.',
+    { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
+  ) } catch (e) { log('  load-ctx agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
+  try { ctx = parseAgentJson(ctxResult, 'load-ctx'); break }
+  catch (e) { log('  load-ctx parse failed: ' + e.message.slice(0, 80)); continue }
+}
+if (!ctx) return { error: 'Load FRs: ctx failed after 3 attempts', raw: String(ctxResult ?? '').slice(-400) }
 let frIds = Array.isArray(ctx.fr_ids) ? ctx.fr_ids
   : (Array.isArray(ctx.fr_details) ? ctx.fr_details.map(f => f.id || f.fr_id || f.fr).filter(Boolean) : [])
 if (!frIds.length) return { error: 'Load FRs: no fr_ids found in ctx', ctxKeys: Object.keys(ctx) }

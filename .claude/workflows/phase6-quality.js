@@ -30,6 +30,10 @@ if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
 if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
 const PY = REPO + '/.venv/bin/python'
 log('REPO = ' + REPO + ' | PY = ' + PY)
+// v15: budget guard (Bug #3 — port from phase2-architecture)
+if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 200000) {
+  log('WARNING: budget low (' + Math.round((budget.remaining() || 0) / 1000) + 'k remaining) — workflow may not complete')
+}
 
 // ---- J: WRITE SCOPE convention for LLM agent debug artifacts ----
 // All agent-generated debug scripts, coverage reports, and exploration
@@ -111,7 +115,8 @@ log('Gate 4 full-project eval (composite ≥85, 14 dims: 13 self-scored + tracea
 let gate4Pass = false, gate4Report = '', gate4Blocked = false
 for (let round = 1; round <= 3; round++) {
   log('  Gate 4 round ' + round + '/3')
-  gate4Report = await agent(
+  // v15: wrap agent() in try/catch (Bug #2)
+  try { gate4Report = await agent(
     'YOU ARE THE GATE-4 ORCHESTRATOR (Phase 6 — full project quality). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
     + 'Pre-Gate: confirm all FRs merged to main + no open critical/high from Gate 3.\n\n'
@@ -132,7 +137,11 @@ for (let round = 1; round <= 3; round++) {
     + 'Report final line: "GATE4: PASS" (composite ≥85 AND all dims ≥ threshold AND DA artifacts present AND D4 ≥90%) or "GATE4: FAIL — <failing dims>".\n\n'
     + 'SCOPE RULES:\n- DO NOT generate RELEASE_NOTES/FINAL_SIGN_OFF (next phase) or run advance-phase / git tag.\n- DO NOT edit gate4_result.json scores to fake them — fix code (DA evidence is the only hand-authored part).\n- DO NOT modify harness/ (HR-17).\n- ONLY run-gate/DA-challenge/eval/finalize/spec-coverage + code fixes.',
     { label: 'gate4-r' + round, phase: 'Gate 4', agentType: 'general-purpose' },
-  )
+  ) } catch (e) {
+    log('  Gate 4 agent threw: ' + String(e.message ?? e).slice(0, 80) + ' -- retrying')
+    gate4Report = ''
+    if (round < 3) continue
+  }
   // Detect session-limit / rate-limit failures: agent returns null or empty when blocked.
   if (gate4Report === null || gate4Report === undefined || (typeof gate4Report === 'string' && gate4Report.length < 10)) {
     gate4Blocked = true
