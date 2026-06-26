@@ -299,14 +299,27 @@ async function runSubTask(cfg) {
   let b2 = null
   for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     log('  --- Round ' + round + '/' + MAX_B_ROUNDS + ' ---')
+    // v15: budget guard (Bug #3 mitigation — port from phase2-architecture v15)
+    if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 50000) {
+      const rem = Math.round((budget.remaining() || 0) / 1000)
+      log('  BUDGET LOW (' + rem + 'k) -- exiting ' + cfg.name)
+      if (b2 && b2.review_status === 'APPROVE') return { content, b2, budget_exhausted: true }
+      if (b2) return { content, b2, budget_exhausted: true }
+      return { error: 'Budget exhausted during ' + cfg.name, budget_exhausted: true }
+    }
 
     // --- A: REQUIREMENTS_ENGINEER ---
     const aPrompt = cfg.buildAPrompt(round, b2)
-    const aResult = await agent(aPrompt, {
+    // v15: wrap agent() in try/catch (Bug #2 mitigation)
+    let aResult
+    try { aResult = await agent(aPrompt, {
       label: 'a-' + cfg.idx + '-r' + round,
       phase: cfg.phaseName,
       agentType: 'general-purpose',
-    })
+    }) } catch (e) {
+      if (round === MAX_B_ROUNDS) return { error: 'A agent failed at max rounds', sub_task: cfg.name, detail: String(e.message ?? e).slice(0, 200) }
+      log('  A agent failed: ' + String(e.message ?? e).slice(0, 80) + ' -- retrying'); continue
+    }
     let a = null
     try { a = parseAgentJson(aResult, 'A-' + cfg.idx + '-r' + round) }
     catch (e) { log('  A JSON parse fail: ' + e.message.slice(0, 80)) }
@@ -321,11 +334,16 @@ async function runSubTask(cfg) {
     // --- B: BUSINESS_ANALYST (stateless; docs embedded verbatim) ---
     const bDocs = cfg.buildBDocs(round, content, b2)
     const bPrompt = buildBPrompt('BUSINESS_ANALYST', cfg.name, bDocs, cfg.bChecklist)
-    const bResult = await agent(bPrompt, {
+    // v15: wrap agent() in try/catch (Bug #2 mitigation)
+    let bResult
+    try { bResult = await agent(bPrompt, {
       label: 'b-' + cfg.idx + '-r' + round,
       phase: cfg.phaseName,
       agentType: 'general-purpose',
-    })
+    }) } catch (e) {
+      if (round === MAX_B_ROUNDS) return { error: 'B agent failed at max rounds', sub_task: cfg.name, detail: String(e.message ?? e).slice(0, 200) }
+      log('  B agent failed: ' + String(e.message ?? e).slice(0, 80) + ' -- retrying'); continue
+    }
     try { b2 = parseAgentJson(bResult, 'B-' + cfg.idx + '-r' + round) }
     catch (e) {
       log('  B parse failed: ' + e.message)
@@ -378,13 +396,27 @@ async function runPeerReview(approvedDocs) {
     }
 
     const bPrompt = buildBPrompt('BUSINESS_ANALYST', 'all 4 P1 deliverables (holistic)', loadedDocs, peerChecklist)
-    const bResult = await agent(bPrompt, {
+    // v15: wrap agent() in try/catch + budget guard (Bug #2 + #3 mitigation)
+    if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 100000) {
+      log('  Peer Review budget low (' + Math.round((budget.remaining() || 0) / 1000) + 'k) -- exiting')
+      if (b2 && b2.review_status === 'APPROVE') return { b2, budget_exhausted: true }
+      if (b2) return { b2, budget_exhausted: true }
+      return { error: 'Budget exhausted before Peer Review', budget_exhausted: true }
+    }
+    let bResult
+    try { bResult = await agent(bPrompt, {
       label: 'peer-b-r' + round,
       phase: 'Peer Review',
       agentType: 'general-purpose',
-    })
+    }) } catch (e) {
+      if (round === MAX_B_ROUNDS) return { error: 'Peer B agent failed at max rounds', detail: String(e.message ?? e).slice(0, 200) }
+      log('  Peer B agent failed: ' + String(e.message ?? e).slice(0, 80) + ' -- retrying'); continue
+    }
     try { b2 = parseAgentJson(bResult, 'PeerB-r' + round) }
-    catch (e) { return { error: 'Peer B parse failed (round ' + round + ')', detail: e.message } }
+    catch (e) {
+      if (round === MAX_B_ROUNDS) return { error: 'Peer B parse failed at max rounds (round ' + round + ')', detail: e.message }
+      log('  Peer B parse failed: ' + e.message.slice(0, 80) + ' -- retrying'); continue
+    }
 
     log('  Peer B-2: ' + b2.review_status + ' | gaps=' + (b2.gaps ?? []).length + ' | high=' + (hasHighGap(b2.gaps) ? 'yes' : 'no'))
 

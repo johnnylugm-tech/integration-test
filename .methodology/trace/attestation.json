@@ -1,6 +1,6 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "e30238066a9bd1ee8bcdffd8f6fb81e926398acc",
+  "git_sha": "be5cac174a8443bf1b7d8d3c20cd535a595a38cd",
   "content_sha256": "b000e3315ca6d746390b02ac965844903cb324fcfaf10501357e9f565bb97b5c",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,

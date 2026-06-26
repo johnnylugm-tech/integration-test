@@ -208,9 +208,22 @@ async function abLoop(cfg) {
   let content = '', b2 = null
   for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     log('  --- ' + cfg.deliverable + ' round ' + round + '/' + MAX_B_ROUNDS + ' ---')
-    const aResult = await agent(cfg.buildAPrompt(round, b2), {
+    // v15: budget guard (Bug #3 mitigation)
+    if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 50000) {
+      const rem = Math.round((budget.remaining() || 0) / 1000)
+      log('  BUDGET LOW (' + rem + 'k) -- exiting ' + cfg.deliverable)
+      if (b2 && b2.review_status === 'APPROVE') return { ok: true, content, b2, budget_exhausted: true }
+      if (b2) return { ok: false, content, b2, budget_exhausted: true }
+      return { error: 'Budget exhausted during ' + cfg.deliverable, budget_exhausted: true }
+    }
+    // v15: wrap agent() in try/catch (Bug #2 mitigation)
+    let aResult
+    try { aResult = await agent(cfg.buildAPrompt(round, b2), {
       label: 'a-' + cfg.key + '-r' + round, phase: cfg.phaseName, agentType: 'general-purpose',
-    })
+    }) } catch (e) {
+      if (round === MAX_B_ROUNDS) return { error: cfg.deliverable + ' A agent failed at max rounds', detail: String(e.message ?? e).slice(0, 200) }
+      log('  A agent failed: ' + String(e.message ?? e).slice(0, 80) + ' -- retrying'); continue
+    }
     let a
     try { a = parseAgentJson(aResult, 'A-' + cfg.key + '-r' + round) }
     catch (e) { log('  A JSON parse fail (likely truncated): ' + e.message.slice(0, 80)); a = null }
@@ -220,9 +233,14 @@ async function abLoop(cfg) {
     }
     log('  A status=' + (a && a.status ? a.status : 'assumed-OK') + ' | disk loaded: ' + content.length + ' chars, confidence=' + (a && a.confidence ? a.confidence : '?'))
 
-    const bResult = await agent(buildBPrompt(cfg.bRole, cfg.deliverable, cfg.buildBDocs(content), cfg.checklist), {
+    // v15: wrap agent() in try/catch (Bug #2 mitigation)
+    let bResult
+    try { bResult = await agent(buildBPrompt(cfg.bRole, cfg.deliverable, cfg.buildBDocs(content), cfg.checklist), {
       label: 'b-' + cfg.key + '-r' + round, phase: cfg.phaseName, agentType: 'general-purpose',
-    })
+    }) } catch (e) {
+      if (round === MAX_B_ROUNDS) return { error: cfg.deliverable + ' B agent failed at max rounds', detail: String(e.message ?? e).slice(0, 200) }
+      log('  B agent failed: ' + String(e.message ?? e).slice(0, 80) + ' -- retrying'); continue
+    }
     try { b2 = parseAgentJson(bResult, 'B-' + cfg.key + '-r' + round) }
     catch (e) {
       if (round === MAX_B_ROUNDS) return { error: cfg.deliverable + ' B parse failed at max rounds', detail: e.message }
@@ -530,7 +548,16 @@ log('Agent B (TECH_LEAD) holistic review of all 3 P2 deliverables; max 5 rounds'
 let peerB2 = null
 for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   log('  --- Peer round ' + round + '/' + MAX_B_ROUNDS + ' ---')
-  const bResult = await agent(
+  // v15: budget guard — gracefully exit if running low (Bug #3 mitigation)
+  if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 100000) {
+    log('  Peer Review budget low (' + Math.round((budget.remaining() || 0) / 1000) + 'k remaining) — exiting gracefully')
+    if (peerB2 && peerB2.review_status === 'APPROVE') { log('  exiting with prior APPROVE'); break }
+    if (peerB2) return { ok: false, peerB2, budget_exhausted: true }
+    return { error: 'Budget exhausted before Peer Review completed', budget_exhausted: true }
+  }
+  // v15: wrap agent() in try/catch — API errors (429/network) must not crash workflow (Bug #2)
+  let bResult
+  try { bResult = await agent(
     buildBPrompt('TECH_LEAD', 'all 3 P2 deliverables (holistic)', [
       ['DOC 1: 02-architecture/SAD.md (heading summary; USE Bash to Read full content if needed)', makeDocSummary(sadContent, { includeFirstLines: true })],
       ['DOC 2: 02-architecture/adr/ADR.md (heading summary; USE Bash to Read full content if needed)', makeDocSummary(adrContent, { includeFirstLines: true })],
@@ -541,9 +568,15 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '- SAB block layers / NFR targets semantically match SAD §2 module design?\n'
     + '- Every fr_module_traceability entry points to a real SAD §2 module?\n- NFR target fields measurable (not N/A/empty)?'),
     { label: 'peer-b-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
-  )
+  ) } catch (e) {
+    if (round === MAX_B_ROUNDS) return { error: 'Peer B agent failed at max rounds (round ' + round + ')', detail: String(e.message ?? e).slice(0, 200) }
+    log('  Peer B agent failed: ' + String(e.message ?? e).slice(0, 80) + ' — retrying'); continue
+  }
   try { peerB2 = parseAgentJson(bResult, 'PeerB-r' + round) }
-  catch (e) { return { error: 'Peer B parse failed (round ' + round + ')', detail: e.message, raw: String(bResult ?? '').slice(-400) } }
+  catch (e) {
+    if (round === MAX_B_ROUNDS) return { error: 'Peer B parse failed at max rounds (round ' + round + ')', detail: e.message, raw: String(bResult ?? '').slice(-400) }
+    log('  Peer B parse failed: ' + e.message.slice(0, 80) + ' — retrying'); continue
+  }
   log('  Peer B-2: ' + peerB2.review_status + ' | gaps=' + (peerB2.gaps ?? []).length + ' | high=' + (hasHighGap(peerB2.gaps) ? 'yes' : 'no'))
 
   // X1 self-verify (observability layer; mirrors phase1 §B-2.5)
@@ -554,13 +587,18 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   if (round === MAX_B_ROUNDS) return { error: 'Peer Review did not converge in ' + MAX_B_ROUNDS + ' rounds (HR-12 escalation)', lastB2: peerB2 }
   // Holistic gaps span multiple files → dispatch a fixer agent
   log('  Peer review found gaps — dispatching fixer for round ' + (round + 1))
-  await agent(
-    'YOU ARE ARCHITECT (holistic fixer). Fix peer-review gaps across P2 deliverables.\n'
-    + 'REPO: ' + REPO + '\n\nPeer review B-2 JSON:\n' + JSON.stringify(peerB2, null, 2) + '\n\n'
-    + 'Apply surgical Edits to whichever of 02-architecture/SAD.md, 02-architecture/adr/ADR.md, 02-architecture/TEST_SPEC.md are affected. Address all medium/high gaps.\n\n'
-    + 'SCOPE RULES:\n- DO NOT run phase-transition/push/run-gate.\n- DO NOT modify harness/.\n- ONLY edit the 3 P2 deliverables. Report what you changed.',
-    { label: 'peer-fix-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
-  )
+  // v15: wrap fixer agent() in try/catch — fixer failures should not crash workflow (Bug #2)
+  try {
+    await agent(
+      'YOU ARE ARCHITECT (holistic fixer). Fix peer-review gaps across P2 deliverables.\n'
+      + 'REPO: ' + REPO + '\n\nPeer review B-2 JSON:\n' + JSON.stringify(peerB2, null, 2) + '\n\n'
+      + 'Apply surgical Edits to whichever of 02-architecture/SAD.md, 02-architecture/adr/ADR.md, 02-architecture/TEST_SPEC.md are affected. Address all medium/high gaps.\n\n'
+      + 'SCOPE RULES:\n- DO NOT run phase-transition/push/run-gate.\n- DO NOT modify harness/.\n- ONLY edit the 3 P2 deliverables. Report what you changed.',
+      { label: 'peer-fix-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
+    )
+  } catch (e) {
+    log('  Peer fixer agent failed: ' + String(e.message ?? e).slice(0, 80) + ' — continuing without fix')
+  }
   sadContent = await loadFileViaBash('02-architecture/SAD.md', '# SAD', 'Peer Review')
   adrContent = await loadFileViaBash('02-architecture/adr/ADR.md', '# Architecture Decision Records', 'Peer Review')
   testSpecContent = await loadFileViaBash('02-architecture/TEST_SPEC.md', '#', 'Peer Review')
