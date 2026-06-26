@@ -148,51 +148,18 @@ async function abLoop(cfg) {
 }
 
 // ---- Bash file loader (playbook §8.2 — cat, not Read; defensive validation) ----
-// v5 BUG FIX (2026-06-26): haiku has STRONG bias to emit "Acknowledged..." after
-// any tool call (verified in wf_03b74cfb-eb9 — 6+ attempts all hallucinated
-// despite prompt explicitly forbidding it). Switch to sonnet + retry 5 + a
-// stricter preamble blacklist.
 async function loadFileViaBash(relPath, expectPrefix, phaseName) {
-  const fullPath = REPO + '/' + relPath
-  const prompt = 'You are a CAT AGENT. Your ONLY task is to run `cat` on a file and emit the EXACT stdout as your final message.\n\n'
-    + 'FILE PATH: ' + fullPath + '\n\n'
-    + 'STEPS:\n'
-    + '1. Use the Bash tool to run EXACTLY this command: cat ' + fullPath + '\n'
-    + '2. The Bash tool will return the file content in its tool_result.\n'
-    + '3. Your final assistant message MUST be the verbatim tool_result content — copy every byte in order.\n'
-    + '4. If the tool_result indicates the file does not exist (e.g. "cat: <path>: No such file or directory"), return EXACTLY this line: ERROR: ' + relPath + ' not found\n\n'
-    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
-    + '- DO NOT write any preamble or acknowledgment before the file content.\n'
-    + '- DO NOT write any commentary, summary, or explanation after the file content.\n'
-    + '- DO NOT start your final message with phrases like "Acknowledged", "I will", "Certainly", "Sure", "Here is", or similar.\n'
-    + '- DO NOT reference tool names, MCP servers, code review graphs, tree-sitter, or token efficiency.\n'
-    + '- Your final message = file content only. Nothing else. Period.\n'
-  const isHallucinated = function (text) {
-    if (text.length < 80) return true
-    if (/^(Acknowledged|Certainly|Sure[, ]|I'll |I will|Here is|Of course|Apologies|Sorry|Let me)/i.test(text)) return true
-    if (/code-review-graph|tree-sitter|token-efficient|MCP server/i.test(text)) return true
-    return false
+  const res = await agent(
+    'Use ONLY the Bash tool. Run EXACTLY: cat ' + REPO + '/' + relPath + '\n'
+    + 'Do NOT use the Read tool. Return the EXACT stdout as your final message — the file content IS your response.\n'
+    + 'If the file does not exist, return exactly: ERROR: ' + relPath + ' not found',
+    { label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-'), phase: phaseName, agentType: 'general-purpose', model: 'haiku' },
+  )
+  const content = (typeof res === 'string' ? res : String(res ?? '')).trim()
+  if (expectPrefix && content.length > 50 && !content.startsWith(expectPrefix) && !content.startsWith('ERROR:')) {
+    return 'ERROR: content-mismatch — expected prefix "' + expectPrefix + '", got: ' + content.slice(0, 120)
   }
-  let lastAttempt = ''
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const res = await agent(prompt, {
-      label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-') + '-a' + attempt,
-      phase: phaseName,
-      agentType: 'general-purpose',
-      model: 'sonnet',
-    })
-    lastAttempt = (typeof res === 'string' ? res : String(res ?? '')).trim()
-    if (lastAttempt.startsWith('ERROR:')) return lastAttempt
-    if (isHallucinated(lastAttempt)) {
-      log('  [load-' + relPath + '] attempt ' + attempt + '/5 hallucinated (len=' + lastAttempt.length + ')')
-      continue
-    }
-    if (expectPrefix && lastAttempt.length > 50 && !lastAttempt.startsWith(expectPrefix)) {
-      return 'ERROR: content-mismatch — expected prefix "' + expectPrefix + '", got: ' + lastAttempt.slice(0, 120)
-    }
-    return lastAttempt
-  }
-  return 'ERROR: loader-failed-after-5-attempts (' + relPath + ') — last attempt: ' + lastAttempt.slice(0, 120)
+  return content
 }
 
 // ════════════════════════════════════════════════════════════════════════

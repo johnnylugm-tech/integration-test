@@ -6,8 +6,9 @@
 //   2. Drop loadDeliverable (v8 workaround for cross-file fabrication).
 //      Plan A-2 says: A returns compact JSON; orchestrator reads from disk.
 //      v11 uses loadFileViaBash (unified Bash cat agent) with expectPrefix check.
-//   3. Drop validateBGaps techVocab blacklist (v7 workaround for B hallucinations).
-//      v11 validateBGaps checks gap.citations (plan B-2 schema) against embedded DOCs.
+//   3. Drop validateBGaps techVocab blacklist (v7 workaround for B hallucinations — taskq-specific).
+//      Plan B-2 schema is authoritative; STATELESS sandbox + verbatim DOC embedding + HR-12 escalation
+//      are the plan's actual defenses. No JS-added B-sanity check (would silently modify plan severity).
 //   4. Drop A prompt anti-invention rules (v9/v10 workarounds).
 //      Plan INGESTION MODE ("100% transcribe; no invention") covers this.
 //   5. Drop SCOPE_RULES added by v10 — keep only playbook §7.3 DO-NOT pattern.
@@ -94,43 +95,6 @@ function hasHighGap(gaps) {
   return (gaps ?? []).some(function (g) { return g.severity === 'medium' || g.severity === 'high' })
 }
 
-// v11 validateBGaps: simplified per plan B-2 schema.
-// Plan B-2 schema requires `citations: ["file:line"]` on every gap.
-// If medium/high gap has no citations OR citations not found in embedded DOCs,
-// downgrade to low (mark as ungrounded).
-function validateBGaps(bReview, docs, subTaskLabel) {
-  if (!bReview || !Array.isArray(bReview.gaps)) return { bReview: bReview, hallucinations: 0 }
-  const allDocContent = (docs || []).map(function (d) { return d[1] || '' }).join('\n\n')
-  let hallucinations = 0
-  const cleanedGaps = []
-  for (const gap of bReview.gaps) {
-    if (gap.severity !== 'high' && gap.severity !== 'medium') {
-      cleanedGaps.push(gap); continue
-    }
-    const citations = Array.isArray(gap.citations) ? gap.citations : []
-    if (citations.length === 0) {
-      hallucinations++
-      log('  [' + subTaskLabel + '] gap with no citations (severity=' + gap.severity + '): ' + String(gap.message || '').slice(0, 80))
-      cleanedGaps.push({ severity: 'low', message: '[NO_CITATIONS] ' + String(gap.message || ''), fr_id: gap.fr_id ?? null })
-      continue
-    }
-    const foundAny = citations.some(function (cite) {
-      const t = String(cite || '')
-      const parts = t.split(':')
-      const target = parts.length > 1 ? parts.slice(1).join(':').trim() : t.trim()
-      return target.length > 0 && allDocContent.indexOf(target) !== -1
-    })
-    if (!foundAny) {
-      hallucinations++
-      log('  [' + subTaskLabel + '] gap citations not found in docs (severity=' + gap.severity + '): ' + JSON.stringify(citations))
-      cleanedGaps.push({ severity: 'low', message: '[UNGROUNDED] ' + String(gap.message || ''), fr_id: gap.fr_id ?? null })
-    } else {
-      cleanedGaps.push(gap)
-    }
-  }
-  return { bReview: Object.assign({}, bReview, { gaps: cleanedGaps }), hallucinations: hallucinations }
-}
-
 // ---- loadFileViaBash: unified Bash cat agent (replaces v10 loadDeliverable + brief loader) ----
 // Per plan A-2: A returns compact JSON; orchestrator reads content from disk.
 // Per playbook §9.5/§8.2: Bash cat is more reliable than Read tool.
@@ -185,8 +149,8 @@ function buildBPrompt(role, deliverableName, docs, checklist) {
     p += '=== [' + docs[i][0] + '] ===\n' + docs[i][1] + '\n\n'
   }
   p += 'Review checklist:\n' + checklist + '\n\n'
-    + 'Return JSON only (no markdown fences, no commentary). Schema:\n'
-    + '{"review_status":"APPROVE"|"REJECT","reason":"<concise>","citations":["file:line"],"docs_embedded":["..."],"gaps":[{"severity":"low|medium|high","message":"...","fr_id":"<FR-XX or null>","citations":["file:line"]}]}\n\n'
+    + 'Return JSON only (no markdown fences, no commentary). Schema (verbatim from phase1_plan.md B-1):\n'
+    + '{"review_status":"APPROVE"|"REJECT","reason":"<concise>","citations":["file:line"],"docs_embedded":["..."],"gaps":[{"severity":"low|medium|high","message":"...","fr_id":"<FR-XX or null>"}]}\n\n'
     + 'IMPORTANT: Return ONLY the JSON object as your final message. No prose before or after.'
   return p
 }
@@ -250,9 +214,6 @@ async function runSubTask(cfg) {
       if (round === MAX_B_ROUNDS) return { error: 'B parse failed at max rounds', sub_task: cfg.name, detail: e.message }
       continue
     }
-    const validated = validateBGaps(b2, bDocs, cfg.idx)
-    b2 = validated.bReview
-    if (validated.hallucinations > 0) log('  B-2 sanity: ' + validated.hallucinations + ' hallucinated gap(s) downgraded to low')
     log('  B-2: ' + b2.review_status + ' | gaps=' + (b2.gaps ?? []).length + ' | high=' + (hasHighGap(b2.gaps) ? 'yes' : 'no'))
 
     if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) {
@@ -300,9 +261,6 @@ async function runPeerReview(approvedDocs) {
     try { b2 = parseAgentJson(bResult, 'PeerB-r' + round) }
     catch (e) { return { error: 'Peer B parse failed (round ' + round + ')', detail: e.message } }
 
-    const validated = validateBGaps(b2, loadedDocs, 'Peer Review')
-    b2 = validated.bReview
-    if (validated.hallucinations > 0) log('  Peer B-2 sanity: ' + validated.hallucinations + ' hallucinated gap(s) downgraded to low')
     log('  Peer B-2: ' + b2.review_status + ' | gaps=' + (b2.gaps ?? []).length + ' | high=' + (hasHighGap(b2.gaps) ? 'yes' : 'no'))
 
     if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) {
@@ -345,58 +303,43 @@ async function runPeerReview(approvedDocs) {
 // PHASE 1 EXECUTION
 // ============================================================================
 
-// ---- State shortcut (opt-in via args.shortcut=true) ----
-async function maybeShortcut(plannedPhase) {
-  if (!args || args.shortcut !== true) return null
-  const r = await agent(
-    'Read ' + REPO + '/.methodology/state.json and report ONLY a JSON object ' +
-    'with two keys: "current_phase" (integer) and "phase_truth_passed" (boolean). ' +
-    'Reply with just the JSON, no prose.',
-    { label: 'state-shortcut', phase: 'State Shortcut', agentType: 'general-purpose' },
-  )
-  try {
-    const s = parseAgentJson(String(r), 'state-shortcut')
-    if (s && s.phase_truth_passed === true && Number(s.current_phase) >= plannedPhase) {
-      log('[SHORTCUT] state.json shows phase ' + s.current_phase + ' already passed (≥ ' + plannedPhase + '); skipping to verification.')
-      return { shortcut: true, current_phase: s.current_phase, phase_truth_passed: true }
-    }
-  } catch (e) {
-    log('[SHORTCUT] state.json parse failed (' + e.message + ') — continuing normally')
-  }
-  return null
-}
-
-const _shortcut = await maybeShortcut(1)
-if (_shortcut) return _shortcut
-
 // ---- Preflight (per phase1_plan.md Pre-Phase Preflight) ----
 phase('Preflight')
-log('Preflight: run-phase 1 + CI wiring + load-context')
+log('Preflight: run-phase 1 + CI wiring + load-context (orchestrator-side retry: max 3 per plan)')
 
-const preflightReport = await agent(
-  'YOU ARE THE PREFLIGHT ORCHESTRATOR. Your ONLY job is to run EXACTLY 3 bash commands (listed below) and report.\n'
-  + 'REPO: ' + REPO + '\n'
-  + 'PYTHON: ' + PY + '\n\n'
-  + 'EXHAUSTIVE STEP LIST — run ONLY these 3 steps, in order:\n'
-  + '1. ' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 1 --project ' + REPO + '\n'
-  + '   If PASSES: note it. If FAILS: fix FSM/Constitution/Drift issues, re-run (max 3 attempts).\n'
-  + '2. Verify CI wiring (Bash test -f for each):\n'
-  + '   a. ' + REPO + '/.methodology/state.json — must exist and contain "current_phase": 1\n'
-  + '   b. ' + REPO + '/.github/workflows/harness_quality_gate.yml — must exist\n'
-  + '   c. ' + REPO + '/.git/hooks/prepare-commit-msg — must exist\n'
-  + '   If any missing: ' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 1 --project ' + REPO + ' --overwrite\n'
-  + '3. mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 1 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase1_ctx.json\n\n'
-  + 'Report final outcome as plain text: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <one-line reason>".\n\n'
-  + 'ABSOLUTE SCOPE RULES (violations will break the pipeline):\n'
-  + '- ONLY run the 3 steps above. Zero other harness commands.\n'
-  + '- DO NOT run validate-handoff — Phase 1 is the FIRST phase; there is no upstream phase to validate.\n'
-  + '- DO NOT run advance-phase, push-checkpoint, run-gate, or any phase-transition command.\n'
-  + '- DO NOT do B-2 review, constitution-check, or peer-review work.\n'
-  + '- DO NOT write any new P1 deliverables (you MAY edit existing ones if needed to fix Drift/Constitution).',
-  { label: 'preflight', phase: 'Preflight', agentType: 'general-purpose' },
-)
+let preflightReport = ''
+for (let pfAttempt = 1; pfAttempt <= 3; pfAttempt++) {
+  log('  --- Preflight attempt ' + pfAttempt + '/3 ---')
+  preflightReport = await agent(
+    'YOU ARE THE PREFLIGHT ORCHESTRATOR. Your ONLY job is to run EXACTLY 3 bash commands (listed below) and report.\n'
+    + 'REPO: ' + REPO + '\n'
+    + 'PYTHON: ' + PY + '\n\n'
+    + 'EXHAUSTIVE STEP LIST — run ONLY these 3 steps, in order:\n'
+    + '1. ' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 1 --project ' + REPO + '\n'
+    + '   If PASSES: note it. If FAILS: report FAIL — orchestrator retries per plan (max 3 total attempts).\n'
+    + '2. Verify CI wiring (Bash test -f for each):\n'
+    + '   a. ' + REPO + '/.methodology/state.json — must exist and contain "current_phase": 1\n'
+    + '   b. ' + REPO + '/.github/workflows/harness_quality_gate.yml — must exist\n'
+    + '   c. ' + REPO + '/.git/hooks/prepare-commit-msg — must exist\n'
+    + '   If any missing: ' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 1 --project ' + REPO + ' --overwrite\n'
+    + '3. mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 1 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase1_ctx.json\n\n'
+    + 'Report final outcome as plain text: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <one-line reason>".\n\n'
+    + 'ABSOLUTE SCOPE RULES (violations will break the pipeline):\n'
+    + '- ONLY run the 3 steps above. Zero other harness commands.\n'
+    + '- DO NOT run validate-handoff — Phase 1 is the FIRST phase; there is no upstream phase to validate.\n'
+    + '- DO NOT run advance-phase, push-checkpoint, run-gate, or any phase-transition command.\n'
+    + '- DO NOT do B-2 review, constitution-check, or peer-review work.\n'
+    + '- DO NOT write any new P1 deliverables (you MAY edit existing ones if needed to fix Drift/Constitution).',
+    { label: 'preflight-a' + pfAttempt, phase: 'Preflight', agentType: 'general-purpose' },
+  )
+  if (typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightReport)) {
+    log('  PREFLIGHT PASSED (attempt ' + pfAttempt + ')')
+    break
+  }
+  log('  attempt ' + pfAttempt + ' did not PASS — retry')
+}
 if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightReport))) {
-  return { error: 'Phase 1 preflight did not PASS', raw: String(preflightReport ?? '').slice(-800) }
+  return { error: 'Phase 1 preflight did not PASS in 3 orchestrator attempts', raw: preflightReport.slice(-800) }
 }
 
 // ---- Load PROJECT_BRIEF.md (DOC 1 for Sub-Task 1 B review per phase1_plan.md) ----
@@ -477,7 +420,7 @@ const srsCfg = {
   idx: 'srs',
   name: 'SRS.md',
   diskPath: '01-requirements/SRS.md',
-  diskPrefix: 'SRS — taskq',
+  diskPrefix: 'Software Requirements Specification',
   phaseName: 'Sub-Task 1/4 — SRS.md',
   buildAPrompt: srsAPrompt,
   buildBDocs: srsBDocs,
@@ -706,7 +649,7 @@ phase('Peer Review')
 log('Agent B holistic review of all 4 deliverables; max 5 rounds')
 
 const peerDocs = [
-  { diskPath: '01-requirements/SRS.md', diskPrefix: 'SRS — taskq', label: '01-requirements/SRS.md (APPROVED)' },
+  { diskPath: '01-requirements/SRS.md', diskPrefix: 'Software Requirements Specification', label: '01-requirements/SRS.md (APPROVED)' },
   { diskPath: '01-requirements/SPEC_TRACKING.md', diskPrefix: 'SPEC_TRACKING', label: '01-requirements/SPEC_TRACKING.md (APPROVED)' },
   { diskPath: '01-requirements/TRACEABILITY_MATRIX.md', diskPrefix: 'TRACEABILITY', label: '01-requirements/TRACEABILITY_MATRIX.md (APPROVED)' },
   { diskPath: 'TEST_INVENTORY.yaml', diskPrefix: 'format_version:', label: 'TEST_INVENTORY.yaml (APPROVED)' },
