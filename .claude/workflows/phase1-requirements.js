@@ -141,10 +141,30 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
   return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
 }
 
-// ---- B prompt builder (verbatim from phase1_plan.md B-1 template) ----
+// ---- B prompt builder (plan §B-1 template, plan-faithful revision) ----
+// Plan §B-1 v2.x originally said "STATELESS sandbox: ZERO file access". That
+// assumption is OBSOLETE — Agent B is general-purpose with full Bash/Read tool
+// access. The verbatim-DOC-embedding pattern causes 3 failure modes:
+//
+//   1. Context window overload: 4 docs × full content = 80k+ tokens → B's
+//      attention disperses; may not actually read the deliverable thoroughly.
+//   2. Premise persistence: prev-round B-2 JSON (incl. any prior hallucination
+//      in `reason`) is re-embedded every round → B extends old false premises
+//      instead of forming fresh judgment from disk.
+//   3. Stale snapshot: embedded content is a round-1 snapshot; if A edits
+//      mid-loop, B never sees the edits unless we re-cat disk.
+//
+// Fix: prompt B to USE Bash/Read for fresh disk view. Embedded docs become a
+// SUMMARY (headings + counts) for orientation, NOT the sole source of truth.
+// prevB2 is filtered to drop `reason` (only `gaps` survives — structured,
+// machine-readable, hard to confabulate).
 function buildBPrompt(role, deliverableName, docs, checklist) {
   let p = 'You are ' + role + '. Your task: review the following deliverable (' + deliverableName + ').\n'
-    + 'You have NO access to any files — all context is provided below.\n\n'
+    + 'You have FULL access to Bash and Read tools — USE THEM to cat/Read the\n'
+    + 'freshest version of every file you cite. The DOC blocks below are a SUMMARY\n'
+    + 'snapshot for orientation; for any citation file:line, you MUST re-read that\n'
+    + 'file via Read/Bash first. Do NOT extend any prior round\'s `reason` verbatim\n'
+    + 'into your own reasoning — read disk, then judge.\n\n'
   for (let i = 0; i < docs.length; i++) {
     p += '=== [' + docs[i][0] + '] ===\n' + docs[i][1] + '\n\n'
   }
@@ -153,6 +173,43 @@ function buildBPrompt(role, deliverableName, docs, checklist) {
     + '{"review_status":"APPROVE"|"REJECT","reason":"<concise>","citations":["file:line"],"docs_embedded":["..."],"gaps":[{"severity":"low|medium|high","message":"...","fr_id":"<FR-XX or null>"}]}\n\n'
     + 'IMPORTANT: Return ONLY the JSON object as your final message. No prose before or after.'
   return p
+}
+
+// ---- safePrevB2: strip prev-round `reason` to defeat premise persistence ----
+// Plan §B-1 says B-2 returns reason + gaps. The `reason` field is free-text
+// and tends to carry hallucinated premises forward across rounds. We keep
+// only the structured `gaps` field (severity-tagged, hard to confabulate).
+function safePrevB2(prevB2) {
+  if (!prevB2) return null
+  return {
+    review_status: prevB2.review_status,
+    gaps: Array.isArray(prevB2.gaps) ? prevB2.gaps : [],
+  }
+}
+
+// ---- makeDocSummary: collapse full content → headings + counts ----
+// Used for APPROVED upstream docs (B does not re-review them; they're context
+// for the deliverable under review). Trims ~95% of token volume while
+// preserving the structural skeleton B needs to orient.
+function makeDocSummary(content, opts) {
+  opts = opts || {}
+  const lines = content.split('\n')
+  const headings = []
+  for (const ln of lines) {
+    const m = ln.match(/^(#{1,6})\s+(.+?)\s*$/)
+    if (m) headings.push(m[2].slice(0, 80))
+  }
+  const charCount = content.length
+  const lineCount = lines.length
+  const summary = {
+    line_count: lineCount,
+    char_count: charCount,
+    headings: headings.slice(0, 40),
+  }
+  if (opts.includeFirstLines) {
+    summary.first_3_lines = lines.slice(0, 3).map(l => l.slice(0, 120))
+  }
+  return JSON.stringify(summary, null, 2)
 }
 
 // ---- SCOPE RULES template (playbook §7.3) ----
@@ -243,13 +300,16 @@ async function runPeerReview(approvedDocs) {
     log('  --- Round ' + round + '/' + MAX_B_ROUNDS + ' ---')
 
     // Reload all 4 docs (fixer may have edited them in previous round)
+    // Strategy: embed summary only (heading + line count); B uses Bash/Read
+    // for fresh disk view when a deeper check is needed (per buildBPrompt).
+    // Embedding all 4 docs verbatim = 80k+ tokens → attention disperses.
     const loadedDocs = []
     for (const d of approvedDocs) {
       const c = await loadFileViaBash(d.diskPath, d.diskPrefix, 'Peer Review')
       if (c.startsWith('FILE_MISSING') || c.startsWith('ERROR:') || c.length < 50) {
         return { error: 'Peer Review: ' + d.diskPath + ' load failed (round ' + round + ')', loader_preview: c.slice(0, 200) }
       }
-      loadedDocs.push([d.label, c])
+      loadedDocs.push([d.label + ' (heading summary; USE Bash cat for full content)', makeDocSummary(c, { includeFirstLines: true })])
     }
 
     const bPrompt = buildBPrompt('BUSINESS_ANALYST', 'all 4 P1 deliverables (holistic)', loadedDocs, peerChecklist)
@@ -397,7 +457,8 @@ function srsAPrompt(round, prevB2) {
   return p
 }
 
-// SRS B DOCs (verbatim from phase1_plan.md Sub-Task 1/4 B-1)
+// SRS B DOCs (plan-faithful: PROJECT_BRIEF.md is small, embed fully;
+// draft SRS.md IS the deliverable under review, embed fully)
 function srsBDocs(round, content, prevB2) {
   return [
     ['DOC 1: Project description / stakeholder brief (PROJECT_BRIEF.md)', projectBriefContent],
@@ -463,9 +524,9 @@ function specTrackAPrompt(round, prevB2) {
 
 function specTrackBDocs(round, content, prevB2) {
   return [
-    ['DOC 1: Previous Sub-Task B-2 review JSON — SRS.md (Sub-Task 1/4, gaps field may contain non-blocking caveats)', JSON.stringify(srsB2, null, 2)],
-    ['DOC 2: 01-requirements/SRS.md (APPROVED — full content)', srsContent],
-    ['DOC 3: draft 01-requirements/SPEC_TRACKING.md (full content)', content],
+    ['DOC 1: Previous Sub-Task B-2 review JSON — SRS.md (Sub-Task 1/4, gaps field may contain non-blocking caveats)', JSON.stringify(safePrevB2(srsB2), null, 2)],
+    ['DOC 2: 01-requirements/SRS.md (APPROVED — heading summary; USE Bash to Read full content if needed)', makeDocSummary(srsContent, { includeFirstLines: true })],
+    ['DOC 3: draft 01-requirements/SPEC_TRACKING.md (full content — this IS the deliverable under review)', content],
   ]
 }
 
@@ -523,11 +584,11 @@ function traceAPrompt(round, prevB2) {
 
 function traceBDocs(round, content, prevB2) {
   return [
-    ['DOC 1: Previous Sub-Task B-2 review JSON — SRS.md (Sub-Task 1/4, gaps field may contain non-blocking caveats)', JSON.stringify(srsB2, null, 2)],
-    ['DOC 2: Previous Sub-Task B-2 review JSON — SPEC_TRACKING.md (Sub-Task 2/4, gaps field may contain non-blocking caveats)', JSON.stringify(specTrackB2, null, 2)],
-    ['DOC 3: 01-requirements/SRS.md (APPROVED — full content)', srsContent],
-    ['DOC 4: 01-requirements/SPEC_TRACKING.md (APPROVED — full content)', specTrackContent],
-    ['DOC 5: draft 01-requirements/TRACEABILITY_MATRIX.md (full content)', content],
+    ['DOC 1: Previous Sub-Task B-2 review JSON — SRS.md (gaps-only; reason stripped)', JSON.stringify(safePrevB2(srsB2), null, 2)],
+    ['DOC 2: Previous Sub-Task B-2 review JSON — SPEC_TRACKING.md (gaps-only; reason stripped)', JSON.stringify(safePrevB2(specTrackB2), null, 2)],
+    ['DOC 3: 01-requirements/SRS.md (APPROVED — heading summary; USE Bash to Read full content if needed)', makeDocSummary(srsContent, { includeFirstLines: true })],
+    ['DOC 4: 01-requirements/SPEC_TRACKING.md (APPROVED — heading summary; USE Bash to Read full content if needed)', makeDocSummary(specTrackContent)],
+    ['DOC 5: draft 01-requirements/TRACEABILITY_MATRIX.md (full content — this IS the deliverable under review)', content],
   ]
 }
 
@@ -570,12 +631,22 @@ function testInvAPrompt(round, prevB2) {
     + '   - If EXISTS: Read it. Continue to step 4.\n'
     + '   - If MISSING: Continue to step 2.\n'
     + '2. Generate TEST_INVENTORY.yaml from SRS.md FR acceptance criteria → assign test function names per FR → validate naming convention.\n'
+    + '   ⮡ MANDATORY 1:1 mapping with TRACEABILITY_MATRIX.md:\n'
+    + '     - Every tc_id in matrix §1 forward trace (e.g. TC-FR01-05a..g) MUST appear as an independent entry in YAML `tests:` block.\n'
+    + '     - Range syntax (TC-XX-NNa..g) is documentation shorthand — you MUST expand into separate - tc_id: TC-XX-NNa, TC-XX-NNb, …, TC-XX-NNg entries.\n'
+    + '     - PROHIBITED: collapsing sub-cases (e.g. reducing TC-FR01-05a..g to TC-FR01-05a only, even when cross-referenced by NFR). Each tc_id enumerated in matrix is a SEPARATE contract item with its own asserts.\n'
+    + '     - PROHIBITED: omitting matrix §1 entries even when "logically covered by another FR" — cross-cutting coverage is signalled via metadata (cross_ref_frs / cross_ref_nfrs), NOT by deletion.\n'
+    + '   ⮡ Coverage summary MUST equal the sum of enumerated entries:\n'
+    + '     - by_fr.<FR>.tc_count MUST equal count(tc_ids in tests block belonging to <FR>).\n'
+    + '     - by_layer.<L>.count MUST equal count(tc_ids in tests block with layer=<L>).\n'
+    + '     - These two MUST equal total_test_cases (no arithmetic drift).\n'
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: review previous B-2 review JSON (DOC below). Apply HIGH-severity gap fixes via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
     + '6. Verify file exists on disk: `test -f ' + REPO + '/TEST_INVENTORY.yaml && wc -l ' + REPO + '/TEST_INVENTORY.yaml`\n'
-    + '7. Return ONLY this compact JSON:\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}'
+    + '7. Verify internal arithmetic: enumerate tc_ids in tests block → must equal by_fr_total AND by_layer_total AND total_test_cases.\n'
+    + '8. Return ONLY this compact JSON:\n'
+    + '{"status":"OK","files":["TEST_INVENTORY.yaml"],"confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>","enumerated_count":<N>,"matrix_section2_count":<M>}'
     + scopeRules('TEST_INVENTORY.yaml', ['01-requirements/SRS.md', '01-requirements/TRACEABILITY_MATRIX.md'])
   if (round > 1 && prevB2) {
     p += '\n\n=== [DOC: Previous B-2 review JSON — TEST_INVENTORY.yaml] ===\n' + JSON.stringify(prevB2, null, 2)
@@ -585,10 +656,10 @@ function testInvAPrompt(round, prevB2) {
 
 function testInvBDocs(round, content, prevB2) {
   return [
-    ['DOC 1: Previous Sub-Task B-2 review JSON — TRACEABILITY_MATRIX.md (Sub-Task 3/4, gaps field may contain non-blocking caveats)', JSON.stringify(traceB2, null, 2)],
-    ['DOC 2: 01-requirements/SRS.md (APPROVED — full content)', srsContent],
-    ['DOC 3: 01-requirements/TRACEABILITY_MATRIX.md (APPROVED — full content)', traceContent],
-    ['DOC 4: draft TEST_INVENTORY.yaml (full content)', content],
+    ['DOC 1: Previous Sub-Task B-2 review JSON — TRACEABILITY_MATRIX.md (gaps-only; reason stripped)', JSON.stringify(safePrevB2(traceB2), null, 2)],
+    ['DOC 2: 01-requirements/SRS.md (APPROVED — heading summary; USE Bash to Read full content if needed)', makeDocSummary(srsContent, { includeFirstLines: true })],
+    ['DOC 3: 01-requirements/TRACEABILITY_MATRIX.md (APPROVED — heading summary; USE Bash to Read full content if needed)', makeDocSummary(traceContent, { includeFirstLines: true })],
+    ['DOC 4: draft TEST_INVENTORY.yaml (full content — this IS the deliverable under review)', content],
   ]
 }
 
@@ -597,13 +668,22 @@ const testInvBChecklist =
   + '- Every FR has ≥1 test function?\n'
   + '- Test function names follow naming convention?\n'
   + '- All FRs from TRACEABILITY_MATRIX covered?\n'
-  + '- All upstream deliverables consistent with each other? No contradictory decisions?'
+  + '- All upstream deliverables consistent with each other? No contradictory decisions?\n'
+  + '⮡ MANDATORY 1:1 mapping check (NEW — prevents TC-collapsing drift):\n'
+  + '- Range syntax in matrix §1 (TC-XX-NNa..g) is shorthand — does YAML enumerate each sub-case as a separate tc_id entry?\n'
+  + '- For each tc_id in matrix §1 forward trace, does a matching tc_id exist in YAML tests block?\n'
+  + '- No silent collapse: TC-FR01-05a..g in matrix must appear as TC-FR01-05a, 05b, …, 05g in YAML (not reduced to 05a only).\n'
+  + '- No silent omission: every tc_id enumerated in matrix §1 must exist in YAML, even when cross-referenced by another FR (cross-cuts are signalled via cross_ref_* metadata, not deletion).\n'
+  + '⮡ Arithmetic consistency:\n'
+  + '- by_fr.<FR>.tc_count = count(tc_ids in tests block belonging to <FR>) — verify per FR.\n'
+  + '- by_layer.<L>.count = count(tc_ids with layer=<L>) — verify per layer.\n'
+  + '- total_test_cases = sum(by_fr) = sum(by_layer) = enumerated_count in tests block. Any drift = HIGH severity.'
 
 const testInvCfg = {
   idx: 'test-inventory',
   name: 'TEST_INVENTORY.yaml',
   diskPath: 'TEST_INVENTORY.yaml',
-  diskPrefix: 'format_version:',
+  diskPrefix: '# TEST_INVENTORY.yaml',
   phaseName: 'Sub-Task 4/4 — TEST_INVENTORY.yaml',
   buildAPrompt: testInvAPrompt,
   buildBDocs: testInvBDocs,
@@ -652,7 +732,7 @@ const peerDocs = [
   { diskPath: '01-requirements/SRS.md', diskPrefix: 'Software Requirements Specification', label: '01-requirements/SRS.md (APPROVED)' },
   { diskPath: '01-requirements/SPEC_TRACKING.md', diskPrefix: 'SPEC_TRACKING', label: '01-requirements/SPEC_TRACKING.md (APPROVED)' },
   { diskPath: '01-requirements/TRACEABILITY_MATRIX.md', diskPrefix: 'TRACEABILITY', label: '01-requirements/TRACEABILITY_MATRIX.md (APPROVED)' },
-  { diskPath: 'TEST_INVENTORY.yaml', diskPrefix: 'format_version:', label: 'TEST_INVENTORY.yaml (APPROVED)' },
+  { diskPath: 'TEST_INVENTORY.yaml', diskPrefix: '# TEST_INVENTORY.yaml', label: 'TEST_INVENTORY.yaml (APPROVED)' },
 ]
 
 const peerResult = await runPeerReview(peerDocs)

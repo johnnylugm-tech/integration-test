@@ -163,31 +163,50 @@ are not re-opened. This bounds backtracking to a single step.
 - **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Build spec tracking matrix from SRS.md FRs → assign status/owner per FR → validate completeness
   - FORBIDDEN: vague/non-testable acceptance criteria
 - **[A-2]** Agent A returns `{status, files, confidence, citations, summary}`
-- **[B-1]** Agent B (BUSINESS_ANALYST) — dispatch as **STATELESS** subagent:
-  > ⚠️  **STATELESS SANDBOX**: Agent B has ZERO access to local files or /tmp.
-  > NEVER write 'read 01-requirements/SRS.md' in the prompt — it will fail silently.
-  > ALL context must be pasted verbatim into the prompt text. This is mandatory.
+- **[B-1]** Agent B (BUSINESS_ANALYST) — dispatch as **FRESH-DISK** subagent:
+  > ⚠️  **FRESH-DISK VIEW (v2 revision; replaces STATELESS sandbox)**: Agent B is a
+  > general-purpose agent with FULL Bash/Read tool access. The legacy "STATELESS
+  > sandbox: ZERO file access" assumption is OBSOLETE — see workflow JS
+  > `buildBPrompt` for the live prompt template.
   >
-  > **Lesson (stateless agent)**: Rounds 2-3 failed because prompts used file paths.
-  > Round 4 succeeded only after embedding full document content directly.
+  > **Why we changed this**: verbatim-DOC-embedding for 4 deliverables pushed the
+  > prompt past 80k tokens, dispersing B's attention so badly that B sometimes
+  > hallucinated the deliverable's product identity in late rounds (R5). Embedding
+  > `prevB2.reason` round-over-round also caused premise persistence: B would
+  > extend an earlier round's false premise instead of judging from disk.
+  >
+  > **The fix is structural, not a workaround**:
+  > 1. APPROVED upstream docs (already-signed-off deliverables) are embedded as a
+  >    **heading summary + line count** (see `makeDocSummary`). B uses Bash/Read
+  >    to cat the full file when a deeper check is needed.
+  > 2. The **draft deliverable under review** is still embedded verbatim — B
+  >    must read it fully.
+  > 3. `prevB2.reason` is stripped (see `safePrevB2`). Only `gaps` survives
+  >    forward — structured, severity-tagged, hard to confabulate.
+  > 4. Prompt explicitly tells B to USE Bash/Read for fresh disk view before
+  >    citing any file:line, and NOT to extend prior rounds' `reason` verbatim.
 
-  **Embed these documents in full** (copy content, not paths):
-  - `Previous Sub-Task B-2 review JSON — SRS.md (Sub-Task 1/4, gaps field may contain non-blocking caveats)`
-  - `01-requirements/SRS.md (APPROVED — full content)`
-  - `draft 01-requirements/SPEC_TRACKING.md (full content)`
+  **Embed these documents** (per role):
+  - `Previous Sub-Task B-2 review JSON — SRS.md` → `safePrevB2(srsB2)` (gaps only)
+  - `01-requirements/SRS.md (APPROVED)` → `makeDocSummary(srsContent)` (heading summary)
+  - `draft 01-requirements/SPEC_TRACKING.md (full content)` → verbatim (deliverable under review)
 
   **Agent B prompt structure** (use this template verbatim):
   ```
   You are BUSINESS_ANALYST. Your task: review the following deliverable (SPEC_TRACKING.md).
-  You have NO access to any files — all context is provided below.
+  You have FULL access to Bash and Read tools — USE THEM to cat/Read the
+  freshest version of every file you cite. The DOC blocks below are a SUMMARY
+  snapshot for orientation; for any citation file:line, you MUST re-read that
+  file via Read/Bash first. Do NOT extend any prior round's `reason` verbatim
+  into your own reasoning — read disk, then judge.
 
-  === [DOC 1: Previous Sub-Task B-2 review JSON — SRS.md (Sub-Task 1/4, gaps field may contain non-blocking caveats)] ===
-  <<paste full content here>>
+  === [DOC 1: Previous Sub-Task B-2 review JSON — SRS.md (gaps-only; reason stripped)] ===
+  <<paste gaps-only JSON here>>
 
-  === [DOC 2: 01-requirements/SRS.md (APPROVED — full content)] ===
-  <<paste full content here>>
+  === [DOC 2: 01-requirements/SRS.md (APPROVED — heading summary; USE Bash to Read full content if needed)] ===
+  <<paste heading summary here>>
 
-  === [DOC 3: draft 01-requirements/SPEC_TRACKING.md (full content)] ===
+  === [DOC 3: draft 01-requirements/SPEC_TRACKING.md (full content — this IS the deliverable under review)] ===
   <<paste full content here>>
 
   Review checklist:
