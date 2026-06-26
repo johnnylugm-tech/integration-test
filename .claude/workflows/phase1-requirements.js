@@ -250,52 +250,57 @@ log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars | 
 // ---- loadDeliverable: load file content from disk via Bash cat ----
 // Use after Agent A writes a deliverable — avoids JSON truncation for large files.
 //
-// v4 BUG FIX (2026-06-26): haiku agents (the cheap model used here) frequently
-// hallucinate their final text — emitting "Acknowledged. The code-review-graph
-// MCP server is available..." instead of the cat stdout. The agent's `Bash` tool
-// DID execute correctly (tool_result contains the real content); the bug is that
-// the workflow JS receives the agent's final *text* message, not the tool_result.
-// Per playbook §7 (Read tool hallucination) and §8.2 (defensive validation),
-// we now (a) reinforce the prompt to forbid any preamble/postamble, (b) retry up
-// to 3 times, (c) detect known haiku hallucination patterns and re-dispatch.
-// If all 3 attempts fail, return a sentinel string that downstream code will
-// fail-fast on (matches the existing FILE_MISSING length-50 check).
+// v5 BUG FIX (2026-06-26): haiku agents have a STRONG fine-tuning bias to emit
+// "Acknowledged..." as their final text after running any tool, REGARDLESS of
+// prompt instructions forbidding it. Even with explicit "DO NOT start with
+// Acknowledged" the model still outputs it (verified across 6+ load attempts in
+// wf_03b74cfb-eb9 — every attempt returned Acknowledged... despite cat stdout
+// being correct in tool_result). Root cause is a model-level behaviour, not
+// prompt-fixable.
+//
+// Fix: use sonnet for the loader (more compliant with instructions, lower
+// hallucination rate on tool-use-then-respond pattern). Increase retries to 5
+// for resilience. Workflow JS cannot access tool_result directly (per workflow
+// tool spec — `agent()` returns the agent's final *text* message only), so we
+// must rely on the model emitting the cat stdout verbatim as its final text.
 async function loadDeliverable(filePath, label, phaseName) {
-  const prompt = 'YOU ARE THE CAT AGENT (haiku). Your ONLY job: dump raw file content.\n'
-    + 'PATH: ' + filePath + '\n\n'
-    + 'Run EXACTLY ONE bash command: cat ' + filePath + '\n'
-    + 'Your final message MUST be the COMPLETE raw stdout — every character, every line, in order.\n'
-    + 'If the file does not exist, return EXACTLY this single line: FILE_MISSING: ' + filePath + '\n\n'
-    + 'CRITICAL — DO NOT add any commentary, preamble, or acknowledgment.\n'
-    + 'Do NOT describe what you see. Do NOT summarize. Do NOT apologize.\n'
-    + 'Do NOT start with phrases like "Acknowledged", "I will", "Certainly", or "Sure".\n'
-    + 'Your final message = file content. Nothing else.'
-  // Known haiku hallucination patterns (defensive validation; playbook §7)
+  const prompt = 'You are a CAT AGENT. Your ONLY task is to run `cat` on a file and emit the EXACT stdout as your final message.\n\n'
+    + 'FILE PATH: ' + filePath + '\n\n'
+    + 'STEPS:\n'
+    + '1. Use the Bash tool to run EXACTLY this command: cat ' + filePath + '\n'
+    + '2. The Bash tool will return the file content in its tool_result.\n'
+    + '3. Your final assistant message MUST be the verbatim tool_result content — copy every byte in order.\n'
+    + '4. If the tool_result indicates the file does not exist (e.g. "cat: <path>: No such file or directory"), return EXACTLY this line: FILE_MISSING: ' + filePath + '\n\n'
+    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
+    + '- DO NOT write any preamble or acknowledgment before the file content.\n'
+    + '- DO NOT write any commentary, summary, or explanation after the file content.\n'
+    + '- DO NOT start your final message with phrases like "Acknowledged", "I will", "Certainly", "Sure", "Here is", or similar.\n'
+    + '- DO NOT apologize, hedge, or describe what you are doing.\n'
+    + '- DO NOT reference tool names, MCP servers, code review graphs, tree-sitter, or token efficiency.\n'
+    + '- Your final message = file content only. Nothing else. Period.\n'
   const isHallucinated = function (text) {
-    if (text.length < 100) return true
-    if (/Acknowledged\./i.test(text)) return true
-    if (/code-review-graph/i.test(text)) return true
-    if (/tree-sitter/i.test(text)) return true
-    if (/token-efficient/i.test(text)) return true
-    if (/I'll run|certainly|sure[, ]/i.test(text) && text.length < 300) return true
+    if (text.length < 80) return true
+    // The 5 known haiku/sonnet preamble patterns observed in practice:
+    if (/^(Acknowledged|Certainly|Sure[, ]|I'll |I will|Here is|Of course|Apologies|Sorry|Let me|Note that)/i.test(text)) return true
+    if (/code-review-graph|tree-sitter|token-efficient|MCP server/i.test(text)) return true
     return false
   }
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     const res = await agent(prompt, {
       label: label + '-a' + attempt,
       phase: phaseName,
       agentType: 'general-purpose',
-      model: 'haiku',
+      model: 'sonnet',
     })
     const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
     if (text.startsWith('FILE_MISSING')) return text
     if (isHallucinated(text)) {
-      log('  [' + label + '] attempt ' + attempt + '/3 hallucinated (len=' + text.length + '): ' + text.slice(0, 80))
+      log('  [' + label + '] attempt ' + attempt + '/5 hallucinated (len=' + text.length + '): ' + text.slice(0, 80))
       continue
     }
     return text
   }
-  return 'LOADER_FAILED_AFTER_3_ATTEMPTS: ' + filePath
+  return 'LOADER_FAILED_AFTER_5_ATTEMPTS: ' + filePath
 }
 
 // ---- Sub-Task 1/4: SRS.md ----

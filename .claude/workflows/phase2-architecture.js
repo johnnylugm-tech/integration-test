@@ -148,39 +148,43 @@ async function abLoop(cfg) {
 }
 
 // ---- Bash file loader (playbook §8.2 — cat, not Read; defensive validation) ----
-// v4 BUG FIX (2026-06-26): haiku agents frequently hallucinate final text
-// ("Acknowledged. The code-review-graph MCP server...") instead of cat stdout.
-// Reinforce prompt + retry up to 3 times + detect hallucination patterns.
+// v5 BUG FIX (2026-06-26): haiku has STRONG bias to emit "Acknowledged..." after
+// any tool call (verified in wf_03b74cfb-eb9 — 6+ attempts all hallucinated
+// despite prompt explicitly forbidding it). Switch to sonnet + retry 5 + a
+// stricter preamble blacklist.
 async function loadFileViaBash(relPath, expectPrefix, phaseName) {
   const fullPath = REPO + '/' + relPath
-  const prompt = 'YOU ARE THE CAT AGENT (haiku). Your ONLY job: dump raw file content.\n'
-    + 'PATH: ' + fullPath + '\n\n'
-    + 'Run EXACTLY ONE bash command: cat ' + fullPath + '\n'
-    + 'Your final message MUST be the COMPLETE raw stdout — every character, every line, in order.\n'
-    + 'If the file does not exist, return EXACTLY this single line: ERROR: ' + relPath + ' not found\n\n'
-    + 'CRITICAL — DO NOT add any commentary, preamble, or acknowledgment.\n'
-    + 'Do NOT describe what you see. Do NOT summarize. Do NOT start with "Acknowledged", "I will", or "Sure".\n'
-    + 'Your final message = file content. Nothing else.'
+  const prompt = 'You are a CAT AGENT. Your ONLY task is to run `cat` on a file and emit the EXACT stdout as your final message.\n\n'
+    + 'FILE PATH: ' + fullPath + '\n\n'
+    + 'STEPS:\n'
+    + '1. Use the Bash tool to run EXACTLY this command: cat ' + fullPath + '\n'
+    + '2. The Bash tool will return the file content in its tool_result.\n'
+    + '3. Your final assistant message MUST be the verbatim tool_result content — copy every byte in order.\n'
+    + '4. If the tool_result indicates the file does not exist (e.g. "cat: <path>: No such file or directory"), return EXACTLY this line: ERROR: ' + relPath + ' not found\n\n'
+    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
+    + '- DO NOT write any preamble or acknowledgment before the file content.\n'
+    + '- DO NOT write any commentary, summary, or explanation after the file content.\n'
+    + '- DO NOT start your final message with phrases like "Acknowledged", "I will", "Certainly", "Sure", "Here is", or similar.\n'
+    + '- DO NOT reference tool names, MCP servers, code review graphs, tree-sitter, or token efficiency.\n'
+    + '- Your final message = file content only. Nothing else. Period.\n'
   const isHallucinated = function (text) {
-    if (text.length < 100) return true
-    if (/Acknowledged\./i.test(text)) return true
-    if (/code-review-graph/i.test(text)) return true
-    if (/tree-sitter/i.test(text)) return true
-    if (/token-efficient/i.test(text)) return true
+    if (text.length < 80) return true
+    if (/^(Acknowledged|Certainly|Sure[, ]|I'll |I will|Here is|Of course|Apologies|Sorry|Let me)/i.test(text)) return true
+    if (/code-review-graph|tree-sitter|token-efficient|MCP server/i.test(text)) return true
     return false
   }
   let lastAttempt = ''
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     const res = await agent(prompt, {
       label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-') + '-a' + attempt,
       phase: phaseName,
       agentType: 'general-purpose',
-      model: 'haiku',
+      model: 'sonnet',
     })
     lastAttempt = (typeof res === 'string' ? res : String(res ?? '')).trim()
     if (lastAttempt.startsWith('ERROR:')) return lastAttempt
     if (isHallucinated(lastAttempt)) {
-      log('  [load-' + relPath + '] attempt ' + attempt + '/3 hallucinated (len=' + lastAttempt.length + ')')
+      log('  [load-' + relPath + '] attempt ' + attempt + '/5 hallucinated (len=' + lastAttempt.length + ')')
       continue
     }
     if (expectPrefix && lastAttempt.length > 50 && !lastAttempt.startsWith(expectPrefix)) {
@@ -188,7 +192,7 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName) {
     }
     return lastAttempt
   }
-  return 'ERROR: loader-failed-after-3-attempts (' + relPath + ') — last attempt: ' + lastAttempt.slice(0, 120)
+  return 'ERROR: loader-failed-after-5-attempts (' + relPath + ') — last attempt: ' + lastAttempt.slice(0, 120)
 }
 
 // ════════════════════════════════════════════════════════════════════════
