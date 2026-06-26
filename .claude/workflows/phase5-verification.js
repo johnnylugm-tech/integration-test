@@ -139,20 +139,46 @@ if (!(typeof envReport === 'string' && /ENV-CHECK:\s*PASS/.test(envReport))) {
 phase('Load FRs')
 log('load-context --phase 5 → fr_ids')
 // v15: retry loop — agent() + parseAgentJson both wrapped (Bug #2)
-let ctx = null, ctxResult = ''
+// v2.13.1: hardened against agent hallucination (Bug #122).
+let ctx = null
+const ctxFile = REPO + '/.sessi-work/phase5_ctx.json'
 for (let attempt = 1; attempt <= 3; attempt++) {
-  try { ctxResult = await agent(
-    'Use ONLY the Bash tool. Run:\n'
-    + '1. `mkdir -p ' + REPO + '/.sessi-work`\n'
-    + '2. `' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 5 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase5_ctx.json`\n'
-    + '3. `cat ' + REPO + '/.sessi-work/phase5_ctx.json`\n'
-    + 'Return the EXACT JSON object from step 3 as your final message. No commentary.',
-    { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
-  ) } catch (e) { log('  load-ctx agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
-  try { ctx = parseAgentJson(ctxResult, 'load-ctx'); break }
-  catch (e) { log('  load-ctx parse failed: ' + e.message.slice(0, 80)); continue }
+  try {
+    const existsRaw = await agent(
+      'You MUST use the Bash tool. Run exactly:\n'
+      + 'test -s ' + ctxFile + ' && echo "FILE_OK_$(wc -c < ' + ctxFile + ')" || echo "FILE_MISSING"\n'
+      + 'Return the raw stdout as your final message.',
+      { label: 'ctx-check-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
+    )
+    if (!/FILE_OK_\d+/.test(String(existsRaw ?? ''))) {
+      log('  ctx file missing/empty (attempt ' + attempt + ') — regenerating')
+      await agent(
+        'You MUST use the Bash tool. Run exactly:\n'
+        + PY + ' ' + REPO + '/harness_cli.py load-context --phase 5 --project ' + REPO + ' --json > ' + ctxFile + ' && echo "REGEN_OK_$(wc -c < ' + ctxFile + ')"\n'
+        + 'Return the raw stdout as your final message.',
+        { label: 'ctx-regen-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
+      )
+      continue
+    }
+  } catch (e) { log('  ctx-check agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
+
+  let ctxResult = ''
+  try {
+    ctxResult = await agent(
+      'You MUST use the Bash tool. Run exactly:\n'
+      + 'cat ' + ctxFile + '\n'
+      + 'Return the EXACT stdout as your final message. No commentary, no markdown fences.',
+      { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
+    )
+  } catch (e) { log('  load-ctx agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
+  try {
+    ctx = parseAgentJson(ctxResult, 'load-ctx')
+    if (Array.isArray(ctx.fr_ids) && ctx.fr_ids.length > 0) break
+    log('  load-ctx returned empty fr_ids (attempt ' + attempt + '): keys=' + Object.keys(ctx ?? {}).join(','))
+    ctx = null
+  } catch (e) { log('  load-ctx parse failed (attempt ' + attempt + '): ' + e.message.slice(0, 120)); ctx = null }
 }
-if (!ctx) return { error: 'Load FRs: ctx failed after 3 attempts', raw: String(ctxResult ?? '').slice(-400) }
+if (!ctx) return { error: 'Load FRs: ctx failed after 3 attempts', ctxFile }
 let frIds = Array.isArray(ctx.fr_ids) ? ctx.fr_ids
   : (Array.isArray(ctx.fr_details) ? ctx.fr_details.map(f => f.id || f.fr_id || f.fr).filter(Boolean) : [])
 if (!frIds.length) return { error: 'Load FRs: no fr_ids found in ctx', ctxKeys: Object.keys(ctx) }
