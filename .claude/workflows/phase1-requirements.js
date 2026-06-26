@@ -123,28 +123,6 @@ function extractLastJson(text) {
   return last
 }
 
-// v6 (2026-06-26): parse Agent A response that embeds deliverable content.
-// Returns {status, files, confidence, citations, summary, content, bytes}
-// where `content` is the verbatim deliverable text (or null if not present).
-// Validates that bytes === content.length (length-consistency) and that
-// content is non-trivially long.
-function parseAgentADeliverable(text, agentLabel) {
-  const parsed = extractLastJson(text)
-  if (!parsed) throw new Error('PARSE_FAIL [' + agentLabel + ']: no JSON')
-  const content = typeof parsed.content === 'string' ? parsed.content : null
-  const bytes = typeof parsed.bytes === 'number' ? parsed.bytes : null
-  if (content === null) {
-    return { ...parsed, content: null, bytes: null, contentSource: 'missing' }
-  }
-  if (content.length < 80) {
-    return { ...parsed, content: null, bytes: null, contentSource: 'too-short' }
-  }
-  if (bytes !== null && bytes !== content.length) {
-    return { ...parsed, content: null, bytes: null, contentSource: 'length-mismatch (claimed=' + bytes + ' actual=' + content.length + ')' }
-  }
-  return { ...parsed, content: content, bytes: content.length, contentSource: 'agent-returned' }
-}
-
 // Parse agent text response. Returns parsed object or throws with last 200 chars for debugging.
 function parseAgentJson(text, agentLabel) {
   const parsed = extractLastJson(text)
@@ -270,21 +248,12 @@ if (projectBriefContent.length < 200) {
 log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars | first line: ' + projectBriefContent.split('\n')[0])
 
 // ---- loadDeliverable: load file content from disk via Bash cat ----
-// Use after Agent A writes a deliverable — avoids JSON truncation for large files.
-//
-// v5 BUG FIX (2026-06-26): haiku agents have a STRONG fine-tuning bias to emit
-// "Acknowledged..." as their final text after running any tool, REGARDLESS of
-// prompt instructions forbidding it. Even with explicit "DO NOT start with
-// Acknowledged" the model still outputs it (verified across 6+ load attempts in
-// wf_03b74cfb-eb9 — every attempt returned Acknowledged... despite cat stdout
-// being correct in tool_result). Root cause is a model-level behaviour, not
-// prompt-fixable.
-//
-// Fix: use sonnet for the loader (more compliant with instructions, lower
-// hallucination rate on tool-use-then-respond pattern). Increase retries to 5
-// for resilience. Workflow JS cannot access tool_result directly (per workflow
-// tool spec — `agent()` returns the agent's final *text* message only), so we
-// must rely on the model emitting the cat stdout verbatim as its final text.
+// Per playbook §9.10 "Compact JSON + disk read pattern": A returns compact JSON
+// (status/confidence/citations/summary), orchestrator reads content from disk.
+// Per playbook §8.2/§9.5: Bash cat is more reliable than Read tool (which
+// may hallucinate). Per playbook §7: agent reliability is a known issue —
+// haiku/sonnet may emit preamble instead of cat stdout. Mitigation: stronger
+// prompt + retry + defensive validation against known hallucination patterns.
 async function loadDeliverable(filePath, label, phaseName) {
   const prompt = 'You are a CAT AGENT. Your ONLY task is to run `cat` on a file and emit the EXACT stdout as your final message.\n\n'
     + 'FILE PATH: ' + filePath + '\n\n'
@@ -300,9 +269,9 @@ async function loadDeliverable(filePath, label, phaseName) {
     + '- DO NOT apologize, hedge, or describe what you are doing.\n'
     + '- DO NOT reference tool names, MCP servers, code review graphs, tree-sitter, or token efficiency.\n'
     + '- Your final message = file content only. Nothing else. Period.\n'
+  // Defensive validation per playbook §7. Known haiku/sonnet preamble patterns:
   const isHallucinated = function (text) {
     if (text.length < 80) return true
-    // The 5 known haiku/sonnet preamble patterns observed in practice:
     if (/^(Acknowledged|Certainly|Sure[, ]|I'll |I will|Here is|Of course|Apologies|Sorry|Let me|Note that)/i.test(text)) return true
     if (/code-review-graph|tree-sitter|token-efficient|MCP server/i.test(text)) return true
     return false
@@ -358,14 +327,9 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '4. (Re-)read the file via Read tool to capture its FINAL on-disk state.\n'
     + '5. If round > 1: review previous B-2 review JSON (DOC 1 below). Apply HIGH-SEVERITY gap fixes to SRS.md via Edit (surgical; do NOT rewrite the whole file). MED/LOW gaps: log but skip unless trivial.\n'
     + '6. (Re-)read the file via Read tool to capture its FINAL on-disk state after any edits.\n'
-    + '7. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SRS.md && wc -l ' + REPO + '/01-requirements/SRS.md && wc -c ' + REPO + '/01-requirements/SRS.md`\n'
-    + '8. CRITICAL — embed FULL file content in your return JSON (v6 redesign):\n'
-    + '   8a. Run Bash: cat ' + REPO + '/01-requirements/SRS.md (verbatim, every byte including newlines).\n'
-    + '   8b. Compute byte count: wc -c < result.\n'
-    + '   8c. Return this JSON with `content` (the verbatim cat stdout) and `bytes` (the byte count):\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["SPEC.md §3 FR-01","..."],"summary":"<1-2 lines>","content":"<FULL cat stdout, every byte verbatim>","bytes":<exact byte count>}\n'
-    + '   The `content` field MUST be the verbatim cat stdout. The `bytes` field MUST equal content.length (JavaScript string length).\n'
-    + '   This eliminates a separate "loader agent" round-trip that has proven unreliable (haiku/sonnet agents hallucinate or skip the cat command).\n\n'
+    + '7. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SRS.md && wc -l ' + REPO + '/01-requirements/SRS.md`\n'
+    + '8. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["SPEC.md §3 FR-01","..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES (you MUST obey):\n'
     + '- DO NOT write any deliverable OTHER than 01-requirements/SRS.md.\n'
     + '- DO NOT run git commit, git push, advance-phase, push-checkpoint, or any phase-transition command.\n'
@@ -384,20 +348,12 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     agentType: 'general-purpose',
   })
   let a
-  try {
-    a = parseAgentADeliverable(aResult, 'A-srs-r' + round)
-  } catch (e) {
+  try { a = parseAgentJson(aResult, 'A-srs-r' + round) } catch (e) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  // v6: prefer A's embedded content; fall back to loader if missing/length-mismatch
-  if (a && a.content && a.contentSource === 'agent-returned') {
-    srsContent = a.content
-    log('  A status=' + (a.status || 'unknown') + ' | content from A.return (' + srsContent.length + ' chars, bytes-match ✓)')
-  } else {
-    log('  A status=' + (a && a.status ? a.status : 'unknown') + ' | content source=' + (a && a.contentSource ? a.contentSource : 'n/a') + ' — falling back to loader')
-    srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'srs-load-r' + round, 'Sub-Task 1/4 — SRS.md')
-  }
+  // Load content from disk (A wrote the file; its JSON may not embed content)
+  srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'srs-load-r' + round, 'Sub-Task 1/4 — SRS.md')
   if (srsContent.startsWith('FILE_MISSING') || srsContent.length < 50) {
     return { error: 'Sub-Task 1/4: SRS.md not found on disk after A (round ' + round + ')', loader_preview: srsContent.slice(0, 200) }
   }
@@ -471,12 +427,9 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: review previous B-2 review JSON (DOC 1 below). Apply HIGH-severity gap fixes via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
-    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SPEC_TRACKING.md && wc -l ' + REPO + '/01-requirements/SPEC_TRACKING.md && wc -c ' + REPO + '/01-requirements/SPEC_TRACKING.md`\n'
-    + '7. CRITICAL — embed FULL file content in your return JSON (v6 redesign):\n'
-    + '   7a. Run Bash: cat ' + REPO + '/01-requirements/SPEC_TRACKING.md (verbatim, every byte including newlines).\n'
-    + '   7b. Compute byte count: wc -c < result.\n'
-    + '   7c. Return this JSON with `content` (verbatim cat stdout) and `bytes`:\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>","content":"<FULL cat stdout, every byte verbatim>","bytes":<exact byte count>}\n\n'
+    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SPEC_TRACKING.md && wc -l ' + REPO + '/01-requirements/SPEC_TRACKING.md`\n'
+    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write SRS.md, TRACEABILITY_MATRIX.md, or TEST_INVENTORY.yaml.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
@@ -493,17 +446,11 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     agentType: 'general-purpose',
   })
   let a
-  try { a = parseAgentADeliverable(aResult, 'A-spec-tracking-r' + round) } catch (e) {
+  try { a = parseAgentJson(aResult, 'A-spec-tracking-r' + round) } catch (e) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  // v6: prefer A's embedded content; fall back to loader if missing/length-mismatch
-  if (a && a.content && a.contentSource === 'agent-returned') {
-    stContent = a.content
-    log('  A status=' + (a.status || 'unknown') + ' | content from A.return (' + stContent.length + ' chars)')
-  } else {
-    log('  A status=' + (a && a.status ? a.status : 'unknown') + ' | content source=' + (a && a.contentSource ? a.contentSource : 'n/a') + ' — falling back to loader')
-    stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'spec-tracking-load-r' + round, 'Sub-Task 2/4 — SPEC_TRACKING.md')
+  stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'spec-tracking-load-r' + round, 'Sub-Task 2/4 — SPEC_TRACKING.md')
   if (stContent.startsWith('FILE_MISSING') || stContent.length < 50) {
     return { error: 'Sub-Task 2/4: SPEC_TRACKING.md not found on disk after A (round ' + round + ')', loader_preview: stContent.slice(0, 200) }
   }
@@ -566,12 +513,9 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
-    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md && wc -l ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md && wc -c ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md`\n'
-    + '7. CRITICAL — embed FULL file content in your return JSON (v6 redesign):\n'
-    + '   7a. Run Bash: cat ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md (verbatim, every byte including newlines).\n'
-    + '   7b. Compute byte count: wc -c < result.\n'
-    + '   7c. Return this JSON with `content` (verbatim cat stdout) and `bytes`:\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>","content":"<FULL cat stdout, every byte verbatim>","bytes":<exact byte count>}\n\n'
+    + '6. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md && wc -l ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md`\n'
+    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write other P1 deliverables.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
@@ -587,12 +531,7 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  if (a && a.content && a.contentSource === 'agent-returned') {
-    tmContent = a.content
-    log('  A status=' + (a.status || 'unknown') + ' | content from A.return (' + tmContent.length + ' chars)')
-  } else {
-    log('  A status=' + (a && a.status ? a.status : 'unknown') + ' | content source=' + (a && a.contentSource ? a.contentSource : 'n/a') + ' — falling back to loader')
-    tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'traceability-load-r' + round, 'Sub-Task 3/4 — TRACEABILITY_MATRIX.md')
+  tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'traceability-load-r' + round, 'Sub-Task 3/4 — TRACEABILITY_MATRIX.md')
   if (tmContent.startsWith('FILE_MISSING') || tmContent.length < 50) {
     return { error: 'Sub-Task 3/4: TRACEABILITY_MATRIX.md not found on disk after A (round ' + round + ')', loader_preview: tmContent.slice(0, 200) }
   }
@@ -648,12 +587,9 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
-    + '6. Verify YAML parses: ' + PY + ' -c "import yaml; yaml.safe_load(open(\'' + REPO + '/TEST_INVENTORY.yaml\'))". Then `wc -c ' + REPO + '/TEST_INVENTORY.yaml`.\n'
-    + '7. CRITICAL — embed FULL file content in your return JSON (v6 redesign):\n'
-    + '   7a. Run Bash: cat ' + REPO + '/TEST_INVENTORY.yaml (verbatim, every byte including newlines).\n'
-    + '   7b. Compute byte count: wc -c < result.\n'
-    + '   7c. Return this JSON with `content` (verbatim cat stdout) and `bytes`:\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>","content":"<FULL cat stdout, every byte verbatim>","bytes":<exact byte count>}\n\n'
+    + '6. Verify YAML parses: ' + PY + ' -c "import yaml; yaml.safe_load(open(\'' + REPO + '/TEST_INVENTORY.yaml\'))".\n'
+    + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write other P1 deliverables.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
@@ -665,16 +601,11 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     agentType: 'general-purpose',
   })
   let a
-  try { a = parseAgentADeliverable(aResult, 'A-test-inventory-r' + round) } catch (e) {
+  try { a = parseAgentJson(aResult, 'A-test-inventory-r' + round) } catch (e) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  if (a && a.content && a.contentSource === 'agent-returned') {
-    tiContent = a.content
-    log('  A status=' + (a.status || 'unknown') + ' | content from A.return (' + tiContent.length + ' chars)')
-  } else {
-    log('  A status=' + (a && a.status ? a.status : 'unknown') + ' | content source=' + (a && a.contentSource ? a.contentSource : 'n/a') + ' — falling back to loader')
-    tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'test-inventory-load-r' + round, 'Sub-Task 4/4 — TEST_INVENTORY.yaml')
+  tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'test-inventory-load-r' + round, 'Sub-Task 4/4 — TEST_INVENTORY.yaml')
   if (tiContent.startsWith('FILE_MISSING') || tiContent.length < 50) {
     return { error: 'Sub-Task 4/4: TEST_INVENTORY.yaml not found on disk after A (round ' + round + ')', loader_preview: tiContent.slice(0, 200) }
   }
