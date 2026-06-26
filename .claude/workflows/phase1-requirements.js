@@ -304,9 +304,18 @@ log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars | 
 // (status/confidence/citations/summary), orchestrator reads content from disk.
 // Per playbook §8.2/§9.5: Bash cat is more reliable than Read tool (which
 // may hallucinate). Per playbook §7: agent reliability is a known issue —
-// haiku/sonnet may emit preamble instead of cat stdout. Mitigation: stronger
-// prompt + retry + defensive validation against known hallucination patterns.
-async function loadDeliverable(filePath, label, phaseName) {
+// haiku/sonnet may emit preamble OR substitute a different file's content.
+// Observed failure (run wf_e7642bc5-8d8, peer-reload-st-r2-a1): loader returned
+// "# SPEC.md Amendment Tracking Log" content for SPEC_TRACKING.md — a file that
+// does not exist anywhere in the repo. The agent cat'd a different file (or
+// fabricated) and the prior validation (preamble blacklist + length) missed it.
+//
+// v8 fix: caller MUST pass expectPrefix — the expected first-line prefix of
+// the target file (e.g. "# SRS" for SRS.md, "format_version:" for YAML).
+// The loader verifies the loaded content begins with that prefix; mismatch
+// triggers a fresh retry and ultimately a LOADER_CONTENT_MISMATCH sentinel.
+// This catches cross-file fabrication that preamble blacklist cannot.
+async function loadDeliverable(filePath, label, phaseName, expectPrefix) {
   const prompt = 'You are a CAT AGENT. Your ONLY task is to run `cat` on a file and emit the EXACT stdout as your final message.\n\n'
     + 'FILE PATH: ' + filePath + '\n\n'
     + 'STEPS:\n'
@@ -339,6 +348,11 @@ async function loadDeliverable(filePath, label, phaseName) {
     if (text.startsWith('FILE_MISSING')) return text
     if (isHallucinated(text)) {
       log('  [' + label + '] attempt ' + attempt + '/5 hallucinated (len=' + text.length + '): ' + text.slice(0, 80))
+      continue
+    }
+    // v8: expectPrefix validation — catches cross-file fabrication
+    if (expectPrefix && !text.startsWith(expectPrefix)) {
+      log('  [' + label + '] attempt ' + attempt + '/5 content-mismatch (expected prefix "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
       continue
     }
     return text
@@ -405,7 +419,7 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     a = null
   }
   // Load content from disk (A wrote the file; its JSON may not embed content)
-  srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'srs-load-r' + round, 'Sub-Task 1/4 — SRS.md')
+  srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'srs-load-r' + round, 'Sub-Task 1/4 — SRS.md', '# SRS')
   if (srsContent.startsWith('FILE_MISSING') || srsContent.length < 50) {
     return { error: 'Sub-Task 1/4: SRS.md not found on disk after A (round ' + round + ')', loader_preview: srsContent.slice(0, 200) }
   }
@@ -506,7 +520,7 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'spec-tracking-load-r' + round, 'Sub-Task 2/4 — SPEC_TRACKING.md')
+  stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'spec-tracking-load-r' + round, 'Sub-Task 2/4 — SPEC_TRACKING.md', '# SPEC_TRACKING')
   if (stContent.startsWith('FILE_MISSING') || stContent.length < 50) {
     return { error: 'Sub-Task 2/4: SPEC_TRACKING.md not found on disk after A (round ' + round + ')', loader_preview: stContent.slice(0, 200) }
   }
@@ -591,7 +605,7 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'traceability-load-r' + round, 'Sub-Task 3/4 — TRACEABILITY_MATRIX.md')
+  tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'traceability-load-r' + round, 'Sub-Task 3/4 — TRACEABILITY_MATRIX.md', '# TRACEABILITY')
   if (tmContent.startsWith('FILE_MISSING') || tmContent.length < 50) {
     return { error: 'Sub-Task 3/4: TRACEABILITY_MATRIX.md not found on disk after A (round ' + round + ')', loader_preview: tmContent.slice(0, 200) }
   }
@@ -669,7 +683,7 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'test-inventory-load-r' + round, 'Sub-Task 4/4 — TEST_INVENTORY.yaml')
+  tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'test-inventory-load-r' + round, 'Sub-Task 4/4 — TEST_INVENTORY.yaml', 'format_version:')
   if (tiContent.startsWith('FILE_MISSING') || tiContent.length < 50) {
     return { error: 'Sub-Task 4/4: TEST_INVENTORY.yaml not found on disk after A (round ' + round + ')', loader_preview: tiContent.slice(0, 200) }
   }
@@ -785,10 +799,10 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + 'SCOPE RULES:\n- DO NOT run phase-transition/push/run-gate.\n- DO NOT modify harness/.\n- ONLY edit the 4 P1 deliverables. Report what you changed.',
     { label: 'peer-fix-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
   )
-  srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'peer-reload-srs-r' + round, 'Peer Review')
-  stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'peer-reload-st-r' + round, 'Peer Review')
-  tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'peer-reload-tm-r' + round, 'Peer Review')
-  tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'peer-reload-ti-r' + round, 'Peer Review')
+  srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'peer-reload-srs-r' + round, 'Peer Review', '# SRS')
+  stContent = await loadDeliverable(REPO + '/01-requirements/SPEC_TRACKING.md', 'peer-reload-st-r' + round, 'Peer Review', '# SPEC_TRACKING')
+  tmContent = await loadDeliverable(REPO + '/01-requirements/TRACEABILITY_MATRIX.md', 'peer-reload-tm-r' + round, 'Peer Review', '# TRACEABILITY')
+  tiContent = await loadDeliverable(REPO + '/TEST_INVENTORY.yaml', 'peer-reload-ti-r' + round, 'Peer Review', 'format_version:')
   log('  Reloaded after fixer: SRS=' + srsContent.length + ' ST=' + stContent.length + ' TM=' + tmContent.length + ' TI=' + tiContent.length)
 }
 
