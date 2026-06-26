@@ -153,7 +153,7 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName) {
     'Use ONLY the Bash tool. Run EXACTLY: cat ' + REPO + '/' + relPath + '\n'
     + 'Do NOT use the Read tool. Return the EXACT stdout as your final message — the file content IS your response.\n'
     + 'If the file does not exist, return exactly: ERROR: ' + relPath + ' not found',
-    { label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-'), phase: phaseName, agentType: 'general-purpose', model: 'haiku' },
+    { label: 'load-' + relPath.replace(/[^a-z0-9]/gi, '-'), phase: phaseName, agentType: 'general-purpose' },
   )
   const content = (typeof res === 'string' ? res : String(res ?? '')).trim()
   if (expectPrefix && content.length > 50 && !content.startsWith(expectPrefix) && !content.startsWith('ERROR:')) {
@@ -166,59 +166,35 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName) {
 // Phase: Entry & Preflight
 // ════════════════════════════════════════════════════════════════════════
 
-// ---- G: state.json re-run shortcut (opt-in via args.shortcut=true) ----
-// When re-running a phase that already PASSED, we can skip env-check +
-// plan-all re-dispatch by reading state.json up front. The shortcut
-// dispatches a haiku agent (cheap, <5s) to read the JSON file directly,
-// since workflow JS cannot use fs.* / process.* (playbook §4 hard rule).
-// Pass args.shortcut=true when re-invoking to activate.
-async function maybeShortcut(plannedPhase) {
-  if (!args || args.shortcut !== true) return null
-  const r = await agent(
-    'Read ' + REPO + '/.methodology/state.json and report ONLY a JSON object ' +
-    'with two keys: "current_phase" (integer) and "phase_truth_passed" (boolean). ' +
-    'Reply with just the JSON, no prose.',
-    { label: 'state-shortcut', phase: 'State Shortcut', agentType: 'general-purpose', model: 'haiku' },
-  )
-  try {
-    const s = parseAgentJson(String(r), 'state-shortcut')
-    if (s && s.phase_truth_passed === true && Number(s.current_phase) >= plannedPhase) {
-      log('[SHORTCUT] state.json shows phase ' + s.current_phase + ' already passed (≥ ' + plannedPhase + '); skipping to verification.')
-      return { shortcut: true, current_phase: s.current_phase, phase_truth_passed: true }
-    }
-  } catch (e) {
-    log('[SHORTCUT] state.json parse failed (' + e.message + ') — continuing normally')
-  }
-  return null
-}
-
-const _shortcut = await maybeShortcut(2)
-if (_shortcut) return _shortcut
-
 phase('Entry & Preflight')
 log('ENTRY-CHECK + P1-ARTIFACTS + run-phase 2 + validate-handoff + CI + load-context')
 
-const preflightReport = await agent(
-  'YOU ARE THE PHASE-2 PREFLIGHT ORCHESTRATOR. Run bash commands in order; report final status.\n'
-  + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-  + 'Steps:\n'
-  + '1. ENTRY-CHECK (P1 review-complete): `git -C ' + REPO + ' log --oneline --grep="phase1(review-complete)" -1` OR confirm all 4 P1 files exist.\n'
-  + '2. P1-ARTIFACTS: `ls ' + REPO + '/01-requirements/SRS.md ' + REPO + '/01-requirements/SPEC_TRACKING.md ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md ' + REPO + '/TEST_INVENTORY.yaml`. ALL 4 must exist — if any missing, report FAIL (return to Phase 1).\n'
-  + '3. PREFLIGHT: `' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 2 --project ' + REPO + '`. If FAIL: fix FSM/Constitution/Drift, re-run (max 3 attempts).\n'
-  + '4. HANDOFF: `' + PY + ' ' + REPO + '/harness_cli.py validate-handoff --from-phase 1 --project ' + REPO + '`. Must exit 0; if exit 1, read errors, fix upstream P1 deliverable, re-run.\n'
-  + '5. PREFLIGHT-CI: confirm `' + REPO + '/.github/workflows/harness_quality_gate.yml` + `' + REPO + '/.git/hooks/prepare-commit-msg` exist; confirm state.json current_phase=2. If stale: `' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 2 --project ' + REPO + ' --overwrite`.\n'
-  + '6. LOAD-CONTEXT: `mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 2 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase2_ctx.json`.\n\n'
-  + 'Report plain text: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <one-line reason>".\n\n'
-  + 'SCOPE RULES:\n'
-  + '- DO NOT write any P2 deliverable (SAD/ADR/TEST_SPEC).\n'
-  + '- DO NOT run advance-phase, push-checkpoint, run-gate.\n'
-  + '- DO NOT modify files inside harness/ (HR-17).\n'
-  + '- ONLY run the commands above, fix preflight issues, and report.',
-  { label: 'preflight', phase: 'Entry & Preflight', agentType: 'general-purpose' },
-)
-if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightReport))) {
-  return { error: 'Phase 2 preflight did not PASS', raw: String(preflightReport ?? '').slice(-600) }
+const MAX_PREFLIGHT_ATTEMPTS = 3
+let preflightPass = false, preflightReport = ''
+for (let attempt = 1; attempt <= MAX_PREFLIGHT_ATTEMPTS; attempt++) {
+  log('  preflight attempt ' + attempt + '/' + MAX_PREFLIGHT_ATTEMPTS)
+  preflightReport = await agent(
+    'YOU ARE THE PHASE-2 PREFLIGHT ORCHESTRATOR. Run bash commands in order; report final status.\n'
+    + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
+    + 'Steps:\n'
+    + '1. ENTRY-CHECK (P1 review-complete): `git -C ' + REPO + ' log --oneline --grep="phase1(review-complete)" -1` OR confirm all 4 P1 files exist.\n'
+    + '2. P1-ARTIFACTS: `ls ' + REPO + '/01-requirements/SRS.md ' + REPO + '/01-requirements/SPEC_TRACKING.md ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md ' + REPO + '/TEST_INVENTORY.yaml`. ALL 4 must exist — if any missing, report FAIL (return to Phase 1).\n'
+    + '3. PREFLIGHT: `' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 2 --project ' + REPO + '`. If FAIL: fix FSM/Constitution/Drift, re-run.\n'
+    + '4. HANDOFF: `' + PY + ' ' + REPO + '/harness_cli.py validate-handoff --from-phase 1 --project ' + REPO + '`. Must exit 0; if exit 1, read errors, fix upstream P1 deliverable, re-run.\n'
+    + '5. PREFLIGHT-CI: confirm `' + REPO + '/.github/workflows/harness_quality_gate.yml` + `' + REPO + '/.git/hooks/prepare-commit-msg` exist; confirm state.json current_phase=2. If stale: `' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 2 --project ' + REPO + ' --overwrite`.\n'
+    + '6. LOAD-CONTEXT: `mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 2 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase2_ctx.json`.\n\n'
+    + 'Report plain text: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <one-line reason>".\n\n'
+    + 'SCOPE RULES:\n'
+    + '- DO NOT write any P2 deliverable (SAD/ADR/TEST_SPEC).\n'
+    + '- DO NOT run advance-phase, push-checkpoint, run-gate.\n'
+    + '- DO NOT modify files inside harness/ (HR-17).\n'
+    + '- ONLY run the commands above, fix preflight issues, and report.',
+    { label: 'preflight-' + attempt, phase: 'Entry & Preflight', agentType: 'general-purpose' },
+  )
+  preflightPass = typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightReport)
+  if (preflightPass) break
 }
+if (!preflightPass) return { error: 'Phase 2 preflight did not PASS after ' + MAX_PREFLIGHT_ATTEMPTS + ' attempts', raw: String(preflightReport ?? '').slice(-600) }
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Load Upstream (SRS.md — needed verbatim for stateless B reviews)
@@ -238,6 +214,8 @@ log('  harness/templates/ADR.md loaded: ' + adrTemplateContent.length + ' chars'
 // ════════════════════════════════════════════════════════════════════════
 // Sub-Task 1/3: SAD.md
 // ════════════════════════════════════════════════════════════════════════
+phase('Sub-Task 1/3 — SAD.md')
+log('abLoop: SAD authoring (ARCHITECT A + TECH_LEAD B; max 5 rounds; HR-12 escalate)')
 const sad = await abLoop({
   phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/SAD.md', diskPrefix: '# SAD',
   buildAPrompt: (round, prevB2) =>
@@ -247,13 +225,13 @@ const sad = await abLoop({
     + '1. Self-check (Bash): `test -f ' + REPO + '/02-architecture/SAD.md`. If EXISTS, Read it (current state).\n'
     + '2. Author Software Architecture Document. REQUIRED:\n'
     + '   - §1 Overview. §2 Module design: every FR (enumerate from SPEC.md ### FR-XX: headings) maps to ≥1 module; follow SPEC.md §6 directory structure (read SPEC §6 for the project-specific module tree — do not assume a fixed module set). ≤15 files/dir, no god-module.\n'
-    + '   - §3 Interfaces & data flows (consistent diagrams). §4 NFR handling (latency/security/reliability per all NFRs enumerated from SPEC.md ### NFR-XX: headings).\n'
+    + '   - §3 Interfaces & data flows (consistent diagrams). §4 NFR handling (latency/security/cost per all NFRs enumerated from SPEC.md ### NFR-XX: headings).\n'
     + '   - §5 SAB block placeholder: include the literal marker `<!-- SAB:START -->` (real YAML filled in SAB Generation phase later).\n'
     + '   - No circular dependencies.\n'
     + '3. Re-read file (Read) for FINAL state. Create dir ' + REPO + '/02-architecture if missing (Write tool).\n'
     + (round > 1 ? '4. Apply HIGH-severity gap fixes from previous B-2 (DOC below) via Edit (surgical, do NOT rewrite whole file).\n' : '')
     + 'Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["SRS.md FR-01","..."],"summary":"<1-2 lines>"}\n\n'
+    + '{"status":"OK","files":["02-architecture/SAD.md"],"confidence":"high|medium|low","citations":["SRS.md FR-01","..."],"summary":"<1-2 lines>"}\n\n'
     + 'SCOPE RULES:\n- DO NOT write ADR.md or TEST_SPEC.md.\n- DO NOT run phase-transition / quality-gate / generate_sab commands.\n- DO NOT modify harness/ (HR-17).\n- ONLY author SAD.md and return JSON.'
     + (round > 1 && prevB2 ? '\n\n=== [DOC: Previous B-2 review JSON — SAD.md] ===\n' + JSON.stringify(prevB2, null, 2) : ''),
   buildBDocs: (content) => [
@@ -262,8 +240,9 @@ const sad = await abLoop({
     ['DOC 3: harness/templates/SAD.md §2.1 — Directory Structure Design Principles', sadTemplateContent],
   ],
   checklist:
-    '- Every FR maps to ≥1 module?\n- NFRs addressed (latency/security/reliability)?\n- No circular dependencies?\n- Data flow diagrams consistent?\n'
-    + '- SAB block present in §5 (<!-- SAB:START --> marker exists)?\n- Directory structure follows CRG cohesion principles (SAD.md §2.1)? See embedded DOC 3\n- ≤15 files/dir, no god-module, no flat dump?',
+    '- Every FR maps to ≥1 module?\n- NFRs addressed (latency/security/cost)?\n- No circular dependencies?\n- Data flow diagrams consistent?\n'
+    + '- SAB block present in §5 (<!-- SAB:START --> marker exists)?\n- `phase` is a bare int (not quoted string)? e.g. `phase: 2` not `phase: "2"`\n- All NFR `type` values from legal values (performance/security/maintainability/reliability/testability/deployability/scalability/usability)?\n'
+    + '- Directory structure follows CRG cohesion principles (SAD.md §2.1)? See embedded DOC 3\n- ≤15 files/dir, no god-module, no flat dump?',
 })
 if (!sad.ok) return sad
 let sadContent = sad.content, sadB2 = sad.b2
@@ -271,6 +250,8 @@ let sadContent = sad.content, sadB2 = sad.b2
 // ════════════════════════════════════════════════════════════════════════
 // Sub-Task 2/3: ADR.md
 // ════════════════════════════════════════════════════════════════════════
+phase('Sub-Task 2/3 — ADR.md')
+log('abLoop: ADR authoring (extract decisions from APPROVED SAD.md; downstream ADR-Constitution gate)')
 const adr = await abLoop({
   phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/adr/ADR.md', diskPrefix: '# Architecture Decision Records',
   buildAPrompt: (round, prevB2) =>
@@ -282,7 +263,7 @@ const adr = await abLoop({
     + '3. Create dir ' + REPO + '/02-architecture/adr if missing. Re-read for FINAL state.\n'
     + (round > 1 ? '4. Apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n' : '')
     + 'Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
+    + '{"status":"OK","files":["02-architecture/adr/ADR.md"],"confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
     + 'SCOPE RULES:\n- DO NOT write SAD.md or TEST_SPEC.md.\n- DO NOT run phase-transition / quality-gate commands.\n- ONLY author ADR.md.'
     + (round > 1 && prevB2 ? '\n\n=== [DOC: Previous B-2 review JSON — ADR.md] ===\n' + JSON.stringify(prevB2, null, 2) : ''),
   buildBDocs: (content) => [
@@ -319,6 +300,8 @@ if (!(typeof adrConstReport === 'string' && /ADR-CONSTITUTION:\s*PASS/.test(adrC
 // ════════════════════════════════════════════════════════════════════════
 // Sub-Task 3/3: TEST_SPEC.md
 // ════════════════════════════════════════════════════════════════════════
+phase('Sub-Task 3/3 — TEST_SPEC.md')
+log('abLoop: TEST_SPEC authoring (per-FR test catalog; v2.9.1 B.3 table-row shape; check-test-spec-consistency)')
 const testSpec = await abLoop({
   phaseName: 'Sub-Task 3/3 — TEST_SPEC.md', key: 'test-spec', deliverable: 'TEST_SPEC.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/TEST_SPEC.md', diskPrefix: '#',
   buildAPrompt: (round, prevB2) =>
@@ -335,7 +318,7 @@ const testSpec = await abLoop({
     + '4. Re-read for FINAL state.\n'
     + (round > 1 ? '5. Apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n' : '')
     + 'Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
+    + '{"status":"OK","files":["02-architecture/TEST_SPEC.md"],"confidence":"high|medium|low","citations":["..."],"summary":"..."}\n\n'
     + 'SCOPE RULES:\n- DO NOT write SAD/ADR.\n- DO NOT run phase-transition / run-gate commands.\n- DO NOT modify harness/.\n- ONLY author TEST_SPEC.md (check-test-spec-consistency is allowed).'
     + (round > 1 && prevB2 ? '\n\n=== [DOC: Previous B-2 review JSON — TEST_SPEC.md] ===\n' + JSON.stringify(prevB2, null, 2) : ''),
   buildBDocs: (content) => [
@@ -350,7 +333,9 @@ const testSpec = await abLoop({
     + '- 8-Question Protocol applied per FR?\n- Classification assigned per FR?\n- NFR Pattern Activation table filled?\n'
     + '- Architecture-risk triggers applied (NP-13/NP-15/NP-07 forced where SAD warrants)?\n'
     + '- Concrete Inputs in TRUE form (key="value"), not pytest-id form?\n- Sub-assertions table per FR (rule_id + predicate + applies_to)?\n'
-    + '- Each `### FR-XX:` header followed by TABLE ROWS (not prose-only)?\n- Summary table populated with counts per type?',
+    + '- Each `### FR-XX:` header followed by TABLE ROWS (not prose-only)?\n- Summary table populated with counts per type?\n'
+    + '- Self-consistency gate passes? (`check-test-spec-consistency`)?\n- Cross-cutting sections complete (NFR Integration + Deployment Smoke + Backward Compatibility if multi-phase)?\n'
+    + '- All upstream deliverables consistent with each other? No contradictory decisions?',
 })
 if (!testSpec.ok) return testSpec
 let testSpecContent = testSpec.content
