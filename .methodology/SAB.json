@@ -1,0 +1,117 @@
+{
+  "version": "1.0",
+  "created_at": "2026-06-27",
+  "phase": 2,
+  "project": "taskq",
+  "layers": [
+    {
+      "name": "cli",
+      "modules": [
+        "03-development/taskq/cli.py",
+        "03-development/taskq/__main__.py"
+      ],
+      "allowed_dependencies": [
+        "executor",
+        "store",
+        "config"
+      ]
+    },
+    {
+      "name": "executor",
+      "modules": [
+        "03-development/taskq/executor.py"
+      ],
+      "allowed_dependencies": [
+        "store",
+        "redactor",
+        "config"
+      ]
+    },
+    {
+      "name": "store",
+      "modules": [
+        "03-development/taskq/store.py"
+      ],
+      "allowed_dependencies": [
+        "config"
+      ]
+    },
+    {
+      "name": "redactor",
+      "modules": [
+        "03-development/taskq/redactor.py"
+      ],
+      "allowed_dependencies": []
+    },
+    {
+      "name": "config",
+      "modules": [
+        "03-development/taskq/config.py"
+      ],
+      "allowed_dependencies": []
+    }
+  ],
+  "dependencies": {
+    "cli": [
+      "executor",
+      "store",
+      "config"
+    ],
+    "executor": [
+      "store",
+      "redactor",
+      "config"
+    ],
+    "store": [
+      "config"
+    ]
+  },
+  "quality_targets": {
+    "max_complexity": 15,
+    "min_coverage": 80,
+    "max_coupling": 0.3
+  },
+  "nfr_dimension_mapping": {
+    "NFR-01": "performance",
+    "NFR-02": "security",
+    "NFR-03": "error_handling"
+  },
+  "nfr_traceability": {
+    "NFR-01": {
+      "type": "performance",
+      "target": "p95 < 50ms",
+      "module": "taskq.store"
+    },
+    "NFR-02": {
+      "type": "security",
+      "target": ">=0 shell=True in taskq/ source tree; 7 blacklist chars rejected",
+      "module": "taskq.executor"
+    },
+    "NFR-03": {
+      "type": "reliability",
+      "target": "atomic write + redaction enforced on every save",
+      "module": "taskq.store"
+    }
+  },
+  "advisory_only": [],
+  "gate_score_overrides": {
+    "performance": 75.0,
+    "security": 80.0,
+    "error_handling": 80.0
+  },
+  "fr_module_traceability": {
+    "FR-01": "taskq.cli",
+    "FR-02": "taskq.executor",
+    "FR-03": "taskq.cli"
+  },
+  "architecture_constraints": [
+    "no_shell_true",
+    "atomic_writes_only",
+    "no_circular_dependencies",
+    "single_redaction_owner_executor"
+  ],
+  "high_risk_modules": [
+    "taskq.executor",
+    "taskq.store"
+  ]
+}

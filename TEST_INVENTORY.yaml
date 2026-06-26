@@ -19,6 +19,107 @@
 # by Phase 4. The by_fr.tc_count totals in the coverage block below MUST equal
 # the count of distinct tc_ids enumerated in the tests block (no arithmetic drift).
 
+# P1 naming authority — used by validate-handoff and derive_test_cases.md to
+# extract the authoritative per-FR test function names that P2 TEST_SPEC.md
+# must preserve. Keys are FR IDs (SRS-canonical); values are test function
+# names grouped by test category (unit / cli / integration / benchmark /
+# static). Names must match the entries enumerated in the `tests:` block
+# below. Coverage rule: every FR declared in SRS.md must appear here with
+# at least one test name.
+fr_tests:
+  FR-01:
+    unit:
+      - test_unit_fr01_task_id_format_eight_hex
+      - test_unit_fr01_task_id_uniqueness_1000_iter
+      - test_unit_fr01_record_fields_present
+      - test_unit_fr01_created_at_iso8601_utc_parseable
+    cli:
+      - test_cli_fr01_empty_command_string_rejected
+      - test_cli_fr01_missing_command_arg_rejected
+      - test_cli_fr01_whitespace_single_space_rejected
+      - test_cli_fr01_whitespace_tabs_newlines_rejected
+      - test_cli_fr01_length_1000_accepted
+      - test_cli_fr01_length_1001_rejected
+      - test_cli_fr01_blacklist_semicolon_rejected
+      - test_cli_fr01_blacklist_pipe_rejected
+      - test_cli_fr01_blacklist_ampersand_rejected
+      - test_cli_fr01_blacklist_dollar_rejected
+      - test_cli_fr01_blacklist_gt_rejected
+      - test_cli_fr01_blacklist_lt_rejected
+      - test_cli_fr01_blacklist_backtick_rejected
+    integration:
+      - test_integration_fr01_atomic_write_no_tmp_leftover
+      - test_integration_fr01_atomic_write_sigkill_trap
+      - test_integration_fr01_corrupted_truncated_exit_one
+      - test_integration_fr01_corrupted_garbage_exit_one
+      - test_integration_fr01_corrupted_content_unchanged
+  FR-02:
+    unit:
+      - test_unit_fr02_tail_truncate_1500_preserved
+      - test_unit_fr02_tail_truncate_5000_to_2000
+      - test_unit_fr02_tail_truncate_2000_boundary
+      - test_unit_fr02_duration_ms_nonnegative
+      - test_unit_fr02_duration_ms_is_strict_int_type
+      - test_unit_fr02_finished_at_iso8601_utc
+      - test_unit_fr02_unexpected_exception_exit_one
+      - test_unit_fr02_no_bare_except_in_codebase
+      - test_unit_fr02_subprocess_run_no_shell_kwarg
+    integration:
+      - test_integration_fr02_exit_zero_done
+      - test_integration_fr02_exit_nonzero_failed_false
+      - test_integration_fr02_exit_nonzero_failed_exit_seven
+      - test_integration_fr02_timeout_status_and_exit_code
+      - test_integration_fr02_retry_failed_default_limit
+      - test_integration_fr02_retry_failed_limit_zero
+      - test_integration_fr02_retry_failed_final_result_persisted
+      - test_integration_fr02_retry_timeout_until_limit
+    static:
+      - test_static_fr02_no_shell_true_in_codebase
+  FR-03:
+    cli:
+      - test_cli_fr03_submit_round_trip
+      - test_cli_fr03_status_valid_all_fields
+      - test_cli_fr03_status_valid_exit_code_zero
+      - test_cli_fr03_status_unknown_id_exit_two
+      - test_cli_fr03_list_one_line_per_task
+      - test_cli_fr03_list_command_truncated_at_fifty
+      - test_cli_fr03_list_format_regex_conformance
+      - test_cli_fr03_list_empty_store_exit_zero
+      - test_cli_fr03_clear_then_list_empty
+      - test_cli_fr03_status_json_single_line
+      - test_cli_fr03_list_json_single_line
+      - test_cli_fr03_json_payload_no_embedded_newline
+      - test_cli_fr03_exit_code_success_zero
+      - test_cli_fr03_exit_code_validation_two
+      - test_cli_fr03_exit_code_timeout_four
+      - test_cli_fr03_exit_code_internal_one
+
+cross_cutting:
+  security:
+    - test_static_nfr02_no_shell_true_grep_zero
+    - test_static_nfr02_no_shell_true_pytest_reassert
+    - test_static_nfr02_shlex_split_and_shell_false_in_source
+    - test_cli_nfr02_blacklist_semicolon_rejected
+    - test_cli_nfr02_blacklist_pipe_rejected
+    - test_cli_nfr02_blacklist_ampersand_rejected
+    - test_cli_nfr02_blacklist_dollar_rejected
+    - test_cli_nfr02_blacklist_gt_rejected
+    - test_cli_nfr02_blacklist_lt_rejected
+    - test_cli_nfr02_blacklist_backtick_rejected
+    - test_unit_nfr02_subprocess_no_shell_kwarg
+  reliability:
+    - test_integration_nfr03_atomic_write_sigkill_valid_json
+    - test_unit_nfr03_redact_sk_prefix_line
+    - test_unit_nfr03_redact_sk_mixed_line
+    - test_unit_nfr03_redact_token_prefix_line
+    - test_unit_nfr03_redact_token_end_of_line
+    - test_unit_nfr03_redact_passthrough_hello
+    - test_unit_nfr03_redact_passthrough_echo_output
+    - test_integration_nfr03_corrupted_no_silent_rebuild
+  performance:
+    - test_benchmark_nfr01_submit_status_p95_under_50ms
+    - test_benchmark_nfr01_script_runs_and_emits_json
+
 meta:
   project: taskq
   spec_version: "2.0.0"
