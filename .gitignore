@@ -16,3 +16,4 @@ __pycache__/
 htmlcov/
 .mutmut-cache/
 .code-review-graph/
+.methodology/.state.lock
