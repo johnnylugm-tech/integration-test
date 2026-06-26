@@ -123,6 +123,28 @@ function extractLastJson(text) {
   return last
 }
 
+// v6 (2026-06-26): parse Agent A response that embeds deliverable content.
+// Returns {status, files, confidence, citations, summary, content, bytes}
+// where `content` is the verbatim deliverable text (or null if not present).
+// Validates that bytes === content.length (length-consistency) and that
+// content is non-trivially long.
+function parseAgentADeliverable(text, agentLabel) {
+  const parsed = extractLastJson(text)
+  if (!parsed) throw new Error('PARSE_FAIL [' + agentLabel + ']: no JSON')
+  const content = typeof parsed.content === 'string' ? parsed.content : null
+  const bytes = typeof parsed.bytes === 'number' ? parsed.bytes : null
+  if (content === null) {
+    return { ...parsed, content: null, bytes: null, contentSource: 'missing' }
+  }
+  if (content.length < 80) {
+    return { ...parsed, content: null, bytes: null, contentSource: 'too-short' }
+  }
+  if (bytes !== null && bytes !== content.length) {
+    return { ...parsed, content: null, bytes: null, contentSource: 'length-mismatch (claimed=' + bytes + ' actual=' + content.length + ')' }
+  }
+  return { ...parsed, content: content, bytes: content.length, contentSource: 'agent-returned' }
+}
+
 // Parse agent text response. Returns parsed object or throws with last 200 chars for debugging.
 function parseAgentJson(text, agentLabel) {
   const parsed = extractLastJson(text)
@@ -336,9 +358,14 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '4. (Re-)read the file via Read tool to capture its FINAL on-disk state.\n'
     + '5. If round > 1: review previous B-2 review JSON (DOC 1 below). Apply HIGH-SEVERITY gap fixes to SRS.md via Edit (surgical; do NOT rewrite the whole file). MED/LOW gaps: log but skip unless trivial.\n'
     + '6. (Re-)read the file via Read tool to capture its FINAL on-disk state after any edits.\n'
-    + '7. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SRS.md && wc -l ' + REPO + '/01-requirements/SRS.md`\n'
-    + '8. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
-    + '{"status":"OK","confidence":"high|medium|low","citations":["SPEC.md §3 FR-01","..."],"summary":"<1-2 lines>"}\n\n'
+    + '7. Verify file exists on disk: `test -f ' + REPO + '/01-requirements/SRS.md && wc -l ' + REPO + '/01-requirements/SRS.md && wc -c ' + REPO + '/01-requirements/SRS.md`\n'
+    + '8. CRITICAL — embed FULL file content in your return JSON (v6 redesign):\n'
+    + '   8a. Run Bash: cat ' + REPO + '/01-requirements/SRS.md (verbatim, every byte including newlines).\n'
+    + '   8b. Compute byte count: wc -c < result.\n'
+    + '   8c. Return this JSON with `content` (the verbatim cat stdout) and `bytes` (the byte count):\n'
+    + '{"status":"OK","confidence":"high|medium|low","citations":["SPEC.md §3 FR-01","..."],"summary":"<1-2 lines>","content":"<FULL cat stdout, every byte verbatim>","bytes":<exact byte count>}\n'
+    + '   The `content` field MUST be the verbatim cat stdout. The `bytes` field MUST equal content.length (JavaScript string length).\n'
+    + '   This eliminates a separate "loader agent" round-trip that has proven unreliable (haiku/sonnet agents hallucinate or skip the cat command).\n\n'
     + 'SCOPE RULES (you MUST obey):\n'
     + '- DO NOT write any deliverable OTHER than 01-requirements/SRS.md.\n'
     + '- DO NOT run git commit, git push, advance-phase, push-checkpoint, or any phase-transition command.\n'
@@ -357,12 +384,20 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     agentType: 'general-purpose',
   })
   let a
-  try { a = parseAgentJson(aResult, 'A-srs-r' + round) } catch (e) {
+  try {
+    a = parseAgentADeliverable(aResult, 'A-srs-r' + round)
+  } catch (e) {
     log('  A JSON parse fail (likely truncated response): ' + e.message.slice(0, 80))
     a = null
   }
-  // Load content from disk (A wrote the file; its JSON may not embed content)
-  srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'srs-load-r' + round, 'Sub-Task 1/4 — SRS.md')
+  // v6: prefer A's embedded content; fall back to loader if missing/length-mismatch
+  if (a && a.content && a.contentSource === 'agent-returned') {
+    srsContent = a.content
+    log('  A status=' + (a.status || 'unknown') + ' | content from A.return (' + srsContent.length + ' chars, bytes-match ✓)')
+  } else {
+    log('  A status=' + (a && a.status ? a.status : 'unknown') + ' | content source=' + (a && a.contentSource ? a.contentSource : 'n/a') + ' — falling back to loader')
+    srsContent = await loadDeliverable(REPO + '/01-requirements/SRS.md', 'srs-load-r' + round, 'Sub-Task 1/4 — SRS.md')
+  }
   if (srsContent.startsWith('FILE_MISSING') || srsContent.length < 50) {
     return { error: 'Sub-Task 1/4: SRS.md not found on disk after A (round ' + round + ')', loader_preview: srsContent.slice(0, 200) }
   }
