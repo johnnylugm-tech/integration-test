@@ -87,35 +87,6 @@ function parseAgentJson(text, label) {
 // Phase: Entry & Preflight
 // ════════════════════════════════════════════════════════════════════════
 
-// ---- G: state.json re-run shortcut (opt-in via args.shortcut=true) ----
-// When re-running a phase that already PASSED, we can skip env-check +
-// plan-all re-dispatch by reading state.json up front. The shortcut
-// dispatches a haiku agent (cheap, <5s) to read the JSON file directly,
-// since workflow JS cannot use fs.* / process.* (playbook §4 hard rule).
-// Pass args.shortcut=true when re-invoking to activate.
-async function maybeShortcut(plannedPhase) {
-  if (!args || args.shortcut !== true) return null
-  const r = await agent(
-    'Read ' + REPO + '/.methodology/state.json and report ONLY a JSON object ' +
-    'with two keys: "current_phase" (integer) and "phase_truth_passed" (boolean). ' +
-    'Reply with just the JSON, no prose.',
-    { label: 'state-shortcut', phase: 'State Shortcut', agentType: 'general-purpose', model: 'haiku' },
-  )
-  try {
-    const s = parseAgentJson(String(r), 'state-shortcut')
-    if (s && s.phase_truth_passed === true && Number(s.current_phase) >= plannedPhase) {
-      log('[SHORTCUT] state.json shows phase ' + s.current_phase + ' already passed (≥ ' + plannedPhase + '); skipping to verification.')
-      return { shortcut: true, current_phase: s.current_phase, phase_truth_passed: true }
-    }
-  } catch (e) {
-    log('[SHORTCUT] state.json parse failed (' + e.message + ') — continuing normally')
-  }
-  return null
-}
-
-const _shortcut = await maybeShortcut(3)
-if (_shortcut) return _shortcut
-
 phase('Entry & Preflight')
 log('ENTRY-CHECK + P2-ARTIFACTS + run-phase 3 + validate-handoff + CI')
 const preflightReport = await agent(
