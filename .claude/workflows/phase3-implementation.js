@@ -158,18 +158,22 @@ if (Array.isArray(ctx.fr_details)) for (const f of ctx.fr_details) frTitle[f.id 
 log('  fr_ids = ' + JSON.stringify(frIds))
 
 // Sentinel pre-check: identify Gate 1 already-done FRs to skip TDD agent invocations on resume/re-run
+// v2.13: read ONLY Phase-3-scoped sentinels (g1_p3_*.flag). Phase 1's Gate 1
+// (spec coverage) is a DIFFERENT check from Phase 3's Gate 1 (code coverage);
+// reusing the same `g1_fr*.flag` path across phases caused Phase 3 to skip
+// real TDD on stale Phase 1 sentinels (Bug #121).
 const sentinelRaw = await agent(
-  'Use ONLY the Bash tool: `ls ' + REPO + '/.sessi-work/sentinels/ 2>/dev/null | grep "^g1_" | grep "\\.flag$" || true`. Return raw output, no commentary.',
+  'Use ONLY the Bash tool: `ls ' + REPO + '/.sessi-work/sentinels/ 2>/dev/null | grep "^g1_p3_" | grep "\\.flag$" || true`. Return raw output, no commentary.',
   { label: 'sentinel-precheck', phase: 'Load FRs' }
 )
 const alreadyDone = new Set()
 if (typeof sentinelRaw === 'string') {
   for (const line of sentinelRaw.split('\n')) {
-    const m = line.trim().match(/^g1_fr(\d+)\.flag$/)
+    const m = line.trim().match(/^g1_p3_fr(\d+)\.flag$/)
     if (m) alreadyDone.add('FR-' + m[1].padStart(2, '0'))
   }
 }
-if (alreadyDone.size > 0) log('  sentinel pre-check: Gate 1 already PASS for ' + [...alreadyDone].join(', ') + ' — skipping TDD agents')
+if (alreadyDone.size > 0) log('  sentinel pre-check: Gate 1 (Phase 3) already PASS for ' + [...alreadyDone].join(', ') + ' — skipping TDD agents')
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Per-FR TDD (script-driven loop; one narrow agent per FR)
@@ -299,7 +303,7 @@ const advanceReport = await agent(
   + 'Steps:\n'
   + '0. GUARD — already advanced? `PHASE=$(jq -r '.current_phase // 0' ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 4 ]`. If Phase 4 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. GUARD + PUSH ⑤ p3-post-gate2: `git -C ' + REPO + ' log --oneline --grep="p3-post-gate2" -1`. If a commit exists, skip the push. Else: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-post-gate2 --project ' + REPO + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
-  + '   Pre-flight (enforced): gate2_result.json composite ≥75 + per-FR Gate 1 sentinel .sessi-work/sentinels/g1_<fr>.flag exists for every FR. If BLOCKED, read the error list and fix.\n'
+  + '   Pre-flight (enforced): gate2_result.json composite ≥75 + per-FR Gate 1 sentinel .sessi-work/sentinels/g1_p3_<fr>.flag exists for every FR. If BLOCKED, read the error list and fix.\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 3 --project ' + REPO + '`\n'
   + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 60%. Fix any blocker, re-run.\n'
   + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
