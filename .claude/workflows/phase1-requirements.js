@@ -661,9 +661,10 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + 'Your SINGLE deliverable: ' + REPO + '/TEST_INVENTORY.yaml (project root)\n\n'
     + 'Steps:\n'
     + '1. Self-check (Bash): `test -f ' + REPO + '/TEST_INVENTORY.yaml`. If EXISTS, Read it.\n'
-    + '2. Author TEST_INVENTORY.yaml mapping every FR/NFR acceptance criterion to test function names. Schema: top-level `fr_tests:` map; each FR has `unit:` and `integration:` arrays of test function names. Naming: test_<module>_<scenario>. Cover ALL FRs + NFRs enumerated from SPEC.md (parse `### FR-XX:` / `### NFR-XX:` headings — do not assume a fixed count). Each FR has >=3 unit + >=1 integration test. Header: `format_version: "1.1"`.\n'
+    + '2. Author TEST_INVENTORY.yaml mapping every AC in the APPROVED SRS.md to test function names. Schema: top-level `fr_tests:` and `nfr_tests:` maps; each FR/NFR has `unit:` array of test function names. Naming: test_<module>_<scenario>. Each AC in the approved SRS.md MUST map to >=1 test function.\n'
+    + '   **CRITICAL: ONLY cite AC IDs that exist in the approved SRS.md. NEVER invent AC IDs (e.g. AC-FR02-8, AC-FR02-9) — those are forbidden.** If SRS.md says AC-FR02-1..7, you can ONLY cite those 7 IDs in your test inventory. If a behavioral concern has no corresponding AC in SRS.md, you may NOT add it as a phantom AC — instead either (a) escalate the gap to a real AC via the gap-rewrite round (the B-2 review JSON will surface it), or (b) skip it for P1 scope.\n'
     + '3. (Re-)read file via Read for final state.\n'
-    + '4. If round > 1: apply HIGH-severity gap fixes from previous B-2 via Edit (surgical).\n'
+    + '4. If round > 1: apply HIGH-severity gap fixes from previous B-2 via Edit (surgical). For each high gap, identify the offending AC citation or test name, then fix the SPECIFIC cited item — do NOT rewrite unrelated sections.\n'
     + '5. (Re-)read file for final state.\n'
     + '6. Verify YAML parses: ' + PY + ' -c "import yaml; yaml.safe_load(open(\'' + REPO + '/TEST_INVENTORY.yaml\'))".\n'
     + '7. Return ONLY this compact JSON — do NOT embed file content (content is read from disk separately):\n'
@@ -671,6 +672,7 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + 'SCOPE RULES:\n'
     + '- DO NOT write other P1 deliverables.\n'
     + '- DO NOT run phase-transition or quality-gate commands.\n'
+    + '- DO NOT invent AC IDs, test names, or behavioral concerns that do not exist in approved SRS.md.\n'
     + '- ONLY do steps 1-7.'
 
   const aResult = await agent(aPromptHeader, {
