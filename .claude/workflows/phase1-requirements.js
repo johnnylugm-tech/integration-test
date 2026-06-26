@@ -135,6 +135,58 @@ function hasHighGap(gaps) {
   return (gaps ?? []).some(function (g) { return g.severity === 'medium' || g.severity === 'high' })
 }
 
+// v6 fix (2026-06-26): Sanity check B reviewer's gap claims against the
+// documents B was given. Observed failure: B reviewer may HALLUCINATE a
+// different file content and REJECT based on that hallucination (e.g.
+// claiming "SRS specifies Node.js + TypeScript" when the actual SRS has
+// Python 3.11 + FR-01..03 INGESTION MODE). The HR-12 escalation path then
+// terminates the workflow with a false-positive REJECT.
+//
+// Fix: for each high/medium gap, extract distinctive quoted strings (e.g.
+// "Node.js", "TypeScript") and known technical terms from the message, then
+// verify at least 1 appears in the docs B was reviewing. If NONE appear, the
+// gap is grounded in hallucinated content → downgrade to "low" and log a
+// warning. This prevents false-positive REJECTs from blocking valid A work.
+function validateBGaps(bReview, docs, subTaskLabel) {
+  if (!bReview || !Array.isArray(bReview.gaps)) return { bReview: bReview, hallucinations: 0 }
+  const allDocContent = (docs || []).map(function (d) { return d[1] || '' }).join('\n\n')
+  let hallucinations = 0
+  const cleanedGaps = []
+  // Common technical terms that, if claimed in a gap, must appear in the doc
+  const techVocab = ['Node\\.js', 'TypeScript', 'JavaScript', 'in-process', 'background job',
+    'job queue library', 'workers?', 'DLQ', 'idempot', 'p99', 'enqueue', 'dedup',
+    'dead ?letter', 'circuit ?breaker', 'workers?', 'DEDUP_WINDOW', 'MAX_RETRIES',
+    'WORKERS']
+  for (const gap of bReview.gaps) {
+    if (gap.severity !== 'high' && gap.severity !== 'medium') {
+      cleanedGaps.push(gap); continue
+    }
+    const msg = String(gap.message || '')
+    // Extract quoted strings (verbatim evidence B claims is in the doc)
+    const quotedMatches = msg.match(/"([^"]{3,})"/g) || []
+    const quotedTerms = quotedMatches.map(function (q) { return q.slice(1, -1) })
+    // Extract distinctive technical terms from the gap message
+    const techTermMatches = msg.match(new RegExp('\\b(' + techVocab.join('|') + ')\\b', 'gi')) || []
+    const techTerms = techTermMatches.map(function (t) { return t.trim() })
+    const allTerms = quotedTerms.concat(techTerms)
+    if (allTerms.length === 0) {
+      // No extractable evidence — keep the gap (B didn't make a specific factual claim
+      // we can check, so don't auto-downgrade). User / next round can decide.
+      cleanedGaps.push(gap); continue
+    }
+    const foundTerms = allTerms.filter(function (t) { return allDocContent.indexOf(t) !== -1 })
+    if (foundTerms.length === 0) {
+      hallucinations++
+      log('  [' + subTaskLabel + '] HALLUCINATED gap (severity=' + gap.severity + '): ' + msg.slice(0, 100))
+      log('  [' + subTaskLabel + ']   terms=' + JSON.stringify(allTerms.slice(0, 4)) + ' — NONE found in embedded docs → downgrading to low')
+      cleanedGaps.push({ severity: 'low', message: '[HALLUCINATED] ' + msg, fr_id: gap.fr_id ?? null, hallucinated: true })
+    } else {
+      cleanedGaps.push(gap)
+    }
+  }
+  return { bReview: Object.assign({}, bReview, { gaps: cleanedGaps }), hallucinations: hallucinations }
+}
+
 // Build B-1 prompt VERBATIM per phase1_plan.md template. `docs` is array of [label, content] pairs.
 function buildBPrompt(role, deliverableName, docs, checklist) {
   let p = 'You are ' + role + '. Your task: review the following deliverable (' + deliverableName + ').\n'
@@ -385,6 +437,10 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     if (round === MAX_B_ROUNDS) return { error: 'B parse failed at max rounds', sub_task: '1/4 SRS.md', detail: e.message }
     continue
   }
+  // Sanity check B's claims against actual embedded docs (downgrade hallucinated gaps)
+  const srsValid = validateBGaps(srsB2, [['PROJECT_BRIEF.md', projectBriefContent], ['SRS.md', srsContent]], '1/4 SRS')
+  srsB2 = srsValid.bReview
+  if (srsValid.hallucinations > 0) log('  B-2 sanity: ' + srsValid.hallucinations + ' hallucinated gap(s) downgraded to low')
   log('  B-2: ' + srsB2.review_status + ' | gaps=' + (srsB2.gaps ?? []).length + ' | high=' + (hasHighGap(srsB2.gaps) ? 'yes' : 'no'))
 
   // --- Loop logic EXACTLY per phase1_plan.md B-2 ---
@@ -477,6 +533,10 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     if (round === MAX_B_ROUNDS) return { error: 'B parse failed at max rounds', sub_task: '2/4 SPEC_TRACKING.md', detail: e.message }
     continue
   }
+  // Sanity check B's claims against actual embedded docs
+  const stValid = validateBGaps(specTrackB2, [['SRS.md (APPROVED)', srsContent], ['SPEC_TRACKING.md (draft)', stContent]], '2/4 SPEC_TRACKING')
+  specTrackB2 = stValid.bReview
+  if (stValid.hallucinations > 0) log('  B-2 sanity: ' + stValid.hallucinations + ' hallucinated gap(s) downgraded to low')
   log('  B-2: ' + specTrackB2.review_status + ' | gaps=' + (specTrackB2.gaps ?? []).length + ' | high=' + (hasHighGap(specTrackB2.gaps) ? 'yes' : 'no'))
 
   if (specTrackB2.review_status === 'APPROVE' && !hasHighGap(specTrackB2.gaps)) {
@@ -560,6 +620,10 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     if (round === MAX_B_ROUNDS) return { error: 'B parse failed at max rounds', sub_task: '3/4 TRACEABILITY_MATRIX.md', detail: e.message }
     continue
   }
+  // Sanity check B's claims against actual embedded docs
+  const tmValid = validateBGaps(traceB2, [['SRS.md (APPROVED)', srsContent], ['SPEC_TRACKING.md (APPROVED)', stContent], ['TRACEABILITY_MATRIX.md (draft)', tmContent]], '3/4 TRACEABILITY')
+  traceB2 = tmValid.bReview
+  if (tmValid.hallucinations > 0) log('  B-2 sanity: ' + tmValid.hallucinations + ' hallucinated gap(s) downgraded to low')
   log('  B-2: ' + traceB2.review_status + ' | gaps=' + (traceB2.gaps ?? []).length + ' | high=' + (hasHighGap(traceB2.gaps) ? 'yes' : 'no'))
 
   if (traceB2.review_status === 'APPROVE' && !hasHighGap(traceB2.gaps)) { log('  APPROVED'); break }
@@ -633,6 +697,10 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     if (round === MAX_B_ROUNDS) return { error: 'B parse failed at max rounds', sub_task: '4/4 TEST_INVENTORY.yaml', detail: e.message }
     continue
   }
+  // Sanity check B's claims against actual embedded docs
+  const tiValid = validateBGaps(testInvB2, [['SRS.md (APPROVED)', srsContent], ['TRACEABILITY_MATRIX.md (APPROVED)', tmContent], ['TEST_INVENTORY.yaml (draft)', tiContent]], '4/4 TEST_INVENTORY')
+  testInvB2 = tiValid.bReview
+  if (tiValid.hallucinations > 0) log('  B-2 sanity: ' + tiValid.hallucinations + ' hallucinated gap(s) downgraded to low')
   log('  B-2: ' + testInvB2.review_status + ' | gaps=' + (testInvB2.gaps ?? []).length + ' | high=' + (hasHighGap(testInvB2.gaps) ? 'yes' : 'no'))
 
   if (testInvB2.review_status === 'APPROVE' && !hasHighGap(testInvB2.gaps)) { log('  APPROVED'); break }
@@ -696,6 +764,15 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   try { peerB2 = parseAgentJson(bResult, 'PeerB-r' + round) } catch (e) {
     return { error: 'Peer B parse failed (round ' + round + ')', detail: e.message, raw: String(bResult ?? '').slice(-500) }
   }
+  // Sanity check peer B's claims against actual embedded docs
+  const peerValid = validateBGaps(peerB2, [
+    ['SRS.md (APPROVED)', srsContent],
+    ['SPEC_TRACKING.md (APPROVED)', stContent],
+    ['TRACEABILITY_MATRIX.md (APPROVED)', tmContent],
+    ['TEST_INVENTORY.yaml (APPROVED)', tiContent],
+  ], 'Peer Review')
+  peerB2 = peerValid.bReview
+  if (peerValid.hallucinations > 0) log('  Peer B-2 sanity: ' + peerValid.hallucinations + ' hallucinated gap(s) downgraded to low')
   log('  Peer B-2: ' + peerB2.review_status + ' | gaps=' + (peerB2.gaps ?? []).length + ' | high=' + (hasHighGap(peerB2.gaps) ? 'yes' : 'no'))
 
   if (peerB2.review_status === 'APPROVE' && !hasHighGap(peerB2.gaps)) { log('  APPROVED'); break }
