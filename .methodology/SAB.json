@@ -23,6 +23,7 @@
       ],
       "allowed_dependencies": [
         "store",
+        "redactor",
         "config"
       ]
     },
@@ -36,11 +37,25 @@
       ]
     },
     {
+      "name": "redactor",
+      "modules": [
+        "03-development/src/taskq/redactor.py"
+      ],
+      "allowed_dependencies": []
+    },
+    {
       "name": "config",
       "modules": [
         "03-development/src/taskq/config.py",
         "03-development/src/taskq/__init__.py",
         "03-development/src/taskq/models.py"
+      ],
+      "allowed_dependencies": []
+    },
+    {
+      "name": "scripts",
+      "modules": [
+        "scripts/shell_audit.py"
       ],
       "allowed_dependencies": []
     }
