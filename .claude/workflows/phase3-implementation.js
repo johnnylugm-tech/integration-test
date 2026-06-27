@@ -161,19 +161,32 @@ for (let attempt = 1; attempt <= 3; attempt++) {
     }
   } catch (e) { log('  ctx-check agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
 
-  // Step 2: cat the file and parse. Treat empty fr_ids as failure.
+  // Step 2: cat the file AND verify fr_ids count via Python parse.
+  // Bug #125 fix: require FR_COUNT_N marker so hallucinated agent output
+  // (toolCalls=0, fast response) cannot pass the parse step.
   let ctxResult = ''
+  let frCountMarker = ''
   try {
     ctxResult = await agent(
-      'You MUST use the Bash tool. Run exactly:\n'
+      'You MUST use the Bash tool. Run ALL of these in one bash call:\n'
       + 'cat ' + ctxFile + '\n'
-      + 'Return the EXACT stdout (the JSON content) as your final message. No commentary, no markdown fences.',
+      + PY + ' -c "import json; d=json.load(open(\'' + ctxFile + '\')); print(\'FR_COUNT_\'+str(len(d.get(\'fr_ids\',[]))))"\n'
+      + 'Return BOTH outputs concatenated. The first is the raw JSON, the second must contain "FR_COUNT_<N>".',
       { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
     )
+    const m = String(ctxResult ?? '').match(/FR_COUNT_(\d+)/)
+    if (!m || parseInt(m[1], 10) < 1) {
+      log('  load-ctx hallucinated (no FR_COUNT>=1) (attempt ' + attempt + '): ' + String(ctxResult ?? '').slice(0, 200))
+      continue
+    }
+    frCountMarker = m[0]
   } catch (e) { log('  load-ctx agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
   try {
     ctx = parseAgentJson(ctxResult, 'load-ctx')
-    if (Array.isArray(ctx.fr_ids) && ctx.fr_ids.length > 0) break
+    if (Array.isArray(ctx.fr_ids) && ctx.fr_ids.length > 0) {
+      log('  load-ctx OK via ' + frCountMarker)
+      break
+    }
     log('  load-ctx returned empty fr_ids (attempt ' + attempt + '): keys=' + Object.keys(ctx ?? {}).join(','))
     ctx = null
   } catch (e) { log('  load-ctx parse failed (attempt ' + attempt + '): ' + e.message.slice(0, 120)); ctx = null }
