@@ -55,15 +55,35 @@
 
 <!-- One section per FR from SRS §2. Generate using derive_test_cases.md 7-Q protocol. -->
 
-### FR-01: <!-- one-line description from SRS §2 -->
+### FR-01: Task Model and Persistence
 
-**Classification**: <!-- API_ENDPOINT | DATA_ENTITY | ALGORITHM | STATE_MACHINE | INTEGRATION | SECURITY_CONTROL | INFRASTRUCTURE -->  
-**Active Patterns**: <!-- NP-01, NP-04 | none -->
+**Classification**: API_ENDPOINT
+**Active Patterns**: NP-01 (validation), NP-04 (atomic write), NFR-02 (security), NFR-03 (reliability)
 
 | # | Test Function | Inputs | Type | Derivation |
 |---|---|---|---|---|
-| 1 | `test_fr01_` | source="視頻"; expected="影片" | happy_path | Q1 |
-| 2 | `test_fr01_` | source="和"; expected="ㄏㄢˋ" | validation | Q2 |
+| 1 | `test_cli_fr01_empty_command_string_rejected` | command="" | validation | Q2 |
+| 2 | `test_cli_fr01_missing_command_arg_rejected` | argv=["submit"] | validation | Q2 |
+| 3 | `test_cli_fr01_whitespace_single_space_rejected` | command=" " | validation | Q2 |
+| 4 | `test_cli_fr01_whitespace_tabs_newlines_rejected` | command="\t\n \r" | validation | Q2 |
+| 5 | `test_cli_fr01_length_1000_accepted` | command_len=1000 | happy_path | Q1 |
+| 6 | `test_cli_fr01_length_1001_rejected` | command_len=1001 | validation | Q2 |
+| 7 | `test_cli_fr01_blacklist_semicolon_rejected` | command="echo a;b" | validation | Q2 |
+| 8 | `test_cli_fr01_blacklist_pipe_rejected` | command="echo a&#124;b" | validation | Q2 |
+| 9 | `test_cli_fr01_blacklist_ampersand_rejected` | command="echo a&b" | validation | Q2 |
+| 10 | `test_cli_fr01_blacklist_dollar_rejected` | command="echo \$HOME" | validation | Q2 |
+| 11 | `test_cli_fr01_blacklist_gt_rejected` | command="echo a>b" | validation | Q2 |
+| 12 | `test_cli_fr01_blacklist_lt_rejected` | command="echo a<b" | validation | Q2 |
+| 13 | `test_cli_fr01_blacklist_backtick_rejected` | command="\`echo\`" | validation | Q2 |
+| 14 | `test_unit_fr01_task_id_format_eight_hex` | (none) | unit | Q4 |
+| 15 | `test_unit_fr01_task_id_uniqueness_1000_iter` | n=1000 | unit | Q4 |
+| 16 | `test_unit_fr01_record_fields_present` | (none) | unit | Q4 |
+| 17 | `test_unit_fr01_created_at_iso8601_utc_parseable` | (none) | unit | Q4 |
+| 18 | `test_integration_fr01_atomic_write_no_tmp_leftover` | (none) | integration | Q7 |
+| 19 | `test_integration_fr01_atomic_write_sigkill_trap` | patch=os.replace.raise | integration | Q7 |
+| 20 | `test_integration_fr01_corrupted_truncated_exit_one` | tasks.json="{truncated" | integration | Q7 |
+| 21 | `test_integration_fr01_corrupted_garbage_exit_one` | tasks.json=b"garbage_bytes\xff\x00\xff" | integration | Q7 |
+| 22 | `test_integration_fr01_corrupted_root_not_object_exit_one` | tasks.json="[1,2,3]" | integration | Q7 |
 
 <!-- Inputs column: concrete declared values as key="value", semicolon-separated.
      MUST be the TRUE value (e.g. expected="ㄌㄜˋ ㄙㄜˋ" with a real space), NOT the

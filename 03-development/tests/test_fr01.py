@@ -141,7 +141,7 @@ def test_cli_fr01_length_1001_rejected(tmp_home):
 
 
 def test_cli_fr01_blacklist_semicolon_rejected(tmp_home):
-    """AC-FR01-05: command containing ';' → exit 2, no write."""
+    """AC-FR01-05: command containing ';' → exit 2, no write. [NFR-02]"""
     command = "echo a;b"
     rc = cli.main(["submit", command])
     assert rc == 2
@@ -280,7 +280,7 @@ def test_unit_fr01_created_at_iso8601_utc_parseable():
 # Section 3 — Integration tests (AC-FR01-08, AC-FR01-09)
 # ===========================================================================
 
-def test_integration_fr01_atomic_write_no_tmp_leftover(tmp_home):
+def test_integration_fr01_atomic_write_no_tmp_leftover(tmp_home):  # [NFR-03]
     """AC-FR01-08: after a successful submit, no `.tmp` file remains."""
     rc = cli.main(["submit", "echo hi"])
     assert rc == 0
