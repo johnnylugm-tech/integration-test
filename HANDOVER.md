@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P3-mid-20260627`  
+**Checkpoint**: `P3-pre-gate2-20260627`  
 **Phase**: P3 — Implementation  
-**Generated**: 2026-06-27T15:49:43Z
+**Generated**: 2026-06-27T15:49:48Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -48,11 +48,11 @@ cat .methodology/phase3_plan.md
 
 ## 任務背景
 
-P3 Implementation in progress (≥50% milestone). 3/3 FRs done.
+P3 Implementation complete. Gate 2 not yet executed.
 
 ## 目前執行狀況
 
-3/3 FRs Gate 1 PASS [FR-01,FR-02,FR-03]. TDD cycles complete for passing FRs.
+All 3 FR(s) Gate 1 PASS [FR-01,FR-02,FR-03]. Gate 2 evaluation not yet started.
 
 **A/B Session Results:**
   - FR-01 / developer: **complete**
@@ -60,11 +60,12 @@ P3 Implementation in progress (≥50% milestone). 3/3 FRs done.
   - FR-03 / developer: **complete**
 
 **Recently Committed Files:**
+  - `.harness/traces/agent_trajectory.jsonl`
+  - `HANDOVER.md`
   - `.methodology/SAB.json`
   - `harness`
   - `.coverage_runner.sh`
   - `.github/workflows/harness_quality_gate.yml`
-  - `.harness/traces/agent_trajectory.jsonl`
   - `.methodology/.gate1_scores.json`
   - `.methodology/decision_logs/2026-06-27/GATE_3_001.yaml`
   - `.methodology/effort_metrics.db`
@@ -79,13 +80,12 @@ P3 Implementation in progress (≥50% milestone). 3/3 FRs done.
   - `.run_cov.py`
   - `.run_cov.sh`
   - `.run_cov_quiet.sh`
-  - `00-summary/Phase3_STAGE_PASS.md`
 
 ## 接下來的工作
 
-1. Complete remaining 0 FR(s): (all FRs Gate 1 PASS — ready for P3-pre-gate2)
-2. Ensure each FR has passing unit tests (TDD)
-3. When all FRs done → `push-milestone --type p3-pre-gate2`
+1. Run Gate 2 evaluation (target score ≥ 75)
+2. Fix any failures during evaluation
+3. On Gate 2 PASS → `finalize-gate --gate 2` handles push + HANDOVER
 
 ## 注意事項
 
@@ -95,9 +95,7 @@ P3 Implementation in progress (≥50% milestone). 3/3 FRs done.
 
 ## 附加資訊
 
-- **fr_done**: 3
-- **fr_total**: 3
-- **remaining_frs**: (all FRs Gate 1 PASS — ready for P3-pre-gate2)
+- **fr_count**: 3
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*
