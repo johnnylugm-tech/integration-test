@@ -111,19 +111,18 @@ if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightR
 // Phase: Env Check
 // ════════════════════════════════════════════════════════════════════════
 phase('Env Check')
-log('run-env-check + finalize-env-check')
+log('run-env-check (root-cause fix: CLI exit code reflects ready flag)')
+// Bug #127 root-cause fix (2026-06-27): `cmd_run_env_check` now returns
+// exit 0 when ready=true and 1 when ready=false (previously always 0).
+// Workflows check `$?` directly with no LLM orchestrator agent in the loop.
 const envReport = await agent(
-  'YOU ARE THE ENV-CHECK ORCHESTRATOR. Run ONCE before the FR loop.\n'
-  + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-  + 'Steps:\n'
-  + '1. `' + PY + ' ' + REPO + '/harness_cli.py run-env-check --phase 7 --project ' + REPO + '` — read the printed prompt.\n'
-  + '2. Evaluate inline and write ' + REPO + '/.sessi-work/env_check_result.json.\n'
-  + '3. `' + PY + ' ' + REPO + '/harness_cli.py finalize-env-check --phase 7 --project ' + REPO + '`.\n\n'
-  + 'Report: "ENV-CHECK: PASS" or "ENV-CHECK: FAIL — <reason>".\n\n'
-  + 'SCOPE RULES:\n- DO NOT run TDD/advance/milestone commands.\n- ONLY env-check.',
+  'You MUST use the Bash tool. Run exactly:\n'
+  + PY + ' ' + REPO + '/harness_cli.py run-env-check --phase 7 --project ' + REPO + '\n'
+  + 'echo "ENV_CHECK_RC=$?"\n'
+  + 'Return the raw stdout verbatim. Do not paraphrase.',
   { label: 'env-check', phase: 'Env Check', agentType: 'general-purpose' },
 )
-if (!(typeof envReport === 'string' && /ENV-CHECK:\s*PASS/.test(envReport))) {
+if (!(typeof envReport === 'string' && /ENV_CHECK_RC=0\b/.test(envReport))) {
   return { error: 'Phase 7 env-check did not PASS', raw: String(envReport ?? '').slice(-500) }
 }
 
@@ -138,9 +137,13 @@ let ctx = null
 const ctxFile = REPO + '/.sessi-work/phase7_ctx.json'
 for (let attempt = 1; attempt <= 3; attempt++) {
   try {
+    // Bug #126 fix (2026-06-27): `wc -c` defaults to fixed-width right-padded
+    // output (`     789`), so `FILE_OK_$(wc -c ...)` actually produces
+    // `FILE_OK_     789` — the strict regex `/FILE_OK_\d+/` never matched.
+    // Root-cause fix: control the OUTPUT side via `awk '{print $1}'`.
     const existsRaw = await agent(
       'You MUST use the Bash tool. Run exactly:\n'
-      + 'test -s ' + ctxFile + ' && echo "FILE_OK_$(wc -c < ' + ctxFile + ')" || echo "FILE_MISSING"\n'
+      + 'test -s ' + ctxFile + ' && echo "FILE_OK_$(wc -c < ' + ctxFile + ' | awk \'{print $1}\')" || echo "FILE_MISSING"\n'
       + 'Return the raw stdout as your final message.',
       { label: 'ctx-check-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
     )
@@ -148,7 +151,7 @@ for (let attempt = 1; attempt <= 3; attempt++) {
       log('  ctx file missing/empty (attempt ' + attempt + ') — regenerating')
       await agent(
         'You MUST use the Bash tool. Run exactly:\n'
-        + PY + ' ' + REPO + '/harness_cli.py load-context --phase 7 --project ' + REPO + ' --json > ' + ctxFile + ' && echo "REGEN_OK_$(wc -c < ' + ctxFile + ')"\n'
+        + PY + ' ' + REPO + '/harness_cli.py load-context --phase 7 --project ' + REPO + ' --json > ' + ctxFile + ' && echo "REGEN_OK_$(wc -c < ' + ctxFile + ' | awk \'{print $1}\')"\n'
         + 'Return the raw stdout as your final message.',
         { label: 'ctx-regen-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
       )
