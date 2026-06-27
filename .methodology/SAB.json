@@ -23,7 +23,6 @@
       ],
       "allowed_dependencies": [
         "store",
-        "redactor",
         "config"
       ]
     },
@@ -35,13 +34,6 @@
       "allowed_dependencies": [
         "config"
       ]
-    },
-    {
-      "name": "redactor",
-      "modules": [
-        "03-development/src/taskq/redactor.py"
-      ],
-      "allowed_dependencies": []
     },
     {
       "name": "config",
@@ -68,7 +60,6 @@
     ],
     "executor": [
       "store",
-      "redactor",
       "config"
     ],
     "store": [

@@ -141,36 +141,41 @@ let ctx = null
 const ctxFile = REPO + '/.sessi-work/phase8_ctx.json'
 for (let attempt = 1; attempt <= 3; attempt++) {
   try {
-    // Bug #126 fix (2026-06-27): `wc -c` defaults to fixed-width right-padded
-    // output (`     789`), so `FILE_OK_$(wc -c ...)` actually produces
-    // `FILE_OK_     789` — the strict regex `/FILE_OK_\d+/` never matched.
-    // Root-cause fix: control the OUTPUT side via `awk '{print $1}'`.
+    // Bug #134 fix (2026-06-28): validate JSON-parseable, not just non-zero size.
+    // Previous `test -s FILE && echo FILE_OK_<size>` passed for partial writes.
+    // Root-cause: use `python3 -c 'json.load(...)'` so incomplete JSON raises
+    // mid-write → no FILE_OK marker → regen path triggered.
+    // Bug #136 sibling: bash built via template literal (single quotes safe).
+    const ctxCheckCmd = `${PY} -c "import json,os,sys; json.load(open('${ctxFile}')); print('FILE_OK_'+str(os.path.getsize('${ctxFile}')))" || echo FILE_MISSING`
     const existsRaw = await agent(
-      'You MUST use the Bash tool. Run exactly:\n'
-      + 'test -s ' + ctxFile + ' && echo "FILE_OK_$(wc -c < ' + ctxFile + ' | awk \'{print $1}\')" || echo "FILE_MISSING"\n'
-      + 'Return the raw stdout as your final message.',
+      `You MUST use the Bash tool. Run exactly:\n${ctxCheckCmd}\nReturn the raw stdout as your final message. Do not paraphrase.`,
       { label: 'ctx-check-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
     )
     if (!/FILE_OK_\d+/.test(String(existsRaw ?? ''))) {
-      log('  ctx file missing/empty (attempt ' + attempt + ') — regenerating')
+      log('  ctx file missing/invalid (attempt ' + attempt + ') — regenerating')
+      const ctxRegenCmd = `${PY} ${REPO}/harness_cli.py load-context --phase 8 --project ${REPO} --json > ${ctxFile} && ${PY} -c "import json,os; json.load(open('${ctxFile}')); print('REGEN_OK_'+str(os.path.getsize('${ctxFile}')))"`
       await agent(
-        'You MUST use the Bash tool. Run exactly:\n'
-        + PY + ' ' + REPO + '/harness_cli.py load-context --phase 8 --project ' + REPO + ' --json > ' + ctxFile + ' && echo "REGEN_OK_$(wc -c < ' + ctxFile + ' | awk \'{print $1}\')"\n'
-        + 'Return the raw stdout as your final message.',
+        `You MUST use the Bash tool. Run exactly:\n${ctxRegenCmd}\nReturn the raw stdout as your final message.`,
         { label: 'ctx-regen-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
       )
       continue
     }
   } catch (e) { log('  ctx-check agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
 
+  // Bug #135 fix (2026-06-28): emit parseable JSON via Python, not `cat`.
+  // Root-cause: agent LLM paraphrased cat output into prose → balancedJsonAt
+  // failed. Have Python emit a single JSON line with ONLY fr_ids + fr_count.
   let ctxResult = ''
   try {
+    const ctxParseCmd = `${PY} -c "import json; d=json.load(open('${ctxFile}')); print(json.dumps({'fr_ids':d.get('fr_ids',[]),'fr_count':len(d.get('fr_ids',[])),'fr_details_keys':list((d.get('fr_details') or {}).keys())}))"`
     ctxResult = await agent(
-      'You MUST use the Bash tool. Run exactly:\n'
-      + 'cat ' + ctxFile + '\n'
-      + 'Return the EXACT stdout as your final message. No commentary, no markdown fences.',
+      `You MUST use the Bash tool. Run exactly:\n${ctxParseCmd}\nReturn the raw stdout as your final message. Do not paraphrase. Do not add commentary.`,
       { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
     )
+    if (!/"fr_count"\s*:\s*[1-9]\d*/.test(String(ctxResult ?? ''))) {
+      log('  load-ctx agent did not return parseable JSON (attempt ' + attempt + '): ' + String(ctxResult ?? '').slice(0, 200))
+      continue
+    }
   } catch (e) { log('  load-ctx agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
   try {
     ctx = parseAgentJson(ctxResult, 'load-ctx')

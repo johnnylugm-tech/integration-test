@@ -148,44 +148,72 @@ for (let attempt = 1; attempt <= 3; attempt++) {
   // Root-cause fix: control the OUTPUT side via `awk '{print $1}'` to strip
   // padding. Regex stays strict (`/FILE_OK_\d+/`) — single-sided fix.
   try {
+    // Bug #134 fix (2026-06-28): root-cause fix — previous check was
+    // `test -s FILE && echo FILE_OK_<size>` which passed for ANY non-zero
+    // file size, including partial writes, truncated buffers, or fragments
+    // left by a crashed writer. The next step (load-ctx-a) then ran
+    // `balancedJsonAt` on the agent's cat output and threw PARSE_FAIL
+    // because the JSON was incomplete — recovery path masked the symptom
+    // (FR_COUNT_N marker) but the partial file passed FILE_OK_ twice.
+    //
+    // Correct fix: validate the file PARSES as JSON, not just that it
+    // has bytes. `python3 -c 'json.load(...)'` raises JSONDecodeError
+    // mid-write, returning non-zero → no FILE_OK marker. Use Python's
+    // json module (already required by load-context) so no new deps.
+    //
+    // Bash is built via template literals so JS string escaping doesn't
+    // fight bash single-quotes (Bug #136 sibling case — advance prompt's
+    // `.current_phase // 0` was eaten by JS property-access + `//` comment).
+    const ctxCheckCmd = `${PY} -c "import json,os,sys; json.load(open('${ctxFile}')); print('FILE_OK_'+str(os.path.getsize('${ctxFile}')))" || echo FILE_MISSING`
     const existsRaw = await agent(
-      'You MUST use the Bash tool. Run exactly:\n'
-      + 'test -s ' + ctxFile + ' && echo "FILE_OK_$(wc -c < ' + ctxFile + ' | awk \'{print $1}\')" || echo "FILE_MISSING"\n'
-      + 'Return the raw stdout as your final message. Do not paraphrase.',
+      `You MUST use the Bash tool. Run exactly:\n${ctxCheckCmd}\nReturn the raw stdout as your final message. Do not paraphrase.`,
       { label: 'ctx-check-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
     )
     if (!/FILE_OK_\d+/.test(String(existsRaw ?? ''))) {
-      log('  ctx file missing/empty (attempt ' + attempt + ') — regenerating')
+      log('  ctx file missing/invalid (attempt ' + attempt + ') — regenerating')
+      const ctxRegenCmd = `${PY} ${REPO}/harness_cli.py load-context --phase 3 --project ${REPO} --json > ${ctxFile} && ${PY} -c "import json,os; json.load(open('${ctxFile}')); print('REGEN_OK_'+str(os.path.getsize('${ctxFile}')))"`
       await agent(
-        'You MUST use the Bash tool. Run exactly:\n'
-        + PY + ' ' + REPO + '/harness_cli.py load-context --phase 3 --project ' + REPO + ' --json > ' + ctxFile + ' && echo "REGEN_OK_$(wc -c < ' + ctxFile + ' | awk \'{print $1}\')"\n'
-        + 'Return the raw stdout as your final message.',
+        `You MUST use the Bash tool. Run exactly:\n${ctxRegenCmd}\nReturn the raw stdout as your final message.`,
         { label: 'ctx-regen-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
       )
       continue
     }
   } catch (e) { log('  ctx-check agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
 
-  // Step 2: cat the file AND verify fr_ids count via Python parse.
-  // Bug #125 fix: require FR_COUNT_N marker so hallucinated agent output
-  // (toolCalls=0, fast response) cannot pass the parse step.
-  // Bug #126: regex whitespace-tolerant (same `wc -c` padding class).
+  // Step 2: have Python emit a single-line JSON string with EXACTLY the
+  // shape the workflow needs (fr_ids + fr_count). The agent's only job is
+  // to run the bash command and return raw stdout — no interpretation.
+  //
+  // Bug #135 fix (2026-06-28): root-cause fix — previous design did
+  // `cat FILE` and asked the agent to "return raw stdout verbatim". The
+  // LLM agent routinely paraphrased the JSON into prose (visible in logs
+  // as tail like "Ds (FR-01, FR-02, FR-03)\n- FR_COUNT_3 marker confirmed...")
+  // so `balancedJsonAt` threw PARSE_FAIL even though the file was valid.
+  // The FR_COUNT_N marker escape hatch masked the symptom but never fixed
+  // the underlying "agent returning prose instead of machine output" class
+  // of bug.
+  //
+  // Correct fix: don't rely on the agent to forward raw stdout. Have Python
+  // emit a single JSON line containing ONLY the workflow-relevant fields
+  // (fr_ids + fr_count). The agent returns that one line; the workflow
+  // parses it directly. Eliminates `balancedJsonAt` ambiguity entirely.
+  // As a bonus, this also lets us drop the FR_COUNT marker check — the
+  // JSON itself contains fr_count.
   let ctxResult = ''
   let frCountMarker = ''
   try {
+    const ctxParseCmd = `${PY} -c "import json; d=json.load(open('${ctxFile}')); print(json.dumps({'fr_ids':d.get('fr_ids',[]),'fr_count':len(d.get('fr_ids',[])),'fr_details_keys':list((d.get('fr_details') or {}).keys())}))"`
     ctxResult = await agent(
-      'You MUST use the Bash tool. Run ALL of these in one bash call:\n'
-      + 'cat ' + ctxFile + '\n'
-      + PY + ' -c "import json; d=json.load(open(\'' + ctxFile + '\')); print(\'FR_COUNT_\'+str(len(d.get(\'fr_ids\',[]))))"\n'
-      + 'Return BOTH outputs concatenated. The first is the raw JSON, the second must contain "FR_COUNT_<N>".',
+      `You MUST use the Bash tool. Run exactly:\n${ctxParseCmd}\nReturn the raw stdout as your final message. Do not paraphrase. Do not add commentary.`,
       { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
     )
-    const m = String(ctxResult ?? '').match(/FR_COUNT_(\d+)/)
-    if (!m || parseInt(m[1], 10) < 1) {
-      log('  load-ctx hallucinated (no FR_COUNT>=1) (attempt ' + attempt + '): ' + String(ctxResult ?? '').slice(0, 200))
+    // Sanity: must contain a JSON object with fr_count >= 1. If the agent
+    // paraphrased, fall through to regen retry (existing recovery path).
+    if (!/"fr_count"\s*:\s*[1-9]\d*/.test(String(ctxResult ?? ''))) {
+      log('  load-ctx agent did not return parseable JSON (attempt ' + attempt + '): ' + String(ctxResult ?? '').slice(0, 200))
       continue
     }
-    frCountMarker = m[0]
+    frCountMarker = 'JSON_OK'
   } catch (e) { log('  load-ctx agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
   try {
     ctx = parseAgentJson(ctxResult, 'load-ctx')
@@ -349,7 +377,7 @@ const advanceReport = await agent(
   'YOU ARE THE PHASE-3 EXIT ORCHESTRATOR. Push formal exit + advance to Phase 4.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '0. GUARD — already advanced? `PHASE=$(jq -r '.current_phase // 0' ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 4 ]`. If Phase 4 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
+  + '0. GUARD — already advanced? `PHASE=$(jq -r .current_phase ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 4 ]`. If Phase 4 is confirmed, report "ADVANCE: PASS (already advanced)" and stop.\n'
   + '1. GUARD + PUSH ⑤ p3-post-gate2: `git -C ' + REPO + ' log --oneline --grep="p3-post-gate2" -1`. If a commit exists, skip the push. Else: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p3-post-gate2 --project ' + REPO + ' --fr-ids ' + gate1Pass.join(',') + '`\n'
   + '   Pre-flight (enforced): gate2_result.json composite ≥75 + per-FR Gate 1 sentinel .sessi-work/sentinels/g1_p3_<fr>.flag exists for every FR. If BLOCKED, read the error list and fix.\n'
   + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 3 --project ' + REPO + '`\n'
