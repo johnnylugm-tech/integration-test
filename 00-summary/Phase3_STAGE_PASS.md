@@ -3,13 +3,13 @@
 Generated: 2026-06-27 16:35 UTC
 
 ## Gate Score
-Gate 2 Composite Score: **94.88**
+Gate 1 Composite Score: **N/A**
 
 ## Quality Status
-quality_complete: **True**
+quality_complete: **False**
 
 ## Deliverables
 Phase 3 deliverables verified by PhaseArtifactRegistry.
 
 ## Summary
-Phase 3 exit gate PASS.
+Phase 3 exit gate FAIL.
