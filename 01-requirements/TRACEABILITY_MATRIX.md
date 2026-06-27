@@ -39,7 +39,13 @@ Provides complete **FR -> SRS -> Code -> Test** bidirectional traceability suppo
 
 | Code File | Test File | Coverage | Status |
 |-----------|-----------|----------|--------|
-| | | | |
+| 03-development/src/taskq/store.py | 03-development/tests/test_fr01.py | full | listed |
+| 03-development/src/taskq/models.py | 03-development/tests/test_fr01.py | full | listed |
+| 03-development/src/taskq/executor.py | 03-development/tests/test_fr02.py | full | listed |
+| 03-development/src/taskq/cli.py | 03-development/tests/test_fr01.py | full | listed |
+| 03-development/src/taskq/cli.py | 03-development/tests/test_fr03.py | full | listed |
+| 03-development/src/taskq/__main__.py | 03-development/tests/test_fr01.py | full | listed |
+| 03-development/src/taskq/config.py | 03-development/tests/test_fr01.py | full | listed |
 
 ---
 
