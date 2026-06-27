@@ -201,18 +201,12 @@
   },
   "crg_review_context": {
     "status": "ok",
-    "summary": "Review context for 19 changed file(s):\n  - Risk: high\n  - 198 impacted nodes in 25 files",
-    "risk": "high",
-    "changed_file_count": 19,
-    "impacted_file_count": 25,
-    "key_entities": [
-      "/Users/johnny/projects/integration-test/03-development/src/taskq/__main__.py",
-      "/Users/johnny/projects/integration-test/03-development/tests/test_fr02.py",
-      "_make_task",
-      "run_one",
-      "spy_run"
-    ],
-    "test_gaps": 2,
+    "summary": "Review context for 11 changed file(s):\n  - Risk: low\n  - 0 impacted nodes in 0 files",
+    "risk": "low",
+    "changed_file_count": 11,
+    "impacted_file_count": 0,
+    "key_entities": [],
+    "test_gaps": 0,
     "next_tool_suggestions": [
       "detect_changes",
       "get_affected_flows",
@@ -220,7 +214,7 @@
     ],
     "context_savings": {
       "estimated": true,
-      "saved_tokens": 27939,
+      "saved_tokens": 16586,
       "saved_percent": 100
     }
   },
@@ -229,21 +223,15 @@
   "passed": true,
   "crg_impact_radius": {
     "status": "ok",
-    "summary": "Blast radius for 19 changed file(s):\n  - 42 nodes directly changed\n  - 198 nodes impacted (within 2 hops)\n  - 25 additional files affected",
-    "risk": "high",
-    "impacted_file_count": 25,
-    "key_entities": [
-      "/Users/johnny/projects/integration-test/.claude/workflows/phase3-implementation.js",
-      "/Users/johnny/projects/integration-test/.claude/workflows/phase4-testing.js",
-      "/Users/johnny/projects/integration-test/.claude/workflows/phase5-verification.js",
-      "/Users/johnny/projects/integration-test/.claude/workflows/phase7-risk.js",
-      "/Users/johnny/projects/integration-test/.claude/workflows/phase8-config.js"
-    ],
+    "summary": "Blast radius for 11 changed file(s):\n  - 0 nodes directly changed\n  - 0 nodes impacted (within 2 hops)\n  - 0 additional files affected",
+    "risk": "low",
+    "impacted_file_count": 0,
+    "key_entities": [],
     "truncated": false,
     "context_savings": {
       "estimated": true,
-      "saved_tokens": 27899,
-      "saved_percent": 99
+      "saved_tokens": 16599,
+      "saved_percent": 100
     }
   }
 }
