@@ -98,7 +98,7 @@ def test_fr02_run_happy_path_exit_zero(tmp_home):
     assert rc == 0
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
-    expected_status = rec.get("status")
+    rec.get("status")
     rec.get("exit_code")
     assert rec["status"] == "done"
     assert rec["exit_code"] == 0
@@ -114,7 +114,7 @@ def test_fr02_run_nonzero_exit_marks_failed(tmp_home):
     assert rc in (0, 1)
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
-    expected_status = rec.get("status")
+    rec.get("status")
     expected_exit_code = rec.get("exit_code")
     # Sub-assertion FR02-retry-non-zero (case 2 trigger: expected_exit_code=7
     # unquoted in TEST_SPEC → SpecAssertionParser doesn't capture it, so the
@@ -138,7 +138,7 @@ def test_fr02_run_timeout_marks_timeout(tmp_home):
     assert rc == 4
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
-    expected_status = rec.get("status")
+    rec.get("status")
     assert rec["status"] == "timeout"
 
 
@@ -154,7 +154,7 @@ def test_fr02_run_state_pending_to_done(tmp_home):
 
     post = json.loads((tmp_home / "tasks.json").read_text())
     rec = post[tid]
-    expected_status = rec.get("status")
+    rec.get("status")
     assert pre[tid]["status"] == "pending"
     assert rec["status"] == "done"
 
@@ -167,7 +167,7 @@ def test_fr02_run_retry_after_failed(tmp_home):
     assert rc in (0, 1)
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
-    expected_status = rec.get("status")
+    rec.get("status")
     assert rec["status"] == "failed"
 
 
@@ -184,7 +184,7 @@ def test_fr02_run_retry_after_timeout(tmp_home):
     assert rc == 4
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
-    expected_status = rec.get("status")
+    rec.get("status")
     assert rec["status"] == "timeout"
 
 
@@ -196,7 +196,7 @@ def test_fr02_run_retry_exhausted_returns_failed(tmp_home):
     assert rc in (0, 1)
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
-    expected_status = rec.get("status")
+    rec.get("status")
     assert rec["status"] == "failed"
 
 
