@@ -1,12 +1,73 @@
 {
   "summary": {
-    "total": 0,
+    "total": 10,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 0,
+    "orphaned": 10,
     "critical": 0,
     "major": 0,
-    "minor": 0
+    "minor": 10
   },
-  "gaps": []
+  "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'main' has no corresponding specification in SPEC.md",
+      "action": "Add spec for main or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'home_dir' has no corresponding specification in SPEC.md",
+      "action": "Add spec for home_dir or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'tasks_path' has no corresponding specification in SPEC.md",
+      "action": "Add spec for tasks_path or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'run' has no corresponding specification in SPEC.md",
+      "action": "Add spec for run or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'new_task_id' has no corresponding specification in SPEC.md",
+      "action": "Add spec for new_task_id or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'new_record' has no corresponding specification in SPEC.md",
+      "action": "Add spec for new_record or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'StoreCorrupted' has no corresponding specification in SPEC.md",
+      "action": "Add spec for StoreCorrupted or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'load' has no corresponding specification in SPEC.md",
+      "action": "Add spec for load or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'save' has no corresponding specification in SPEC.md",
+      "action": "Add spec for save or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'clear' has no corresponding specification in SPEC.md",
+      "action": "Add spec for clear or remove if unnecessary"
+    }
+  ]
 }
