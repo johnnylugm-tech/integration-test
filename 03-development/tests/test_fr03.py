@@ -32,6 +32,7 @@ and c is the trigger value extracted from the case's declared Inputs.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -62,11 +63,22 @@ def tmp_home(monkeypatch, tmp_path):
 
 
 def _run_cli(*argv: str) -> subprocess.CompletedProcess:
-    """Invoke `python -m taskq <argv>` as a subprocess and capture result."""
+    """Invoke `python -m taskq <argv>` as a subprocess and capture result.
+
+    Bug #129 fix (2026-06-27): subprocess does NOT inherit pytest's
+    `pythonpath = 03-development/src` from setup.cfg — it only inherits the
+    parent's environment variables, not sys.path. Without setting PYTHONPATH,
+    the subprocess raises `No module named taskq` and tests fail for the
+    WRONG reason (environment, not feature behavior). Match the convention
+    used in test_fr02.py's manual subprocess.run calls (which set
+    `PYTHONPATH=03-development/src`).
+    """
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
     return subprocess.run(
         [sys.executable, "-m", "taskq", *argv],
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
@@ -201,8 +213,8 @@ def test_fr03_status_json_flag_emits_single_line_json(tmp_home):
     out = proc.stdout.rstrip("\n")
     # Sub-assertion FR03-json-single-line (case 5 trigger:
     # expected_output_is_single_line_json=True).
-    if expected_output_is_single_line_json is True:
-        assert expected_output_is_single_line_json is True
+    if expected_output_is_single_line_json:
+        assert expected_output_is_single_line_json
     non_empty_lines = [ln for ln in out.splitlines() if ln]
     assert len(non_empty_lines) == 1, (
         f"--json output must be a single line, got {len(non_empty_lines)} lines: {out!r}"
@@ -226,8 +238,8 @@ def test_fr03_list_json_flag_emits_array_json(tmp_home):
     out = proc.stdout.rstrip("\n")
     # Sub-assertion FR03-json-single-line (case 6 trigger:
     # expected_output_is_single_line_json=True).
-    if expected_output_is_single_line_json is True:
-        assert expected_output_is_single_line_json is True
+    if expected_output_is_single_line_json:
+        assert expected_output_is_single_line_json
     non_empty_lines = [ln for ln in out.splitlines() if ln]
     assert len(non_empty_lines) == 1, (
         f"--json output must be a single line, got {len(non_empty_lines)} lines: {out!r}"
@@ -329,7 +341,7 @@ def test_fr03_phase1_submit_list_backward_compat(tmp_path, monkeypatch):
     home = tmp_path / ".taskq"
     home.mkdir()
     env = {
-        **subprocess.os.environ,
+        **os.environ,
         "TASKQ_HOME": str(home),
         "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
     }

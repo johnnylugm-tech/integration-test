@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "64ede0700844843ee05975ed869135da57e1359c",
-  "content_sha256": "164c00d4a12a229d0c2ece13290c5e6a0e4550e6cb8fbc0304275e2a9add0182",
+  "git_sha": "8994d50ab6827b1f53e67612de98f50cedfaf3fb",
+  "content_sha256": "fdf61a1170b9c678735b3bfec8ad34655e308a66d26ad4d34335edc97fa8b1c1",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -9,29 +9,27 @@
     "schema_version": "harness/traceability/overlay/v1",
     "project_id": "integration-test",
     "completeness": {
-      "total_requirements": 2,
-      "srs_coverage": "50.0%",
-      "code_coverage": "50.0%",
+      "total_requirements": 3,
+      "srs_coverage": "33.3%",
+      "code_coverage": "100.0%",
       "test_coverage": "100.0%",
-      "verification_rate": "50.0%",
-      "total_links": 9,
+      "verification_rate": "100.0%",
+      "total_links": 13,
       "missing_mappings": {
         "fr_without_srs": [
-          "FR-02"
+          "FR-02",
+          "FR-03"
         ],
-        "fr_without_code": [
-          "FR-02"
-        ],
+        "fr_without_code": [],
         "fr_without_test": []
       }
     },
     "missing": {
       "fr_without_srs": [
-        "FR-02"
+        "FR-02",
+        "FR-03"
       ],
-      "fr_without_code": [
-        "FR-02"
-      ],
+      "fr_without_code": [],
       "fr_without_test": []
     },
     "requirements": {
@@ -55,11 +53,27 @@
       },
       "FR-02": {
         "fr_id": "FR-02",
-        "status": "not_implemented",
+        "status": "verified",
         "srs_section": null,
-        "code_files": [],
+        "code_files": [
+          "03-development/src/taskq/cli.py",
+          "03-development/src/taskq/executor.py"
+        ],
         "test_files": [
           "tests/test_fr02.py"
+        ],
+        "sad_module": "—",
+        "priority": "HIGH"
+      },
+      "FR-03": {
+        "fr_id": "FR-03",
+        "status": "verified",
+        "srs_section": null,
+        "code_files": [
+          "03-development/src/taskq/cli.py"
+        ],
+        "test_files": [
+          "tests/test_fr03.py"
         ],
         "sad_module": "—",
         "priority": "HIGH"

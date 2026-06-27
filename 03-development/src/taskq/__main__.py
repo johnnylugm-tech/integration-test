@@ -9,5 +9,5 @@ import sys
 
 from taskq.cli import main
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover — entry point only fires under `python -m taskq`, not under pytest import
     sys.exit(main(sys.argv[1:]))

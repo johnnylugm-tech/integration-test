@@ -38,7 +38,6 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -100,7 +99,7 @@ def test_fr02_run_happy_path_exit_zero(tmp_home):
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
     expected_status = rec.get("status")
-    expected_exit_code = rec.get("exit_code")
+    rec.get("exit_code")
     # Sub-assertion FR02-status-terminal (case 1 trigger: expected_status="done").
     if expected_status == "done":
         assert expected_status in ("done", "failed", "timeout")
@@ -132,10 +131,15 @@ def test_fr02_run_nonzero_exit_marks_failed(tmp_home):
 
 def test_fr02_run_timeout_marks_timeout(tmp_home):
     """AC-FR02-03: long-running command + timeout=1 → status="timeout"
-    (case 3 inputs: expected_status="timeout"; timeout=1)."""
+    (case 3 inputs: expected_status="timeout"; timeout=1).
+
+    Per SPEC.md line 57 ("單一任務模式下 timeout 結果 → exit 4"), the CLI must
+    also propagate exit 4 when the task times out. Bug #129 fix: align with
+    SPEC and FR-03's AC-FR03-08 expectation.
+    """
     tid = _seed_task(tmp_home, 'python -c "import time; time.sleep(5)"')
     rc = cli.main(["run", "--id", tid, "--timeout", "1"])
-    assert rc in (0, 1)
+    assert rc == 4
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
     expected_status = rec.get("status")
@@ -183,10 +187,14 @@ def test_fr02_run_retry_after_failed(tmp_home):
 def test_fr02_run_retry_after_timeout(tmp_home):
     """AC-FR02-06: a timing-out command with retry_limit=1 is retried; final
     status remains "timeout" (case 6 inputs: timeout=1; retry_limit=1;
-    expected_status="timeout")."""
+    expected_status="timeout").
+
+    Per SPEC.md line 57, CLI exits 4 on timeout regardless of retry outcome.
+    Bug #129 fix: align with SPEC and FR-03's AC-FR03-08 expectation.
+    """
     tid = _seed_task(tmp_home, 'python -c "import time; time.sleep(5)"')
     rc = cli.main(["run", "--id", tid, "--timeout", "1", "--retry", "1"])
-    assert rc in (0, 1)
+    assert rc == 4
     data = json.loads((tmp_home / "tasks.json").read_text())
     rec = data[tid]
     expected_status = rec.get("status")

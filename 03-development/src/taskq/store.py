@@ -47,3 +47,12 @@ def save(data: dict) -> None:
     # Attribute access (not ``from os import replace``) so monkeypatch on
     # ``store.os.replace`` reaches this call site.
     os.replace(tmp, path)
+
+
+def clear() -> None:
+    """Remove ``tasks.json`` if it exists (FR-03 ``clear`` subcommand)."""
+    path = config.tasks_path()
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass

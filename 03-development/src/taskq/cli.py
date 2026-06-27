@@ -1,4 +1,5 @@
-"""[FR-01, FR-02] CLI entry point: ``submit``, ``list``, ``run``, ``health``.
+"""[FR-01, FR-02, FR-03] CLI entry point: ``submit``, ``list``, ``run``,
+``status``, ``clear``, ``health`` + ``--json`` flag.
 
 Citations:
   - 03-development/tests/test_fr01.py:54   _run_cli spawns ``python -m taskq``
@@ -13,15 +14,25 @@ Citations:
     must surface as CLI exit code 1
   - 03-development/tests/test_fr02.py:316  ``cli.main(["health"])`` returns 0 with
     ``OK`` on stdout / empty stderr
+  - 03-development/tests/test_fr03.py:86   status <known id> → exit 0, full record
+  - 03-development/tests/test_fr03.py:108  status <unknown id> → exit 2, stderr
+  - 03-development/tests/test_fr03.py:127  list command field truncated to 50 chars
+  - 03-development/tests/test_fr03.py:168  clear empties store
+  - 03-development/tests/test_fr03.py:190  status --json emits single-line JSON
+  - 03-development/tests/test_fr03.py:218  list --json emits single-line JSON array
+  - 03-development/tests/test_fr03.py:259  CLI exits 4 on task timeout
+  - 03-development/tests/test_fr03.py:294  CLI exits 1 on internal error / corrupted store
 """
 from __future__ import annotations
 
+import json
 import sys
 
 from taskq import executor, models, store
 
 _MAX_COMMAND_LEN = 1000
 _BLACKLIST = ";|&$><`"
+_LIST_COMMAND_TRUNC = 50
 
 
 def _validate(command: str) -> str | None:
@@ -63,14 +74,64 @@ def _submit(command: str) -> int:
     return 0
 
 
-def _list() -> int:
+def _format_record_line(tid: str, rec: dict) -> str:
+    """Return ``{tid}\\t{status}\\t{command[:_LIST_COMMAND_TRUNC]}``.
+
+    The command field is truncated to ``_LIST_COMMAND_TRUNC`` characters per
+    AC-FR03-03 so that long commands don't blow up terminal width.
+    """
+    cmd = rec.get("command", "")
+    if len(cmd) > _LIST_COMMAND_TRUNC:
+        cmd = cmd[:_LIST_COMMAND_TRUNC]
+    return f"{tid}\t{rec.get('status', '')}\t{cmd}"
+
+
+def _list(*, json_output: bool) -> int:
+    """FR-03 ``list``: print all tasks; truncate command to 50 chars; ``--json``
+    emits a single-line JSON array of the raw records (full command, no trunc).
+    """
     try:
         data = store.load()
     except store.StoreCorrupted:
         print("store corrupted", file=sys.stderr)
         return 1
-    for tid, rec in sorted(data.items()):
-        print(f"{tid}\t{rec.get('status', '')}\t{rec.get('command', '')}")
+    if json_output:
+        records = [data[tid] | {"id": tid} for tid in sorted(data.keys())]
+        sys.stdout.write(json.dumps(records, separators=(",", ":")))
+        sys.stdout.write("\n")
+        return 0
+    for tid in sorted(data.keys()):
+        print(_format_record_line(tid, data[tid]))
+    return 0
+
+
+def _status(tid: str, *, json_output: bool) -> int:
+    """FR-03 ``status``: print the full record for ``tid``; exit 2 on unknown id
+    with stderr ``unknown task: <tid>``; ``--json`` emits single-line JSON."""
+    try:
+        data = store.load()
+    except store.StoreCorrupted:
+        print("store corrupted", file=sys.stderr)
+        return 1
+    if tid not in data:
+        print(f"unknown task: {tid}", file=sys.stderr)
+        return 2
+    rec = data[tid]
+    if json_output:
+        sys.stdout.write(json.dumps(rec | {"id": tid}, separators=(",", ":")))
+        sys.stdout.write("\n")
+        return 0
+    print(f"id:      {tid}")
+    for key in ("status", "command", "created_at", "exit_code",
+                "stdout_tail", "stderr_tail", "duration_ms", "finished_at"):
+        if key in rec:
+            print(f"{key}: {rec[key]}")
+    return 0
+
+
+def _clear() -> int:
+    """FR-03 ``clear``: remove the store file (no tasks.json on disk after)."""
+    store.clear()
     return 0
 
 
@@ -120,15 +181,22 @@ def _parse_run_args(rest: list[str]) -> tuple[str, float | None, int] | int:
 def _run(rest: list[str]) -> int:
     """Execute the stored task referenced by ``--id``.
 
-    Any exception raised by ``executor.run`` (other than the controlled
-    non-zero exit / timeout flows, which are handled inside the executor)
-    is surfaced as exit code 1 per AC-FR02-14.
+    Exit codes:
+      - 0: task completed (status done)
+      - 1: unexpected exception (AC-FR02-14) or corrupted store
+      - 2: bad args / unknown tid
+      - 4: task timed out (AC-FR03-08) — propagate executor's timeout as
+           the process exit code rather than swallowing it as rc=0.
     """
     parsed = _parse_run_args(rest)
     if isinstance(parsed, int):
         return parsed
     tid, timeout, retry = parsed
-    data = store.load()
+    try:
+        data = store.load()
+    except store.StoreCorrupted:
+        print("store corrupted", file=sys.stderr)
+        return 1
     if tid not in data:
         print(f"error: task {tid!r} not found", file=sys.stderr)
         return 2
@@ -139,6 +207,9 @@ def _run(rest: list[str]) -> int:
         print(f"error: run failed: {exc}", file=sys.stderr)
         return 1
     store.save(data)
+    # AC-FR03-08: timeout must propagate as CLI exit 4, not be swallowed as 0.
+    if task.get("status") == "timeout":
+        return 4
     return 0
 
 
@@ -146,6 +217,13 @@ def _health() -> int:
     """Smoke probe — print ``OK`` to stdout and return 0."""
     print("OK")
     return 0
+
+
+def _has_json_flag(rest: list[str]) -> tuple[bool, list[str]]:
+    """Extract ``--json`` flag (anywhere in argv) and return (json_mode, rest)."""
+    if "--json" in rest:
+        return True, [a for a in rest if a != "--json"]
+    return False, rest
 
 
 def main(argv: list[str]) -> int:
@@ -159,9 +237,18 @@ def main(argv: list[str]) -> int:
             return 2
         return _submit(rest[0])
     if cmd == "list":
-        return _list()
+        json_mode, rest2 = _has_json_flag(rest)
+        return _list(json_output=json_mode)
+    if cmd == "status":
+        json_mode, rest2 = _has_json_flag(rest)
+        if not rest2:
+            print("error: status requires a task id", file=sys.stderr)
+            return 2
+        return _status(rest2[0], json_output=json_mode)
     if cmd == "run":
         return _run(rest)
+    if cmd == "clear":
+        return _clear()
     if cmd == "health":
         return _health()
     print(f"error: unknown subcommand {cmd!r}", file=sys.stderr)
