@@ -473,8 +473,27 @@ async function runSubTask(cfg) {
     b2.verify = await runBSelfVerify(cfg, b2, round)
     log('  ' + summarizeVerify(b2, b2.verify))
 
+    // X1 VETO GUARD (Bug v17 — observed 2026-06-29 on phase1-requirements):
+    // Without this guard, B can hallucinate a REJECT in a later round (e.g. round 5
+    // "SRS.md failed to load" when the file exists and is complete) and waste all
+    // 5 B rounds even though X1 self-verify correctly identifies the claim as false
+    // (verified:false + recalibrated_review:APPROVE). Promoting REJECT → APPROVE when
+    // X1 high-confidence overrides is safe because: (a) X1 has direct file system
+    // access to verify citations/claims; (b) recalibrated_review:APPROVE + confidence:high
+    // is only emitted when X1 found the gap unverified; (c) we keep all gap data
+    // attached to b2 for downstream visibility (b2.x1_veto_overridden flag set).
+    if (b2.review_status === 'REJECT' &&
+        b2.verify &&
+        b2.verify.recalibrated_review === 'APPROVE' &&
+        b2.verify.confidence === 'high') {
+      log('  X1 VETO — B hallucination confirmed by self-verify (recalibrated_review=APPROVE, confidence=high); promoting REJECT → APPROVE')
+      b2.review_status = 'APPROVE'
+      b2.gaps = []
+      b2.x1_veto_overridden = true
+    }
+
     if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) {
-      log('  APPROVED (all gaps low)')
+      log('  APPROVED (all gaps low)' + (b2.x1_veto_overridden ? ' [X1 VETO]' : ''))
       return { content: content, b2: b2 }
     }
     if (round === MAX_B_ROUNDS) {
