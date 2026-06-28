@@ -320,8 +320,13 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
 //
 // Replaces loadFileViaBash for deterministic I/O. The LLM agent is reduced to
 // a "shell wrapper" — it only runs the python command and relays stdout
-// verbatim. All validation (prefix, length, SHA-256) is done by Python
-// (harness/scripts/file_loader.py), not by the LLM. See phase1 mirror.
+// verbatim. All validation (prefix, length, SHA-256) is done by Python via
+// the harness_cli.py read-file subcommand (introduced in harness submodule
+// feat cmd_read_file), not by the LLM. See phase1 mirror.
+//
+// KNOWN LIMITATION (not fixed here, see phase1 mirror): workflow tool
+// `agent()` returns LLM's final TEXT only; shell-wrapper relies on LLM
+// emitting cat stdout verbatim. True fix needs workflow tool API change.
 //
 // Returns:
 //   - content text (on status=OK) — same shape as loadFileViaBash for compat
@@ -331,23 +336,29 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
   opts = opts || {}
   const maxAttempts = opts.maxAttempts || 3
   const filePath = REPO + '/' + relPath
+  // v16: switch to harness_cli.py read-file + --content-out (plain text) for
+  // same reason as phase1: LLM-as-shell has trouble relaying JSON verbatim;
+  // plain text + prefix check is more reliable. Mirror phase1 v16 logic.
   const expectPrefixArg = expectPrefix ? ' --expect-prefix ' + JSON.stringify(expectPrefix) : ''
+  const contentOut = '/tmp/load_p2_' + relPath.replace(/[\/.]/g, '_') + '.txt'
   const jsonOut = '/tmp/load_p2_' + relPath.replace(/[\/.]/g, '_') + '.json'
-  const pythonCmd = 'python3 ' + REPO + '/harness/scripts/file_loader.py --file ' + JSON.stringify(filePath)
-    + expectPrefixArg + ' --content --json-out ' + jsonOut + ' --quiet'
+  const pythonCmd = 'python3 ' + REPO + '/harness_cli.py read-file --file ' + JSON.stringify(filePath)
+    + expectPrefixArg + ' --content --content-out ' + contentOut + ' --json-out ' + jsonOut + ' --quiet'
 
-  const prompt = 'You are a SHELL WRAPPER AGENT. Your ONLY task is to run a single shell command and emit the EXACT stdout as your final message.\n\n'
-    + 'COMMAND TO RUN:\n' + pythonCmd + '\n\n'
-    + 'STEPS:\n'
-    + '1. Use the Bash tool to run EXACTLY this command (no modifications).\n'
-    + '2. The Bash tool will return the command output in its tool_result.\n'
-    + '3. Your final assistant message MUST be the verbatim stdout (cat ' + jsonOut + ').\n'
-    + '4. If python3 exits non-zero, return EXACTLY this line: ERROR_LOAD_FAILED: ' + filePath + '\n\n'
+  const prompt = 'You are a SHELL WRAPPER AGENT. Your ONLY job is to run ONE shell command and emit ONE file content verbatim.\n\n'
+    + 'STEPS (DO NOT DEVIATE):\n'
+    + '1. Use Bash tool to run EXACTLY this command (no modifications):\n'
+    + '   ' + pythonCmd + '\n\n'
+    + '2. Use Bash tool to run `cat ' + contentOut + '` — read the content file from disk.\n\n'
+    + '3. Your final assistant message = the EXACT output of `cat ' + contentOut + '` (verbatim bytes).\n\n'
     + 'CRITICAL OUTPUT RULES (violations = failure):\n'
-    + '- DO NOT modify the command. DO NOT add flags. DO NOT skip steps.\n'
-    + '- DO NOT write any preamble or acknowledgment before the JSON output.\n'
-    + '- DO NOT interpret, summarize, or reformat the JSON. Emit bytes verbatim.\n'
-    + '- Your final message = raw stdout bytes only.'
+    + '- DO NOT generate or paraphrase content based on your memory/inference.\n'
+    + '- ALWAYS read the actual file from disk. NEVER hallucinate file content.\n'
+    + '- DO NOT echo the JSON file. Only echo the content file.\n'
+    + '- DO NOT write any preamble or acknowledgment.\n'
+    + '- DO NOT add commentary, summary, or explanation.\n'
+    + '- Your final message = the verbatim cat output only.\n'
+    + '- If the command fails, return EXACTLY: ERROR_LOAD_FAILED: ' + filePath
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await agent(prompt, {
@@ -357,28 +368,22 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
     })
     const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
     if (text.startsWith('ERROR_LOAD_FAILED')) return 'ERROR: ' + relPath + ' load failed (Python exit non-zero)'
-    let parsed = null
-    try {
-      const cleaned = text.replace(/^```(?:json)?\s*/m, '').replace(/```\s*$/m, '').trim()
-      parsed = JSON.parse(cleaned)
-    } catch (e) {
-      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' not-JSON (len=' + text.length + ')')
+    if (text.length < 50) {
+      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + text.length + ')')
       continue
     }
-    if (!parsed || typeof parsed !== 'object') {
-      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' parsed-not-object')
-      continue
+    // v16: defense-in-depth prefix check (same as phase1).
+    if (expectPrefix) {
+      const head = text.slice(0, 500)
+      const stripped = expectPrefix.replace(/^#\s*/, '')
+      const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
+      if (!anchorRe.test(head)) {
+        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' content-prefix-mismatch (expected "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
+        continue
+      }
     }
-    if (parsed.status === 'OK' && typeof parsed.content === 'string') {
-      return parsed.content
-    }
-    if (parsed.status === 'MISSING') {
-      return 'ERROR: ' + relPath + ' not found'
-    }
-    log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' status=' + parsed.status + ' — ' + (parsed.diagnostic || ''))
-    if (parsed.status !== 'PREFIX_MISMATCH' && parsed.status !== 'TOO_SHORT') {
-      return 'ERROR: LOADER_FAILED_STATUS_' + parsed.status + ': ' + relPath
-    }
+    return text
   }
   return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
 }
