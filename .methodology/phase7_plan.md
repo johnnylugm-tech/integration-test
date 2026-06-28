@@ -2,12 +2,10 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-06-29
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 7 - Risk Management
 > **Status**: Full version (including Phase 7 detailed tasks)
-> **Mode**: Dynamic (load-context at execution time)
-
 
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
@@ -78,57 +76,13 @@ Each FR gets a Gate 1 risk-aware re-evaluation (CHECKPOINT). No harness run-gate
   4. Phase 7 confirmed in `.methodology/state.json` (`advance-phase` already run)
   > If stale: run `python3 harness_cli.py init-project --phase 7 --project . --overwrite`
 
-### 🔄 [PHASE-CONTEXT] — Load Before Starting
+### Risk Categories
+- Technical risks
+- Schedule risks
+- Resource risks
+- External risks
 
-```bash
-python3 harness_cli.py load-context --phase 7 --project . --json \
-  > .sessi-work/phase7_ctx.json
-```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
-> All `{FR-ID}` references in tasks below come from this file.
-
-### FR Tasks — Expanded at Execution Time
-
-- **[ENV-CHECK]** Run ONCE before the FR loop — `GATE1`/`GATE1-DELTA` preflight requires `.sessi-work/env_check_result.json`:
-  ```bash
-  python3 harness_cli.py run-env-check --phase 7 --project .
-  # evaluate inline → write .sessi-work/env_check_result.json →
-  python3 harness_cli.py finalize-env-check --phase 7 --project .
-  ```
-  > Without this, every `run-fr-step --step GATE1-DELTA` blocks on 'env_check_result.json not found'.
-
-> Read `fr_ids` from `.sessi-work/phase7_ctx.json`.
-> For each `{FR-ID}` in the list, execute the template below:
-
----
-**{FR-ID} — {FR-TITLE from fr_details}**
-
-- **[ORCH-GATE1-DELTA]** `run-fr-step --phase 7 --fr-id {FR-ID} --step GATE1-DELTA --project .`
-> Crash recovery: `resume-fr-phase` auto-detects code changes → switches to full TDD if needed.
-> **Auto-skip**: if NO FR's code changed since its last Gate 1 PASS, `advance-phase --completed 7`
-> treats this entire DELTA loop as satisfied automatically — you may skip the per-FR steps.
-> Only FRs whose code actually changed need a re-evaluation.
->
-> **GATE1-DELTA outcomes:**
-> - CASE 1 PASS:    Gate 1 PASS → continue to next {FR-ID}
-> - CASE 2 FAIL:    Gate 1 FAIL → full TDD auto-triggered by crash recovery:
->   `run-fr-step --phase 7 --fr-id {FR-ID} --step TDD-RED` → TDD-GREEN → TDD-IMPROVE → GATE1
-> - CASE 3 BLOCKED: 3 TDD rounds still failing → escalate to human.
->   Provide: last Gate 1 output + pytest failure log.
-
----
-
-### P7 Risk Register Generation
-
-> Generate risk deliverables ONCE before per-FR evaluation (orchestrator runs directly).
-
-- **[RISK-REGISTER]** Generate `07-risk/RISK_REGISTER.md`:
-  - Review open issues from Gate 3/4, `deferred_fixes.md`, and `.sessi-work/issue_registry.json`
-  - For each risk: ID, name, likelihood (1–5), impact (1–5), category, mitigation approach
-- **[RISK-MITIGATION]** Generate `07-risk/RISK_MITIGATION_PLANS.md`:
-  - For HIGH risks (likelihood × impact ≥ 9): write formal mitigation plan with owner + deadline
-- **[RISK-STATUS]** Generate `07-risk/RISK_STATUS_REPORT.md`:
-  - Summary of all risks, current status, mitigation owner, target date
+(No FR list found in manifest — run Gate 1 per FR manually)
 
 ### P7 Milestone Push (10-Push Strategy ⑨)
 
@@ -147,6 +101,11 @@ python3 harness_cli.py load-context --phase 7 --project . --json \
 
 ### Phase 7 → Phase 8: Configuration Management
 
+- Generate Phase 8 plan:
+  ```bash
+  python3 harness_cli.py plan-phase --phase 8 --project . \
+    --output .methodology/phase8_plan.md
+  ```
 - **[PHASE-TRUTH]** Phase Truth ≥ 90% (HR-11) — verified by advance-phase
   > **FAIL** → check `phase_truth_verifier` output in `.sessi-work/`
   >   → identify which phase link or gate artifact failed

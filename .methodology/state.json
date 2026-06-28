@@ -1,9 +1,9 @@
 {
   "state": "RUNNING",
-  "current_phase": 2,
+  "current_phase": 1,
   "last_gate": null,
   "last_fr": null,
-  "last_update": "2026-06-28T21:25:15.564193+00:00",
-  "phase_truth_passed": true,
-  "last_milestone_command": "advance-phase --completed-phase 1"
+  "last_update": "2026-06-29T02:00:00+00:00",
+  "phase_truth_passed": false,
+  "last_milestone_command": "manual-reset-to-P1-for-D-validation"
 }

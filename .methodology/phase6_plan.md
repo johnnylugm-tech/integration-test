@@ -2,12 +2,10 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-06-29
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 6 - Quality Assurance
 > **Status**: Full version (including Phase 6 detailed tasks)
-> **Mode**: Dynamic (load-context at execution time)
-
 
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
@@ -79,14 +77,6 @@ Agent B peer review of the QA deliverables (HR-01) — both are required to exit
   3. harness importable (submodule, PYTHONPATH, or vendored `quality_gate/`)
   4. Phase 6 confirmed in `.methodology/state.json` (`advance-phase` already run)
   > If stale: run `python3 harness_cli.py init-project --phase 6 --project . --overwrite`
-
-### 🔄 [PHASE-CONTEXT] — Load Before Starting
-
-```bash
-python3 harness_cli.py load-context --phase 6 --project . --json \
-  > .sessi-work/phase6_ctx.json
-```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
 
 ### P6 Phase End Audit (+ A/B Review)
 
@@ -265,6 +255,11 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
 
 ### Phase 6 → Phase 7: Risk Management
 
+- Generate Phase 7 plan:
+  ```bash
+  python3 harness_cli.py plan-phase --phase 7 --project . \
+    --output .methodology/phase7_plan.md
+  ```
 - **[GIT-TAG]** Push Gate 4 git tag (SKILL.md §0.4):
   ```bash
   SCORE=$(python3 -c "import json; d=json.load(open('.methodology/quality_manifest.json')); print(d.get('composite_score','XX'))" 2>/dev/null || echo 'XX')

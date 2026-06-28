@@ -2,12 +2,10 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-06-29
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 4 - Testing
 > **Status**: Full version (including Phase 4 detailed tasks)
-> **Mode**: Dynamic (load-context at execution time)
-
 
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
@@ -30,6 +28,9 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
 
 > **Checkpoint Index**:
 > - CHECKPOINT-0: TEST_PLAN.md (generate before per-FR testing starts)
+> - CHECKPOINT-1: Gate 1 / FR-01 *(auto-push via run-fr-step)*
+> - CHECKPOINT-2: Gate 1 / FR-02 *(auto-push via run-fr-step)*
+> - CHECKPOINT-3: Gate 1 / FR-03 *(auto-push via run-fr-step)*
 > - MILESTONE: P4-mid push (≥50% FRs Gate 1 PASS) → **HANDOVER.md**
 > - MILESTONE: P4-pre-gate3 push (all FRs done, before Gate 3) → **HANDOVER.md**
 > - CHECKPOINT-GATE-3: Gate 3 (Phase 4 Exit) → **push + HANDOVER.md**
@@ -72,15 +73,6 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
   4. Phase 4 confirmed in `.methodology/state.json` (`advance-phase` already run)
   > If stale: run `python3 harness_cli.py init-project --phase 4 --project . --overwrite`
 
-### 🔄 [PHASE-CONTEXT] — Load Before Starting
-
-```bash
-python3 harness_cli.py load-context --phase 4 --project . --json \
-  > .sessi-work/phase4_ctx.json
-```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
-> All `{FR-ID}` references in tasks below come from this file.
-
 ### CHECKPOINT-0: Generate TEST_PLAN.md
 
 > Generate `04-testing/TEST_PLAN.md` from SRS.md FR acceptance criteria.
@@ -94,57 +86,79 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
 - Verify TEST_PLAN.md covers all FRs from manifest/quality_manifest.json
 - **[TP-DONE]** TEST_PLAN.md written: all FRs have ≥1 test case, NFRs addressed
 
-### FR Tasks — Expanded at Execution Time
+### FR Test Coverage
 
-- **[ENV-CHECK]** Run ONCE before the FR loop — `GATE1`/`GATE1-DELTA` preflight requires `.sessi-work/env_check_result.json`:
+#### FR-01: 任務模型與持久化 (Task model and persistence)
+**Test Target**: Verify 
+
+**Gate 1 Re-evaluation — FR-01** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
   ```bash
-  python3 harness_cli.py run-env-check --phase 4 --project .
-  # evaluate inline → write .sessi-work/env_check_result.json →
-  python3 harness_cli.py finalize-env-check --phase 4 --project .
+  python3 harness_cli.py run-fr-step --phase 4 --fr-id FR-01 \
+    --step GATE1-DELTA --project .
   ```
-  > Without this, every `run-fr-step --step GATE1-DELTA` blocks on 'env_check_result.json not found'.
+  → Code-change detection: git diff FR-01 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-01` → exit 0 required before continuing.
 
-> Read `fr_ids` from `.sessi-work/phase4_ctx.json`.
-> For each `{FR-ID}` in the list, execute the template below:
-
----
-**{FR-ID} — {FR-TITLE from fr_details}**
-
-- **[ORCH-GATE1-DELTA]** `run-fr-step --phase 4 --fr-id {FR-ID} --step GATE1-DELTA --project .`
-> Crash recovery: `resume-fr-phase` auto-detects code changes → switches to full TDD if needed.
-> **Auto-skip**: if NO FR's code changed since its last Gate 1 PASS, `advance-phase --completed 4`
-> treats this entire DELTA loop as satisfied automatically — you may skip the per-FR steps.
-> Only FRs whose code actually changed need a re-evaluation.
->
-> **GATE1-DELTA outcomes:**
-> - CASE 1 PASS:    Gate 1 PASS → continue to next {FR-ID}
-> - CASE 2 FAIL:    Gate 1 FAIL → full TDD auto-triggered by crash recovery:
->   `run-fr-step --phase 4 --fr-id {FR-ID} --step TDD-RED` → TDD-GREEN → TDD-IMPROVE → GATE1
-> - CASE 3 BLOCKED: 3 TDD rounds still failing → escalate to human.
->   Provide: last Gate 1 output + pytest failure log.
-
----
-
-### P4 Milestone Pushes (10-Push Strategy ⑤⑥)
-
-> Per-FR steps push automatically via `run-fr-step`. The milestone pushes below
-> also write `HANDOVER.md` with phase/FR/status summary and push to origin.
-> All FR IDs in this project: <FR-01,FR-02,…>
-
-- **PUSH ⑤ — P4-mid** (trigger when ≥<N//2>/N FRs have Gate 1 PASS):
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
   ```bash
-  python3 harness_cli.py push-milestone --type p4-mid --project . \
-    --fr-done <N//2> --fr-total N --fr-ids <comma-separated FR-IDs with Gate 1 PASS>
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-01
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
   ```
-  > `--fr-ids` lists the FRs with Gate 1 PASS so far. Replace `<comma-separated FR-IDs with Gate 1 PASS>` with actual.
-  > Writes HANDOVER.md + commits + pushes. Next session reads HANDOVER.md to resume.
 
-- **PUSH ⑥ — P4-pre-gate3** (trigger when all N FRs Gate 1 PASS, before Gate 3):
+#### FR-02: 任務執行與重試 (Task execution and retry)
+**Test Target**: Verify 
+
+**Gate 1 Re-evaluation — FR-02** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
   ```bash
-  python3 harness_cli.py push-milestone --type p4-pre-gate3 --project . \
-    --fr-ids <comma-separated FR-IDs with Gate 1 PASS>
+  python3 harness_cli.py run-fr-step --phase 4 --fr-id FR-02 \
+    --step GATE1-DELTA --project .
   ```
-  > Last stable snapshot before Gate 3 evaluation. HANDOVER.md + push.
+  → Code-change detection: git diff FR-02 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-02` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-02
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-03: CLI 整合與查詢 (CLI integration and query)
+**Test Target**: Verify 
+
+**Gate 1 Re-evaluation — FR-03** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 4 --fr-id FR-03 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-03 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-03` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-03
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
 
 ### TEST_RESULTS.md Summary
 
@@ -166,6 +180,27 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
   - Uncovered lines (if any)
   > cross_artifact.py validates this file's numbers against live `pytest --cov` at Gate 3.
   > Fabricated numbers will be caught by the cross-artifact check.
+
+### P4 Milestone Pushes (10-Push Strategy ⑤⑥)
+
+> Per-FR steps push automatically via `run-fr-step`. The milestone pushes below
+> also write `HANDOVER.md` with phase/FR/status summary and push to origin.
+> All FR IDs in this project: FR-01,FR-02,FR-03
+
+- **PUSH ⑤ — P4-mid** (trigger when ≥1/3 FRs have Gate 1 PASS):
+  ```bash
+  python3 harness_cli.py push-milestone --type p4-mid --project . \
+    --fr-done 1 --fr-total 3 --fr-ids FR-01
+  ```
+  > `--fr-ids` lists the FRs with Gate 1 PASS so far. Replace `FR-01` with actual.
+  > Writes HANDOVER.md + commits + pushes. Next session reads HANDOVER.md to resume.
+
+- **PUSH ⑥ — P4-pre-gate3** (trigger when all 3 FRs Gate 1 PASS, before Gate 3):
+  ```bash
+  python3 harness_cli.py push-milestone --type p4-pre-gate3 --project . \
+    --fr-ids FR-01,FR-02,FR-03
+  ```
+  > Last stable snapshot before Gate 3 evaluation. HANDOVER.md + push.
 
 
 ### 🔒 CHECKPOINT-GATE-3: Phase 4 Exit
@@ -299,6 +334,11 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
 
 ### Phase 4 → Phase 5: Verification & Delivery
 
+- Generate Phase 5 plan:
+  ```bash
+  python3 harness_cli.py plan-phase --phase 5 --project . \
+    --output .methodology/phase5_plan.md
+  ```
 - **[TDD-PRECHECK]** Verify TDD checks pass — advance-phase enforces:
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing

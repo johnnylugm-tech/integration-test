@@ -1,13 +1,20 @@
 {
   "fr": "TRACEABILITY_MATRIX.md",
   "review_status": "APPROVE",
-  "reason": "TRACEABILITY_MATRIX.md approved by holistic peer review and per-sub-task B-2 review. Phase 1 deliverable meets canonical spec ingestion requirements; SPEC.md v2.0.0 (3 FRs FR-01..03 + 3 NFRs NFR-01..03) fully transcribed with DERIVED annotations where canonical phrasing required interpretation. All FRs and NFRs mapped to test inventory; traceability matrix shows 1:1 AC-to-test-case mapping.",
+  "reason": "TRACEABILITY_MATRIX.md v1.0.0 establishes full bidirectional traceability: Section 2 forward (FR-01/02/03, NFR-01/02/03, C-01..C-07, TASKQ_* x3, R1/R2/R3) all map to specific design modules and TC IDs (1:1 with sub-cases); Section 3 backward map covers every TC ID exhaustively; Section 4 coverage matrices show 100 percent on all dimensions (19 FR-TCs, 12 NFR-TCs, 7 C, 3 CFG, 3 R); Section 5 orphan analysis is NONE; Section 6 carries NFR-99 open-issues from SRS Section 8 forward; Section 8 completeness validation self-checks all required points. Upstream B-2 reviews for SRS.md and SPEC_TRACKING.md returned APPROVE with empty gaps. Trace counts are internally consistent with SRS.md AC Summary (Section 6) and SPEC_TRACKING.md metadata.",
   "citations": [
-    "01-requirements/TRACEABILITY_MATRIX.md",
-    "SPEC.md"
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:1-268",
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:29-211",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:24-78"
   ],
   "docs_embedded": [
-    "SRS.md"
+    "SRS.md Section 2 (C-01..C-07)",
+    "SRS.md Section 3 (FR-01/02/03)",
+    "SRS.md Section 4 (NFR-01/02/03)",
+    "SRS.md Section 5 (TASKQ_* config)",
+    "SRS.md Section 9 (R1/R2/R3)",
+    "SPEC_TRACKING.md Sections 2-5 (FR/NFR/C/Config tables)",
+    "TRACEABILITY_MATRIX.md Sections 2-8 (forward + backward + coverage + validation)"
   ],
   "confidence": 0.9
 }

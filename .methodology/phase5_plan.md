@@ -2,12 +2,10 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-06-29
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 5 - Verification & Delivery
 > **Status**: Full version (including Phase 5 detailed tasks)
-> **Mode**: Dynamic (load-context at execution time)
-
 
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
@@ -78,45 +76,8 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). No harness run-gate — P
   4. Phase 5 confirmed in `.methodology/state.json` (`advance-phase` already run)
   > If stale: run `python3 harness_cli.py init-project --phase 5 --project . --overwrite`
 
-### 🔄 [PHASE-CONTEXT] — Load Before Starting
-
-```bash
-python3 harness_cli.py load-context --phase 5 --project . --json \
-  > .sessi-work/phase5_ctx.json
-```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
-> All `{FR-ID}` references in tasks below come from this file.
-
-### FR Tasks — Expanded at Execution Time
-
-- **[ENV-CHECK]** Run ONCE before the FR loop — `GATE1`/`GATE1-DELTA` preflight requires `.sessi-work/env_check_result.json`:
-  ```bash
-  python3 harness_cli.py run-env-check --phase 5 --project .
-  # evaluate inline → write .sessi-work/env_check_result.json →
-  python3 harness_cli.py finalize-env-check --phase 5 --project .
-  ```
-  > Without this, every `run-fr-step --step GATE1-DELTA` blocks on 'env_check_result.json not found'.
-
-> Read `fr_ids` from `.sessi-work/phase5_ctx.json`.
-> For each `{FR-ID}` in the list, execute the template below:
-
----
-**{FR-ID} — {FR-TITLE from fr_details}**
-
-- **[ORCH-GATE1-DELTA]** `run-fr-step --phase 5 --fr-id {FR-ID} --step GATE1-DELTA --project .`
-> Crash recovery: `resume-fr-phase` auto-detects code changes → switches to full TDD if needed.
-> **Auto-skip**: if NO FR's code changed since its last Gate 1 PASS, `advance-phase --completed 5`
-> treats this entire DELTA loop as satisfied automatically — you may skip the per-FR steps.
-> Only FRs whose code actually changed need a re-evaluation.
->
-> **GATE1-DELTA outcomes:**
-> - CASE 1 PASS:    Gate 1 PASS → continue to next {FR-ID}
-> - CASE 2 FAIL:    Gate 1 FAIL → full TDD auto-triggered by crash recovery:
->   `run-fr-step --phase 5 --fr-id {FR-ID} --step TDD-RED` → TDD-GREEN → TDD-IMPROVE → GATE1
-> - CASE 3 BLOCKED: 3 TDD rounds still failing → escalate to human.
->   Provide: last Gate 1 output + pytest failure log.
-
----
+### Verification Items
+(No FR list found — add per-FR verification steps based on SRS.md)
 
 ### P5 System Verification
 
@@ -147,6 +108,11 @@ python3 harness_cli.py load-context --phase 5 --project . --json \
 
 ### Phase 5 → Phase 6: Quality Assurance
 
+- Generate Phase 6 plan:
+  ```bash
+  python3 harness_cli.py plan-phase --phase 6 --project . \
+    --output .methodology/phase6_plan.md
+  ```
 - **[PHASE-TRUTH]** Phase Truth ≥ 90% (HR-11) — verified by advance-phase
   > **FAIL** → check `phase_truth_verifier` output in `.sessi-work/`
   >   → identify which phase link or gate artifact failed

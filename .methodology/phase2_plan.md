@@ -328,13 +328,13 @@ are not re-opened. This bounds backtracking to a single step.
 
 ### FR Architecture Mapping (3 total)
 
-#### FR-01: Task Model & Persistence — `[SPEC §3 FR-01]`
+#### FR-01: 任務模型與持久化 (Task model and persistence)
 **Requirement**: 
 
-#### FR-02: Task Execution & Retry — `[SPEC §3 FR-02]`
+#### FR-02: 任務執行與重試 (Task execution and retry)
 **Requirement**: 
 
-#### FR-03: CLI Integration & Query — `[SPEC §3 FR-03]`
+#### FR-03: CLI 整合與查詢 (CLI integration and query)
 **Requirement**: 
 
 ### SAB Generation (Machine-Readable Architecture Baseline)
@@ -500,9 +500,9 @@ are not re-opened. This bounds backtracking to a single step.
 
 - **[B-APPROVAL]** ✅ Persist Agent B approval JSONs for each deliverable to `.methodology/agent_b_approvals/<id>.json`
   > Required by `harness_cli.py advance-phase` via `_verify_agent_b_approvals_core`.
-  > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"], "confidence": <0.0-1.0>}`
-  > Phase 2 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[2]`). For Phase 1: SRS, SPEC_TRACKING, TRACEABILITY_MATRIX, TEST_INVENTORY.
-  > `<id>` is the basename WITHOUT extension (e.g. `SRS.md` → `SRS`).
+  > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"]}`
+  > Phase 2 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[2]`, e.g., for Phase 1: SRS.md, SPEC_TRACKING.md, TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml).
+  > `<id>` MUST match the full _PHASE_DELIVERABLES[N] entry EXACTLY, including file extension (e.g. `SRS.md` → file `SRS.md.json`). Harness matches `approvals_dir / f"{did}.json"` directly without stem-stripping.
   > Use Bash + Python (harness_cli.py write-approval subcommand if available, else direct Write tool) — do NOT use Edit (whole-file write only).
 
 - **[B-PUSH]** ✅ PUSH ② — Push to GitHub + HANDOVER.md — retry until success (CHECKPOINT-PEER-REVIEW saved):

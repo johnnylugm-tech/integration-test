@@ -303,7 +303,7 @@ are not re-opened. This bounds backtracking to a single step.
 **Agent B**: BUSINESS_ANALYST
 
 **A/B Work** (HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews):
-- **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Generate TEST_INVENTORY.yaml from SRS.md FR acceptance criteria → assign test function names per FR → validate naming convention
+- **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Generate TEST_INVENTORY.yaml from SRS.md FR acceptance criteria → assign test function names per FR → validate naming convention. **1:1 rule**: matrix sub-ranges (e.g. `TC-FR01-05a..g` = 7 sub-cases) MUST enumerate as separate tc_ids in YAML — one entry per sub-case, NOT collapse into a single entry with internal loop. This prevents B-2 review from REJECT-ing on 1:1 violation.
   - FORBIDDEN: vague/non-testable acceptance criteria
 - **[A-2]** Agent A returns `{status, files, confidence, citations, summary}`
 - **[B-1]** Agent B (BUSINESS_ANALYST) — dispatch as **STATELESS** subagent:
@@ -342,6 +342,7 @@ are not re-opened. This bounds backtracking to a single step.
   - Every FR has ≥1 test function?
   - Test function names follow naming convention?
   - All FRs from TRACEABILITY_MATRIX covered?
+  - 1:1 expansion: matrix sub-ranges (a..g, etc.) must enumerate as separate tc_ids — no collapsing N sub-cases into 1 entry
   - All upstream deliverables consistent with each other? No contradictory decisions?
 
   Return JSON only:
@@ -370,25 +371,33 @@ are not re-opened. This bounds backtracking to a single step.
 
 ### FR Requirements (3 total)
 
-#### FR-01: 任務模型與持久化 (Task model and persistence)
+#### FR-01: 任務模型與持久化
 **Task**: 
 
-#### FR-02: 任務執行與重試 (Task execution and retry)
+#### FR-02: 任務執行與重試
 **Task**: 
 
-#### FR-03: CLI 整合與查詢 (CLI integration and query)
+#### FR-03: CLI 整合與查詢
 **Task**: 
 
 ### NFR Non-Functional Requirements (3 total)
 
-#### NFR-01: 1 (1.a)
-**Requirement**: Quantitative (p95 < 50ms)
+#### NFR-01: Performance
+**Requirement**: > `submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行)
 
-#### NFR-02: 2 (2.a–b)
-**Requirement**: Codebase scan + test coverage
+The implementation **MUST** achieve a 95th-percentile latency of less than 50 ms for the combined sequence "submit + status" executed 100
 
-#### NFR-03: 2 (3.a–b)
-**Requirement**: Crash-injection + regex output check
+#### NFR-02: Security
+**Requirement**: > 全 codebase 禁用 `shell=True`;FR-01 注入字元黑名單必須有測試覆蓋
+
+The implementation **MUST** satisfy both clauses:
+1. 全 codebase 禁用 `shell=True` — `shell=True` **MUST NOT** appear anywhere in the codebase's task-ex
+
+#### NFR-03: Reliability
+**Requirement**: > `tasks.json` 原子寫(進程中斷後仍為合法 JSON);`stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代
+
+The implementation **MUST** satisfy both clauses:
+1. `tasks.json` 原子寫 — wri
 
 ### Phase 1 Deliverables
 - `SRS.md` - Software Requirements Specification (FRs + NFRs)
@@ -470,8 +479,8 @@ are not re-opened. This bounds backtracking to a single step.
 
 - **[B-APPROVAL]** ✅ Persist Agent B approval JSONs for each deliverable to `.methodology/agent_b_approvals/<id>.json`
   > Required by `harness_cli.py advance-phase` via `_verify_agent_b_approvals_core`.
-  > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"], "confidence": <0.0-1.0>}`
-  > Phase 1 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[1]`). For Phase 1: SRS.md, SPEC_TRACKING.md, TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml.
+  > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"]}`
+  > Phase 1 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[1]`, e.g., for Phase 1: SRS.md, SPEC_TRACKING.md, TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml).
   > `<id>` MUST match the full _PHASE_DELIVERABLES[N] entry EXACTLY, including file extension (e.g. `SRS.md` → file `SRS.md.json`). Harness matches `approvals_dir / f"{did}.json"` directly without stem-stripping.
   > Use Bash + Python (harness_cli.py write-approval subcommand if available, else direct Write tool) — do NOT use Edit (whole-file write only).
 

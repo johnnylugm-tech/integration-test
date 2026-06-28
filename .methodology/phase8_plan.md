@@ -2,12 +2,10 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-06-29
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 8 - Configuration Management
 > **Status**: Full version (including Phase 8 detailed tasks)
-> **Mode**: Dynamic (load-context at execution time)
-
 
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
@@ -78,74 +76,13 @@ Each FR gets a Gate 1 config-aware re-evaluation (CHECKPOINT). No harness run-ga
   4. Phase 8 confirmed in `.methodology/state.json` (`advance-phase` already run)
   > If stale: run `python3 harness_cli.py init-project --phase 8 --project . --overwrite`
 
-### 🔄 [PHASE-CONTEXT] — Load Before Starting
+### Configuration Categories
+- Environment configuration
+- Deployment configuration
+- Security configuration
+- Monitoring configuration
 
-```bash
-python3 harness_cli.py load-context --phase 8 --project . --json \
-  > .sessi-work/phase8_ctx.json
-```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
-> All `{FR-ID}` references in tasks below come from this file.
-
-### FR Tasks — Expanded at Execution Time
-
-- **[ENV-CHECK]** Run ONCE before the FR loop — `GATE1`/`GATE1-DELTA` preflight requires `.sessi-work/env_check_result.json`:
-  ```bash
-  python3 harness_cli.py run-env-check --phase 8 --project .
-  # evaluate inline → write .sessi-work/env_check_result.json →
-  python3 harness_cli.py finalize-env-check --phase 8 --project .
-  ```
-  > Without this, every `run-fr-step --step GATE1-DELTA` blocks on 'env_check_result.json not found'.
-
-> Read `fr_ids` from `.sessi-work/phase8_ctx.json`.
-> For each `{FR-ID}` in the list, execute the template below:
-
----
-**{FR-ID} — {FR-TITLE from fr_details}**
-
-- **[ORCH-GATE1-DELTA]** `run-fr-step --phase 8 --fr-id {FR-ID} --step GATE1-DELTA --project .`
-> Crash recovery: `resume-fr-phase` auto-detects code changes → switches to full TDD if needed.
-> **Auto-skip**: if NO FR's code changed since its last Gate 1 PASS, `advance-phase --completed 8`
-> treats this entire DELTA loop as satisfied automatically — you may skip the per-FR steps.
-> Only FRs whose code actually changed need a re-evaluation.
->
-> **GATE1-DELTA outcomes:**
-> - CASE 1 PASS:    Gate 1 PASS → continue to next {FR-ID}
-> - CASE 2 FAIL:    Gate 1 FAIL → full TDD auto-triggered by crash recovery:
->   `run-fr-step --phase 8 --fr-id {FR-ID} --step TDD-RED` → TDD-GREEN → TDD-IMPROVE → GATE1
-> - CASE 3 BLOCKED: 3 TDD rounds still failing → escalate to human.
->   Provide: last Gate 1 output + pytest failure log.
-
----
-
-### P8 Configuration Records Generation
-
-> Generate config deliverables ONCE before push-milestone (orchestrator runs directly).
-
-> **Baseline source** (harness commits `4738542` + `51bd4a8`):
-> `CONFIG_RECORDS.md` and `RELEASE_CHECKLIST.md` are deterministically generated
-> by `scripts/phase8_doc_gen.py` during the P7→P8 advance-phase hook (see
-> `phase7_plan.md` §Auto-trigger on P7→P8 advance). P8 phase work is therefore
-> **review and append**, not regenerate:
->
-> 1. Read the framework-generated baseline in `08-config/`
-> 2. Flag any missing sections the generator could not derive
-> 3. Append human-only context (ownership, on-call rotation, runbook links,
->    anything not derivable from `state.json` / `quality_manifest.json` / git)
-> 4. Do NOT overwrite the framework-generated version — that would break
->    determinism (byte-equal across runs) for downstream consumers
-
-- **[CONFIG-RECORDS]** Review + append `08-config/CONFIG_RECORDS.md`:
-  - Framework baseline already contains: env var inventory, source-of-truth
-    module references, feature flags derived from `harness_config.json`
-  - Human-only additions: ownership per config item, secret rotation cadence,
-    access audit log reference
-  - Reference: `03-development/src/` module configs + any `.env.example` or `settings.py`
-- **[RELEASE-CHECKLIST]** Review + append `08-config/RELEASE_CHECKLIST.md`:
-  - Framework baseline already contains: Gate 4 PASS proof, quality_manifest
-    composite score, FR coverage summary, git tag/hash
-  - Human-only additions: deployment runbook URL, rollback owner + on-call,
-    post-release monitoring dashboard, customer comms template
+(No FR list found in manifest — run Gate 1 per FR manually)
 
 ### P8 Archive — REQUIRED before push-milestone (CI p8-archive-check)
 
