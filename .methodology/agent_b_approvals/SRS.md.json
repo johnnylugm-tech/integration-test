@@ -1,12 +1,24 @@
 {
   "fr": "SRS.md",
   "review_status": "APPROVE",
-  "reason": "SRS.md load failed; cannot verify Agent A transcribe/cover/NFR-99/DERIVED behavior. Reject pending deliverable read.",
+  "reason": "Agent A correctly followed canonical_spec = SPEC.md via PROJECT_BRIEF.md precedence; ran prompt-injection grep on SPEC.md (clean, 0 hits); correctly reported no TBD/TODO/<placeholder> markers in canonical spec (no NFR-99/FR-XX-deferred needed); transcribed all 3 FRs (FR-01..FR-03) and 3 NFRs (NFR-01..NFR-03) verbatim into 25 independently-testable ACs with DERIVED markers on every decomposition; FRs are testable (exit codes 0/1/2/4, concrete regex pattern, 1000-char threshold, 2000-char tail, uuid4 first-8-hex) and NFRs are measurable (p95<50ms / 100 iters, atomic-write-survives-crash, redaction regex with full-line [REDACTED] substitution); no contradictions; all stakeholder needs covered (CLI user via submit/run, ops via secret redaction, automation via --json); constraints table C-01..C",
   "citations": [
-    "/Users/johnny/projects/integration-test/01-requirements/SRS.md"
+    "01-requirements/SRS.md:3-5",
+    "01-requirements/SRS.md:52-87",
+    "01-requirements/SRS.md:91-116",
+    "01-requirements/SRS.md:121-148",
+    "01-requirements/SRS.md:155-200",
+    "01-requirements/SRS.md:251",
+    "SPEC.md:30-46",
+    "SPEC.md:48-58",
+    "SPEC.md:60-73",
+    "SPEC.md:79-85",
+    "PROJECT_BRIEF.md:18-22"
   ],
   "docs_embedded": [
-    "ERROR_LOAD_FAILED: /Users/johnny/projects/integration-test/01-requirements/SRS.md (per task prompt DOC 2)"
+    "PROJECT_BRIEF.md",
+    "01-requirements/SRS.md",
+    "SPEC.md"
   ],
   "confidence": 0.9
 }

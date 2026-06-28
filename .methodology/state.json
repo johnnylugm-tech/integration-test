@@ -3,7 +3,7 @@
   "current_phase": 1,
   "last_gate": null,
   "last_fr": null,
-  "last_update": "2026-06-29T03:00:00+00:00",
+  "last_update": "2026-06-29T04:00:00+00:00",
   "phase_truth_passed": false,
-  "last_milestone_command": "manual-reset-to-P1-for-v22-validation"
+  "last_milestone_command": "manual-reset-to-P1-for-architectural-fix-validation"
 }

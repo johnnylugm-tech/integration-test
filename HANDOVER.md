@@ -2,7 +2,7 @@
 
 **Checkpoint**: `P1-exit-20260628`  
 **Phase**: P1 — Spec & Discovery  
-**Generated**: 2026-06-28T23:26:34Z
+**Generated**: 2026-06-28T23:51:26Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -53,35 +53,35 @@ P1 phase completed — pushed for record.
 
 ## 交付物清單
 
-- `01-requirements/SRS.md` ✅ (290L)
-- `01-requirements/SPEC_TRACKING.md` ✅ (155L)
-- `01-requirements/TRACEABILITY_MATRIX.md` ✅ (223L)
+- `01-requirements/SRS.md` ✅ (278L)
+- `01-requirements/SPEC_TRACKING.md` ✅ (160L)
+- `01-requirements/TRACEABILITY_MATRIX.md` ✅ (279L)
 
 ## 目前執行狀況
 
-0 FR(s) defined in SRS []. 3/4 deliverables present, Agent-B APPROVED.
+3 FR(s) defined in SRS [FR-01,FR-02,FR-03]. 3/4 deliverables present, Agent-B APPROVED.
 
 **Recently Committed Files:**
+  - `.claude/workflows/phase1-requirements.js`
+  - `.claude/workflows/phase2-architecture.js`
   - `.harness/traces/agent_trajectory.jsonl`
-  - `.methodology/agent_b_approvals/SPEC_TRACKING.md.json`
   - `.methodology/agent_b_approvals/SRS.md.json`
-  - `.methodology/agent_b_approvals/TEST_INVENTORY.yaml.json`
   - `.methodology/agent_b_approvals/TRACEABILITY_MATRIX.md.json`
-  - `.methodology/fr_progress.json`
   - `.methodology/phase1_plan.md`
-  - `.methodology/phase2_plan.md`
-  - `.methodology/phase3_plan.md`
-  - `.methodology/phase4_plan.md`
-  - `.methodology/phase5_plan.md`
-  - `.methodology/phase6_plan.md`
-  - `.methodology/phase7_plan.md`
-  - `.methodology/phase8_plan.md`
   - `.methodology/state.json`
   - `01-requirements/SPEC_TRACKING.md`
   - `01-requirements/SRS.md`
   - `01-requirements/TRACEABILITY_MATRIX.md`
   - `HANDOVER.md`
   - `TEST_INVENTORY.yaml`
+  - `srs_vs_spec_diff.json`
+  - `.methodology/agent_b_approvals/SPEC_TRACKING.md.json`
+  - `.methodology/agent_b_approvals/TEST_INVENTORY.yaml.json`
+  - `.methodology/fr_progress.json`
+  - `.methodology/phase2_plan.md`
+  - `.methodology/phase3_plan.md`
+  - `.methodology/phase4_plan.md`
+  - `.methodology/phase5_plan.md`
 
 ## 接下來的工作
 
@@ -98,7 +98,7 @@ P1 phase completed — pushed for record.
 
 ## 附加資訊
 
-- **fr_count**: 0
+- **fr_count**: 3
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*

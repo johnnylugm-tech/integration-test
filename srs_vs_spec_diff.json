@@ -4,12 +4,73 @@
   "mode": "srs_vs_spec",
   "spec_present": true,
   "summary": {
-    "total_ac": 0,
+    "total_ac": 6,
     "verbatim_count": 0,
-    "interpreted_count": 0,
+    "interpreted_count": 6,
     "invention_count": 0,
     "over_spec_threshold": 0.7,
-    "high_score_count": 0
+    "high_score_count": 3
   },
-  "per_ac": []
+  "per_ac": [
+    {
+      "label": "FR-01",
+      "fr_id": "FR-01",
+      "score": {
+        "over_spec_score": 0.622,
+        "best_match_ratio": 0.378,
+        "derived_present": true,
+        "verdict": "interpreted"
+      }
+    },
+    {
+      "label": "FR-02",
+      "fr_id": "FR-02",
+      "score": {
+        "over_spec_score": 0.63,
+        "best_match_ratio": 0.37,
+        "derived_present": true,
+        "verdict": "interpreted"
+      }
+    },
+    {
+      "label": "FR-03",
+      "fr_id": "FR-03",
+      "score": {
+        "over_spec_score": 0.631,
+        "best_match_ratio": 0.369,
+        "derived_present": true,
+        "verdict": "interpreted"
+      }
+    },
+    {
+      "label": "NFR-01",
+      "fr_id": "NFR-01",
+      "score": {
+        "over_spec_score": 0.862,
+        "best_match_ratio": 0.138,
+        "derived_present": true,
+        "verdict": "interpreted"
+      }
+    },
+    {
+      "label": "NFR-02",
+      "fr_id": "NFR-02",
+      "score": {
+        "over_spec_score": 0.882,
+        "best_match_ratio": 0.118,
+        "derived_present": true,
+        "verdict": "interpreted"
+      }
+    },
+    {
+      "label": "NFR-03",
+      "fr_id": "NFR-03",
+      "score": {
+        "over_spec_score": 0.837,
+        "best_match_ratio": 0.163,
+        "derived_present": true,
+        "verdict": "interpreted"
+      }
+    }
+  ]
 }

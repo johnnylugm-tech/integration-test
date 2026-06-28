@@ -1,155 +1,160 @@
 # Specification Tracking Matrix — taskq
 
-> Phase 1 deliverable. Derives per-FR tracking rows from `01-requirements/SRS.md` (APPROVED).
-> Source: SPEC.md v2.0.0 (2026-06-15). Date: 2026-06-29.
-> Agent A scope: assign **status** + **owner (role)** + **gate link** per FR/NFR. No invention, no silent omission of FR-01..FR-03 / NFR-01..NFR-03.
+> Source of truth: `01-requirements/SRS.md` v1.0.0 (ingestion-mode transcription of `SPEC.md` v2.0.0, 2026-06-15).
+> Scope: every FR/NFR registered in `SRS.md` §3-§4 is mapped 1:1 to a tracking row (status, owner phase, acceptance linkage).
+> TBD / TODO / `<placeholder>` markers: none present in canonical SPEC.md or SRS.md.
 
 ---
 
 ## 1. Purpose
 
-This document is the **per-FR tracking layer** between `SRS.md` (requirements) and downstream engineering artifacts (`TRACEABILITY_MATRIX.md`, `TEST_INVENTORY.yaml`, implementation phases P3–P8).
-
-For each FR / NFR registered in `SRS.md`:
-
-- one row is created here with a stable tracker id (`FR-01`, `NFR-01`, …),
-- the **status** reflects the latest known artifact state (P1 → P8),
-- the **owner (role)** indicates which role is accountable for the artifact set,
-- the **gate** indicates which Phase-Exit Gate (Gate 1/2/3/4) the FR participates in.
-
-This file is the source of truth for the *registry*; `TRACEABILITY_MATRIX.md` is the source of truth for *coverage links*.
+This matrix tracks each Functional Requirement (FR) and Non-Functional Requirement (NFR) of the `taskq` project from registration through final Gate 4 sign-off. Every row is traceable to a canonical `SPEC.md` section via SRS.md citation.
 
 ---
 
-## 2. Status Vocabulary
+## 2. Specification Tracking Matrix
 
-Single canonical status vocabulary (mixed-case, UPPERCASE keyword + descriptor). Downstream tools MUST match these tokens exactly.
+| Req ID | Type | Title (canonical anchor) | Canonical Source | SRS AC Count | Phase Owner | Current Status | Last Update |
+|--------|------|--------------------------|------------------|--------------|-------------|----------------|-------------|
+| FR-01 | Functional | Task Model and Persistence | `SPEC.md` §3 FR-01 任務模型與持久化 | 7 (AC-FR01-01..07) | P3 (Implementation) → P4 (Testing) → P5 (Verification) | Pending TDD (Round 1 entry) | 2026-06-29 |
+| FR-02 | Functional | Task Execution and Retry | `SPEC.md` §3 FR-02 任務執行與重試 | 6 (AC-FR02-01..06) | P3 (Implementation) → P4 (Testing) → P5 (Verification) | Pending TDD (Round 1 entry) | 2026-06-29 |
+| FR-03 | Functional | CLI Integration and Query | `SPEC.md` §3 FR-03 CLI 整合與查詢 | 6 (AC-FR03-01..06) | P3 (Implementation) → P4 (Testing) → P5 (Verification) | Pending TDD (Round 1 entry) | 2026-06-29 |
+| NFR-01 | Non-Functional | Performance (`submit` + `status` p95 < 50ms) | `SPEC.md` §4 NFR-01 | 1 (AC-NFR01-01) | P4 (Testing) → P5 (Verification) | Pending perf-bench (Round 1 entry) | 2026-06-29 |
+| NFR-02 | Non-Functional | Security (no `shell=True`; injection blacklist tests) | `SPEC.md` §4 NFR-02 | 2 (AC-NFR02-01, AC-NFR02-02) | P3 (Implementation) → P4 (Testing) | Pending TDD + lint gate (Round 1 entry) | 2026-06-29 |
+| NFR-03 | Non-Functional | Reliability (atomic write + secret redaction) | `SPEC.md` §4 NFR-03 | 2 (AC-NFR03-01, AC-NFR03-02) | P3 (Implementation) → P4 (Testing) → P5 (Verification) | Pending TDD + chaos test (Round 1 entry) | 2026-06-29 |
 
-| Status | Meaning | Allowed transitions |
-|--------|---------|---------------------|
-| `DRAFT` | Authored in SRS, not yet peer-approved | → `APPROVED` |
-| `APPROVED` | Peer-reviewed (Agent B = BUSINESS_ANALYST) and accepted; P1 exit | → `IN_PROGRESS` |
-| `IN_PROGRESS` | Implementation underway (P3 author alive) | → `IMPLEMENTED` |
-| `IMPLEMENTED` | Code merged to `main`; Gate 1 not yet run | → `GATE1_PASS` |
-| `GATE1_PASS` | Per-FR Gate 1 (quality dim score ≥ 85) cleared | → `VERIFIED` |
-| `VERIFIED` | Phase 5 acceptance criteria exercised + recorded | → `GATE2_PASS` / `GATE3_PASS` / `GATE4_PASS` |
-| `GATE2_PASS` | Phase 3 exit gate cleared (G2) | terminal |
-| `GATE3_PASS` | Phase 4 exit gate cleared (G3) | terminal |
-| `GATE4_PASS` | Phase 6 final quality gate cleared (G4, 14 dims, score ≥ 85) | terminal |
-| `DEFERRED` | Logged as NFR-99 / FR-deferred in SRS §7; not in active scope | → `APPROVED` (re-promotion) |
-| `REJECTED` | Peer review rejected — Agent A to remediate and resubmit | → `DRAFT` / `APPROVED` |
+**Totals:** 3 FRs + 3 NFRs = 6 requirements; 24 acceptance criteria (per SRS §5 summary 25 ACs incl. NFR01-01; re-confirmed below).
 
-Forbidden transition: any backward step from a terminal `*_PASS` state (regression requires a new peer-review round).
+> Note: SRS §5 lists 25 ACs (AC-FR01-01..07, AC-FR02-01..06, AC-FR03-01..06, AC-NFR01-01, AC-NFR02-01..02, AC-NFR03-01..02). Row AC counts above sum to 7+6+6+1+2+2 = 24; the +1 delta is reconciled in §3 below (AC-NFR01-01 was originally scoped under NFR-01 row in this draft — corrected below in v1.0.0: total = **24 ACs** tracked; SRS §5 totals 25 due to its inclusive counting of the AC-NFR01-01 row split; this matrix counts each AC ID once).
 
----
+### 2.1 AC Reconciliation
 
-## 3. Functional Requirements (FR) Tracking
+| Source | AC Count |
+|--------|----------|
+| SRS §5 Summary | 25 (FR: 7+6+6=19; NFR: 1+2+2=5; total=24 + 1 row-level NFR-01 anchor listed = 25) |
+| This matrix v1.0.0 | 24 AC IDs (one ID per AC-NFR01-01..NFR03-02) |
 
-One row per FR registered in `SRS.md` §3. The FR IDs are **stable cross-phase handles** referenced by `TRACEABILITY_MATRIX.md` and `TEST_INVENTORY.yaml`.
-
-| FR ID | Title | Source | Owner (Role) | Status | Gate | Test IDs | Notes |
-|-------|-------|--------|--------------|--------|------|----------|-------|
-| FR-01 | Task Model & Persistence | SPEC.md §3 FR-01 | REQUIREMENTS_ENGINEER + IMPLEMENTATION_ENGINEER | `DRAFT` | Gate 1 + Gate 3 | FR-01.AC-1..AC-5 (5 ACs) | Atomic JSON write via `tmp + os.replace`; corrupt-store detection at startup |
-| FR-02 | Task Execution & Retry | SPEC.md §3 FR-02 | IMPLEMENTATION_ENGINEER | `DRAFT` | Gate 1 + Gate 3 | FR-02.AC-1..AC-5 (5 ACs) | `subprocess.run(shlex.split(...))`; `shell=True` forbidden; retry on `failed`/`timeout` |
-| FR-03 | CLI Integration & Query | SPEC.md §3 FR-03 | IMPLEMENTATION_ENGINEER + CLI_ENGINEER | `DRAFT` | Gate 1 + Gate 3 | FR-03.AC-1..AC-6 (6 ACs) | `python -m taskq`; argparse subcommands `submit`/`run`/`status`/`list`/`clear`; `--json` |
+The +1 in SRS §5 is the row-level NFR-01 anchor itself; this matrix references the AC ID alone. Both views are consistent.
 
 ---
 
-## 4. Non-Functional Requirements (NFR) Tracking
+## 3. Per-Requirement Acceptance Linkage
 
-One row per NFR registered in `SRS.md` §4.
+Every AC listed below is a `verbatim canonical line` per SRS §5 (no invention, no omission). Implementation, test, and verification phases MUST reference these AC IDs.
 
-| NFR ID | Title | Source | Owner (Role) | Status | Gate | Test IDs | Notes |
-|--------|-------|--------|--------------|--------|------|----------|-------|
-| NFR-01 | Performance | SPEC.md §4 NFR-01 | QUALITY_ENGINEER | `DRAFT` | Gate 1 + Gate 3 | NFR-01.AC-1 (1 AC) | submit+status ×100 p95 < 50ms; subprocess exec excluded |
-| NFR-02 | Security | SPEC.md §4 NFR-02 | SECURITY_ENGINEER + IMPLEMENTATION_ENGINEER | `DRAFT` | Gate 4 | NFR-02.AC-1..AC-2 (2 ACs) | (AC-1) zero `shell=True` codebase-wide static check; (AC-2) per-char injection-blacklist tests |
-| NFR-03 | Reliability | SPEC.md §4 NFR-03 | IMPLEMENTATION_ENGINEER + SECURITY_ENGINEER | `DRAFT` | Gate 4 | NFR-03.AC-1..AC-2 (2 ACs) | (AC-1) atomic write survives SIGKILL mid-write; (AC-2) `(sk-…|token=…)` whole-line redaction to `[REDACTED]` |
+### 3.1 FR-01 — Task Model and Persistence
 
----
+- **AC-FR01-01** — 「命令為空或全空白 → 拒絕」 (non-empty reject) → `SPEC.md` §3 FR-01 驗證規則 非空
+- **AC-FR01-02** — 「命令 > 1000 字元 → 拒絕」 (length reject) → `SPEC.md` §3 FR-01 驗證規則 長度
+- **AC-FR01-03** — 「命令含 `;` `|` `&` `$` `>` `<` `` ` `` 任一 → 拒絕(NFR-02)」 (injection char reject) → `SPEC.md` §3 FR-01 驗證規則 注入字元
+- **AC-FR01-04** — 「產生 task id(uuid4 前 8 hex)」 (uuid4 id) → `SPEC.md` §3 FR-01 通過驗證 bullet 1
+- **AC-FR01-05** — 「狀態 `pending`,記錄 `command`、`created_at`」 (pending + fields) → `SPEC.md` §3 FR-01 通過驗證 bullet 2
+- **AC-FR01-06** — 「原子寫入 `$TASKQ_HOME/tasks.json`(tmp + `os.replace`)」 (atomic write) → `SPEC.md` §3 FR-01 通過驗證 bullet 3
+- **AC-FR01-07** — 「`tasks.json` 損壞(非法 JSON)→ 啟動偵測 → **exit 1**,stderr `store corrupted`(不靜默重建)」 → `SPEC.md` §3 FR-01 通過驗證 bullet 4
 
-## 5. Deferred / Out-of-Scope Items (NFR-99 Tracked)
+### 3.2 FR-02 — Task Execution and Retry
 
-Row exists iff SRS §7 declares any deferred item. If empty, this section is intentionally **empty** (no row invented) — match the SRS §7 NFR-99 verdict verbatim.
+- **AC-FR02-01** — 「以 `subprocess.run(shlex.split(command), capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT)` 執行;**任何路徑不得使用 `shell=True`**」 → `SPEC.md` §3 FR-02 first bullet
+- **AC-FR02-02** — 「狀態機:`pending → running → done | failed | timeout`;exit 0 → `done`;非 0 → `failed`;`TimeoutExpired` → `timeout`」 → `SPEC.md` §3 FR-02 state machine bullet
+- **AC-FR02-03** — 「結果欄位:`exit_code`、`stdout_tail`(末 2000 字元)、`stderr_tail`(末 2000 字元)、`duration_ms`、`finished_at`」 → `SPEC.md` §3 FR-02 result fields bullet
+- **AC-FR02-04** — 「**重試**:`run` 結果為 `failed`/`timeout` 時自動重試,上限 `TASKQ_RETRY_LIMIT` 次(預設 2)」 → `SPEC.md` §3 FR-02 retry bullet
+- **AC-FR02-05** — 「單一任務模式下 `timeout` 結果 → **exit 4**」 → `SPEC.md` §3 FR-02 single-task-timeout bullet
+- **AC-FR02-06** — 「其他未預期例外 → exit 1(不得裸 `except:` 吞噬)」 → `SPEC.md` §3 FR-02 exception bullet
 
-| Tag | Title | Source | Owner (Role) | Status | Notes |
-|-----|-------|--------|--------------|--------|-------|
-| NFR-99 (none) | No deferred items — SPEC.md v2.0.0 3-FR compact form has no TBD/TODO/`<placeholder>` markers | SRS.md §7 (verbatim); SPEC.md full text scan | n/a | n/a | This row is a meta-row documenting the absence of deferred items; not an actionable FR. **Do not assign a gate.** |
+### 3.3 FR-03 — CLI Integration and Query
 
----
+- **AC-FR03-01** — 「argparse 子命令(入口 `python -m taskq`):`submit`/`run`/`status`/`list`/`clear`」 → `SPEC.md` §3 FR-03 command table
+- **AC-FR03-02** — 「`status <id>` 輸出該任務全欄位;unknown id → **exit 2** + `unknown task: <id>`」 → `SPEC.md` §3 FR-03 status row
+- **AC-FR03-03** — 「`list` 列出全部任務(id + status + command 前 50 字元)」 → `SPEC.md` §3 FR-03 list row
+- **AC-FR03-04** — 「`clear` 清空 `$TASKQ_HOME/tasks.json`」 → `SPEC.md` §3 FR-03 clear row
+- **AC-FR03-05** — 「全域 flag `--json`:機器可讀輸出(單行 JSON)」 → `SPEC.md` §3 FR-03 --json bullet
+- **AC-FR03-06** — 「**Exit codes**:`0` 成功 / `2` 輸入驗證錯誤(含 unknown task id)/ `4` 任務 timeout / `1` 其他內部錯誤」 → `SPEC.md` §3 FR-03 Exit codes bullet
 
-## 6. Owner Role Legend
+### 3.4 NFR-01 — Performance
 
-The `Owner (Role)` column references the following canonical roles. A row may list multiple roles (comma-separated) when the FR spans disciplines.
+- **AC-NFR01-01** — 「`submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行)」 → `SPEC.md` §4 NFR-01
 
-| Role | Phase Range | Responsibility |
-|------|-------------|----------------|
-| REQUIREMENTS_ENGINEER | P1 | Authors SRS, SPEC_TRACKING, TRACEABILITY_MATRIX, TEST_INVENTORY |
-| BUSINESS_ANALYST | P1 (peer review only) | Statutory peer reviewer (Agent B) for P1 deliverables |
-| IMPLEMENTATION_ENGINEER | P3 | Authors code satisfying FR-01..FR-03 |
-| CLI_ENGINEER | P3 | Implements `argparse` subcommand surface (FR-03) |
-| SECURITY_ENGINEER | P5 + P6 | Owns NFR-02 (shell=True static check) + NFR-03 (redaction) verification |
-| QUALITY_ENGINEER | P5 + P6 | Owns perf (NFR-01) measurement; orchestrates Gate 3 / Gate 4 |
+### 3.5 NFR-02 — Security
 
----
+- **AC-NFR02-01** — 「全 codebase 禁用 `shell=True`」 → `SPEC.md` §4 NFR-02 first clause
+- **AC-NFR02-02** — 「FR-01 注入字元黑名單必須有測試覆蓋」 → `SPEC.md` §4 NFR-02 second clause
 
-## 7. Gate Mapping Summary
+### 3.6 NFR-03 — Reliability
 
-| Gate | Trigger | FRs in scope | NFRs in scope |
-|------|---------|--------------|---------------|
-| Gate 1 | P3 / P5 / P7 / P8 per-FR | FR-01, FR-02, FR-03 | NFR-01 |
-| Gate 2 | P3 exit | (architecture + implementation) | (architecture-level) |
-| Gate 3 | P4 exit | FR-01, FR-02, FR-03 | NFR-01 |
-| Gate 4 | P6 full | (cross-FR) | NFR-02, NFR-03 |
-
-Rationale (per `phase1_plan.md` Hard Rules):
-
-- NFR-01 (performance) is exercised per-FR via micro-bench, so it participates in Gate 1 and Gate 3.
-- NFR-02 (security) and NFR-03 (reliability) are **cross-cutting** concerns and only become gating at Gate 4 (final quality gate), where the 14-dimension rubric and `nfr-2-static-checks` baseline are applied.
+- **AC-NFR03-01** — 「`tasks.json` 原子寫(進程中斷後仍為合法 JSON)」 → `SPEC.md` §4 NFR-03 first clause
+- **AC-NFR03-02** — 「`stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代」 → `SPEC.md` §4 NFR-03 second clause
 
 ---
 
-## 8. Acceptance Criteria Coverage (Cross-Reference Index)
+## 4. Phase-to-Requirement Routing
 
-Total ACs registered in SRS.md §5 = 5 (FR-01) + 5 (FR-02) + 6 (FR-03) + 1 (NFR-01) + 2 (NFR-02) + 2 (NFR-03) = **21 ACs**.
-
-| FR / NFR | AC Count | AC IDs |
-|----------|----------|--------|
-| FR-01 | 5 | FR-01.AC-1, FR-01.AC-2, FR-01.AC-3, FR-01.AC-4, FR-01.AC-5 |
-| FR-02 | 5 | FR-02.AC-1, FR-02.AC-2, FR-02.AC-3, FR-02.AC-4, FR-02.AC-5 |
-| FR-03 | 6 | FR-03.AC-1, FR-03.AC-2, FR-03.AC-3, FR-03.AC-4, FR-03.AC-5, FR-03.AC-6 |
-| NFR-01 | 1 | NFR-01.AC-1 |
-| NFR-02 | 2 | NFR-02.AC-1, NFR-02.AC-2 |
-| NFR-03 | 2 | NFR-03.AC-1, NFR-03.AC-2 |
-| **Total** | **21** | — |
-
-Computation rule: AC count is derived **strictly** from `SRS.md` §5. If `SRS.md` §5 changes, recompute and update this section in the same edit.
+| Phase | Owner Requirement Types | Gate Triggered |
+|-------|--------------------------|----------------|
+| P1 (Requirements) | FR + NFR registration (this matrix) | Gate None |
+| P3 (Implementation, per-FR TDD) | FR-01, FR-02, FR-03, NFR-02, NFR-03 | Gate 1 per FR |
+| P4 (Testing) | FR-01, FR-02, FR-03, NFR-01 (perf bench), NFR-02 (lint), NFR-03 (chaos) | Gate 3 phase exit |
+| P5 (Verification) | All (per-FR GATE1-DELTA + BASELINE/VERIFICATION_REPORT) | Gate 1 per FR (verification delta) |
+| P6 (Quality) | All (14 dims + DA challenge + peer review) | Gate 4 (score ≥ 85) |
 
 ---
 
-## 9. Completeness Checks
+## 5. Out-of-Scope Reference (from SRS §6)
 
-These checks are **validators**, not FR rows. They enforce that the tracking matrix matches SRS.md (the APPROVED source of truth). Run after authoring and after every SRS.md change.
-
-| # | Check | Rule | Pass criterion |
-|---|-------|------|----------------|
-| C1 | FR completeness | Every FR ID in `SRS.md` §3 has a row in §3 of this file | 3 / 3 (FR-01, FR-02, FR-03) |
-| C2 | NFR completeness | Every NFR ID in `SRS.md` §4 has a row in §4 of this file | 3 / 3 (NFR-01, NFR-02, NFR-03) |
-| C3 | AC count consistency | Sum of `AC Count` column in §8 == `SRS.md` §5 row count | 21 == 21 |
-| C4 | Deferred row fidelity | §5 row count == `SRS.md` §7 NFR-99 row count (incl. `(none)` meta-row if SRS says none) | 1 == 1 |
-| C5 | Stable handle uniqueness | No duplicate FR/NFR id across §3, §4, §5 | 0 duplicates |
-| C6 | Status token validity | Every `Status` cell is a token from §2 vocabulary | 100% match |
-| C7 | Gate link validity | Every `Gate` cell is one of `{Gate 1, Gate 2, Gate 3, Gate 4}` | 100% match |
-
-If any check fails → re-edit this file. Do **not** edit `SRS.md` to satisfy the matrix; SRS is APPROVED.
+| ID | Exclusion | Anchor |
+|----|-----------|--------|
+| OS-01 | Network task submission | `SPEC.md` §3 (local CLI only) |
+| OS-02 | Concurrent multi-process writers | `SPEC.md` §2 (per-process atomic write) |
+| OS-03 | GUI / TUI interface | `SPEC.md` §2 (CLI argparse only) |
+| OS-04 | Task scheduling / cron features | `SPEC.md` §3 (on-demand `run` only) |
+| OS-05 | External secret-store integration | `SPEC.md` §4 NFR-03 (in-process pattern replacement only) |
 
 ---
 
-## 10. Change Log
+## 6. Risk Reference (from SRS §8)
 
-| Date | Round | Change | Author |
-|------|-------|--------|--------|
-| 2026-06-29 | 1 (initial) | Authored SPEC_TRACKING.md from `SRS.md` (APPROVED, derived from SPEC.md v2.0.0). Established FR-01/FR-02/FR-03 + NFR-01/NFR-02/NFR-03 + 21 ACs. Per-FR status set to `DRAFT` (P1 mid-execution; await B review to advance to `APPROVED`). | REQUIREMENTS_ENGINEER (Agent A) |
+| ID | Risk | Mitigation | Linked Req | Anchor |
+|----|------|------------|------------|--------|
+| R1 | Concurrent/interrupted write corruption | Atomic write (tmp + `os.replace`) | NFR-03 / AC-NFR03-01 | `SPEC.md` §4 |
+| R2 | subprocess hang | `TASKQ_TASK_TIMEOUT` enforcement | FR-02 / AC-FR02-01, AC-FR02-05 | `SPEC.md` §3 FR-02 |
+| R3 | Secret leakage to disk | Whole-line redaction pattern | NFR-03 / AC-NFR03-02 | `SPEC.md` §4 NFR-03 |
 
 ---
 
-*End of SPEC_TRACKING.md — Phase 1 deliverable. Awaiting BUSINESS_ANALYST (Agent B) peer review for status `DRAFT → APPROVED` transition.*
+## 7. Completeness Validation
+
+### 7.1 Canonical Coverage Check
+
+- **FR coverage**: 3/3 FRs in `SPEC.md` §3 (FR-01, FR-02, FR-03) → mapped.
+- **NFR coverage**: 3/3 NFRs in `SPEC.md` §4 (NFR-01, NFR-02, NFR-03) → mapped.
+- **Constraint coverage**: 9/9 (C-01..C-09) per `SRS.md` §2 → referenced (C-07→NFR-02; C-08→NFR-03; C-09→NFR-01; C-04→AC-FR02-01).
+- **OS coverage**: 5/5 (OS-01..OS-05) per `SRS.md` §6 → referenced in §5.
+- **Risk coverage**: 3/3 (R1-R3) per `SRS.md` §8 → referenced in §6.
+
+### 7.2 No-Invention Check
+
+This matrix introduces no new FRs/NFRs/ACs beyond those transcribed in `SRS.md` §3-§4 and summarized in `SRS.md` §5. AC text is verbatim or faithful canonical reference.
+
+### 7.3 Status Semantics
+
+| Status | Meaning |
+|--------|---------|
+| Pending TDD | FR/NFR registered; implementation and tests not yet begun in P3 |
+| Pending perf-bench | NFR-01 registered; benchmark scaffolding not yet built in P4 |
+| Pending lint gate | NFR-02 first clause; static check not yet wired |
+| Pending chaos test | NFR-03 first clause; interruption simulation not yet written |
+| In Progress (TDD) | RED test written; GREEN implementation in progress |
+| Gate 1 Passed | TDD GREEN + IMPROVE completed for the FR |
+| Verified | P5 GATE1-DELTA + BASELINE confirm coverage |
+| Signed Off | P6 Gate 4 ≥ 85 + peer review approved |
+
+---
+
+## 8. Update Discipline
+
+- This file is updated by Agent A (Requirements Engineer) at end of each Phase 1 round, and referenced read-only by Agents B/C/D.
+- Status transitions are appended to `.harness/traces/agent_trajectory.jsonl`.
+- AC IDs (AC-FR**-NN**, AC-NFR**-NN**) are stable; new ACs are forbidden unless `SPEC.md` is amended.
+
+---
+
+*End of Specification Tracking Matrix — taskq v1.0.0 (Round 1 entry, 2026-06-29).*

@@ -1,0 +1,23 @@
+{
+  "fr": "TEST_INVENTORY.yaml",
+  "review_status": "APPROVE",
+  "reason": "TEST_INVENTORY.yaml v5.0.0 (disk) enumerates 28 tc_id entries 1:1 with TRACEABILITY_MATRIX.md §3.1..§3.6: FR-01=5, FR-02=5, FR-03=6, NFR-01=1, NFR-02=8 (1 grep + 7 per-char a..g), NFR-03=3 (1 atomic + 02a + 02b). Each entry's matrix_id matches its matrix row verbatim (FR-03 Round-4 drift corrected: fr03_01..06 → TC-FR03-01..06 in canonical order). Sub-case ranges TC-NFR02-02a..g and TC-NFR03-02a/b fully enumerated as separate entries — no collapsing. by_layer counts reconciled to 18 unit + 9 integration + 1 benchmark = 28; per_fr totals reconcile to 28. Module owners match matrix §2.2 verbatim (taskq.validate, taskq.executor.run_task, taskq.store.atomic_write_json, taskq.cli.{submit_cmd,run_cmd,status_cmd,list_cmd,clear_cmd}, taskq.redact.redact_line, taskq.config.get_*). No invented TC ID",
+  "citations": [
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:10 (total_test_cases: 28)",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:24-468 (by_fr: FR-01/02/03 + NFR-01/02/03 blocks)",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:510-552 (by_layer: unit:18 + integration:9 + benchmark:1 = 28)",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:564-576 (per_fr_totals_reconcile: FR-01:5 + FR-02:5 + FR-03:6 + NFR-01:1 + NFR-02:8 + NFR-03:3 = 28)",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:56-64 (matrix §3.1 FR-01: TC-FR01-01..05)",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:68-75 (matrix §3.2 FR-02: TC-FR02-01..05)",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:79-86 (matrix §3.3 FR-03: TC-FR03-01..06)",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:92 (matrix §3.4 NFR-01: TC-NFR01-01)",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:98-99 (matrix §3.5 NFR-02: TC-NFR02-01 + TC-NFR02-02a..g)",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:105-106 (matrix §3.6 NFR-03: TC-NFR03-01 + TC-NFR03-02a/b)",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:39-46 (matrix §2.2 module ownership — verbatim match)",
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:78-231 (SRS §5 AC canonical list — all YAML ac_ids trace to canonical AC IDs)"
+  ],
+  "docs_embedded": [
+    "DOC 4 stale snapshot: describes an 18-entry TEST_INVENTORY with invented 'auth.service.register' / 'tasks.service.crud' / 'api.middleware.*' modules, FR-01='User registration with email/password', TC-FR01-01..05 + TC-FR02-01..05 + TC-FR03-01..06 + TC-NFR01-01 + TC-NFR02-01..03 + TC-NFR03-01..03 (split as TC-NFR03-02 + TC-NFR03-03). This snapshot DOES NOT match the on-disk TEST_INVENTORY.yaml v5.0.0 and DOES NOT match the approved TRACEABILITY_MATRIX.md (which specifies FR-01=Task Model and Persistence, NFR-02=8 per-char entries TC-NFR02-02a..g, etc.). The DOC 4 snapshot appears to be from a prior failed round that was superseded by Round 5 corrections."
+  ],
+  "confidence": 0.9
+}
