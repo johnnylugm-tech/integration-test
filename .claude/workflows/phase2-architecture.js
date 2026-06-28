@@ -290,14 +290,28 @@ async function persistApproval(deliverableId, b2) {
     docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
   }, null, 2)
-  const pythonCmd = 'python3 -c "import json,os; os.makedirs(' + JSON.stringify(approvalsDir) + ', exist_ok=True); open(' + JSON.stringify(approvalPath) + ',\'w\').write(' + JSON.stringify(approvalJson) + ')"'
+  // v18 fix parity + v22 disk verification (Bugs observed 2026-06-29 on phase1-requirements):
+  // template literal (not string concat) avoids \\' escape parsing bug; verify agent
+  // confirms the file actually landed on disk before persistApproval returns, so a
+  // silent write failure surfaces as a thrown error instead of a cryptic advance-phase
+  // "approval missing" later.
+  const pythonCmd = `python3 -c "import json,os; os.makedirs(${JSON.stringify(approvalsDir)}, exist_ok=True); open(${JSON.stringify(approvalPath)}, 'w').write(${JSON.stringify(approvalJson)})"`
   const prompt = 'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout verbatim:\n\n' + pythonCmd + '\n\nNo commentary, no preamble, no other tool calls.'
   const res = await agent(prompt, {
     label: 'persist-' + deliverableId,
     phase: 'Persist Approval',
     agentType: 'general-purpose',
   })
-  log('  persisted approval: ' + approvalPath + ' (' + (typeof res === 'string' ? res.length : 0) + ' chars from agent)')
+  const verifyCmd = `python3 -c "import os,sys; p=${JSON.stringify(approvalPath)}; sys.exit(0 if os.path.isfile(p) and os.path.getsize(p) > 10 else 1)"`
+  const verifyRes = await agent('You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout verbatim (last line is the exit code):\n\n' + verifyCmd, {
+    label: 'verify-persist-' + deliverableId,
+    phase: 'Persist Approval',
+    agentType: 'general-purpose',
+  })
+  if (typeof verifyRes !== 'string' || !/exit\s*0|VERIFIED|EXISTS/i.test(verifyRes)) {
+    throw new Error('persistApproval verification FAILED for ' + approvalPath + ' — file not on disk after write. Agent verify output: ' + String(verifyRes).slice(0, 200))
+  }
+  log('  persisted + verified approval: ' + approvalPath + ' (' + (typeof res === 'string' ? res.length : 0) + ' chars written, disk verified)')
 }
 
 // ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----

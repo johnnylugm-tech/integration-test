@@ -1,116 +1,155 @@
 # Specification Tracking Matrix — taskq
 
-> Source of truth: `/Users/johnny/projects/integration-test/01-requirements/SRS.md` (v1.0.0, 2026-06-29)
-> Project role: integration-test target for harness-methodology v2.9 pipeline validation
-> Phase: 1 — Requirements | Sub-Task: 2/4 (SPEC_TRACKING.md)
-> Status legend: `DRAFT` → `APPROVED` → `IN-IMPLEMENTATION` → `IMPLEMENTED` → `VERIFIED`
-> Owner legend: IMPLEMENTER = phase owner; REVIEWER = peer-reviewer (P6); OWNER = primary engineering lead.
-
-## 1. Document Metadata
-
-| Field | Value |
-|-------|-------|
-| Document ID | SPEC_TRACKING.md |
-| Created | 2026-06-29 |
-| Author Role | REQUIREMENTS_ENGINEER (Agent A) |
-| Source Spec | SRS.md v1.0.0 (INGESTION MODE from SPEC.md v2.0.0) |
-| Project Codename | taskq |
-| Language | Python 3.11 (stdlib only) |
-| Total FRs | 3 (FR-01, FR-02, FR-03) |
-| Total NFRs | 3 (NFR-01, NFR-02, NFR-03) |
-| Total Constraints | 7 (C-01 ~ C-07) |
-| Total Config Vars | 3 (TASKQ_HOME, TASKQ_TASK_TIMEOUT, TASKQ_RETRY_LIMIT) |
-
-## 2. FR Tracking Matrix
-
-| FR ID | Title | Status | Owner | Priority | Spec Section | AC Count | Verification Phase | Implementation Phase | Test Phase | Risk Tags | Notes |
-|-------|-------|--------|-------|----------|--------------|----------|-------------------|---------------------|-----------|-----------|-------|
-| FR-01 | 任務模型與持久化 (Task Model and Persistence) | APPROVED | taskq-team/IMPLEMENTER | P0 | SRS §3.1.1, §3.1.2 | 7 | P5 | P3 | P4 | R1 (atomic write), NFR-02 (injection chars) | Validation: empty/length/injection chars; Pass: uuid8 + pending + atomic write + corruption-detect |
-| FR-02 | 任務執行與重試 (Task Execution and Retry) | APPROVED | taskq-team/IMPLEMENTER | P0 | SRS §3.2.1, §3.2.2, §3.2.3, §3.2.4, §3.2.5 | 6 | P5 | P3 | P4 | R2 (subprocess hang), NFR-02 (no shell=True) | DERIVED: subprocess.run kwargs; State machine pending→running→{done,failed,timeout}; Retry up to TASKQ_RETRY_LIMIT |
-| FR-03 | CLI 整合與查詢 (CLI Integration and Query) | APPROVED | taskq-team/IMPLEMENTER | P1 | SRS §3.3, §3.3.1, §3.3.2 | 6 | P5 | P3 | P4 | — | argparse subcommands; --json flag; exit code table (0/2/4/1) |
-
-## 3. NFR Tracking Matrix
-
-| NFR ID | Title | Status | Owner | Priority | Spec Section | AC Count | Verification Phase | Test Mechanism | Risk Tags | Notes |
-|--------|-------|--------|-------|----------|--------------|----------|-------------------|---------------|-----------|-------|
-| NFR-01 | Performance | APPROVED | taskq-team/IMPLEMENTER | P1 | SRS §4 | 1 | P5 | benchmark (p95 < 50ms over 100 submit+status iters) | — | DERIVED: p95 algorithm delegated to harness |
-| NFR-02 | Security | APPROVED | taskq-team/SECURITY-LEAD | P0 | SRS §4 | 2 | P5 | grep zero shell=True + per-char blacklist unit tests | NFR-99 (coverage unit per-char) | shell=True forbidden codebase-wide; FR-01 blacklist 7 chars tested per-char |
-| NFR-03 | Reliability | APPROVED | taskq-team/IMPLEMENTER | P0 | SRS §4 | 2 | P5 | kill-signal sim + redaction pattern match | R1 (atomic write), R3 (secret leak) | atomic write (tmp + os.replace); redaction `sk-[A-Za-z0-9_-]{8,}\|`token=\S+` → `[REDACTED]` |
-
-## 4. Constraint Tracking
-
-| C ID | Constraint | Status | Owner | Source | Verification |
-|------|------------|--------|-------|--------|--------------|
-| C-01 | Python 3.11 stdlib only | APPROVED | taskq-team/IMPLEMENTER | SPEC §1 | P3 — no requirements.txt runtime deps |
-| C-02 | `python -m taskq` CLI entry point | APPROVED | taskq-team/IMPLEMENTER | SPEC §1 | P4 — argparse entry |
-| C-03 | `shell=True` forbidden everywhere | APPROVED | taskq-team/SECURITY-LEAD | SPEC §2 / NFR-02 | P5 — codebase grep |
-| C-04 | `tasks.json` atomic write (tmp + os.replace) | APPROVED | taskq-team/IMPLEMENTER | SPEC §2 / NFR-03 | P5 — kill-signal sim |
-| C-05 | Configuration via `TASKQ_*` env vars (config.py) | APPROVED | taskq-team/IMPLEMENTER | SPEC §2 | P3 — config.py module |
-| C-06 | `shlex.split` for command tokenization | APPROVED | taskq-team/IMPLEMENTER | SPEC §2 | P3 — code review |
-| C-07 | Runtime zero external dependencies | APPROVED | taskq-team/IMPLEMENTER | PROJECT_BRIEF | P3 — no third-party packages |
-
-## 5. Configuration Tracking
-
-| Var | Default | Status | Owner | Spec Section | AC |
-|-----|---------|--------|-------|--------------|-----|
-| TASKQ_HOME | `.taskq` | APPROVED | taskq-team/IMPLEMENTER | SRS §5 | default applied when env unset |
-| TASKQ_TASK_TIMEOUT | `10.0` | APPROVED | taskq-team/IMPLEMENTER | SRS §5 | default applied when env unset; used by FR-02 |
-| TASKQ_RETRY_LIMIT | `2` | APPROVED | taskq-team/IMPLEMENTER | SRS §5 | default applied when env unset; used by FR-02 §3.2.4 |
-
-## 6. Cross-Reference Index
-
-| FR/NFR | Constraints | Config Vars | Risks | Open Issues |
-|--------|-------------|-------------|-------|-------------|
-| FR-01 | C-04, C-05, C-06 | TASKQ_HOME | R1 | — |
-| FR-02 | C-03, C-06 | TASKQ_TASK_TIMEOUT, TASKQ_RETRY_LIMIT | R2 | NFR-99 (stdout_tail char-count ambiguity), NFR-99 (subprocess kwargs completeness) |
-| FR-03 | C-02 | — | — | — |
-| NFR-01 | — | — | — | NFR-99 (p95 algorithm ownership) |
-| NFR-02 | C-03 | — | — | NFR-99 (coverage unit per-char) |
-| NFR-03 | C-04 | — | R1, R3 | NFR-99 (line-vs-partial-line redaction semantics) |
-
-## 7. Status Snapshot
-
-| Layer | Total | DRAFT | APPROVED | IN-IMPLEMENTATION | IMPLEMENTED | VERIFIED |
-|-------|-------|-------|----------|-------------------|-------------|----------|
-| FR | 3 | 0 | 3 | 0 | 0 | 0 |
-| NFR | 3 | 0 | 3 | 0 | 0 | 0 |
-| Constraint | 7 | 0 | 7 | 0 | 0 | 0 |
-| Config | 3 | 0 | 3 | 0 | 0 | 0 |
-
-## 8. Completeness Validation
-
-| Check | Result | Evidence |
-|-------|--------|----------|
-| All FRs from SRS.md enumerated? | PASS | FR-01, FR-02, FR-03 listed (SRS §3) |
-| All NFRs from SRS.md enumerated? | PASS | NFR-01, NFR-02, NFR-03 listed (SRS §4) |
-| All Constraints from SRS.md enumerated? | PASS | C-01 ~ C-07 listed (SRS §2) |
-| All Config vars from SRS.md enumerated? | PASS | TASKQ_HOME, TASKQ_TASK_TIMEOUT, TASKQ_RETRY_LIMIT (SRS §5) |
-| Owner assigned per FR? | PASS | IMPLEMENTER / SECURITY-LEAD owners per row |
-| Owner assigned per NFR? | PASS | IMPLEMENTER / SECURITY-LEAD owners per row |
-| Status populated per item? | PASS | All rows show `APPROVED` (Phase 1 gate state) |
-| Orphan requirements (in SRS but not tracked)? | NONE | FR count matches SRS §3; NFR count matches SRS §4 |
-| Risks cross-referenced? | PASS | R1/R2/R3 mapped (SRS §9) |
-| Open issues cross-referenced? | PASS | NFR-99 entries mapped (SRS §8) |
-
-## 9. Phase Hand-off
-
-| Hand-off Target | Items to Carry |
-|-----------------|---------------|
-| Sub-Task 3/4 (TRACEABILITY_MATRIX.md) | FR list §2, NFR list §3, AC counts per row |
-| Sub-Task 4/4 (TEST_INVENTORY.yaml) | FR list §2, NFR list §3, per-item AC counts as 1:1 sub-case input |
-| Phase 3 (Implementation) | Approved FR/NFR rows, ownership table, constraint list |
-| Phase 5 (Verification) | AC count per FR/NFR row, risk tags |
-| Phase 6 (Quality / Peer Review) | Owner column for review-attribution |
-
-## 10. Open Items
-
-| ID | Description | Source | Tracking |
-|----|-------------|--------|----------|
-| NFR-99 / FR-02 | stdout_tail "末 2000 字元" byte-vs-char ambiguity | SRS §8 | Carried forward to P3/P5 for harness resolution |
-| NFR-99 / FR-02 | subprocess.run kwargs completeness | SRS §8 | Carried forward to P3 |
-| NFR-99 / NFR-01 | p95 algorithm ownership (sort-index vs quantile) | SRS §8 | Carried forward to P5 benchmark design |
-| NFR-99 / NFR-02 | redaction line-vs-partial-line semantics | SRS §8 | Carried forward to P5 |
+> Phase 1 deliverable. Derives per-FR tracking rows from `01-requirements/SRS.md` (APPROVED).
+> Source: SPEC.md v2.0.0 (2026-06-15). Date: 2026-06-29.
+> Agent A scope: assign **status** + **owner (role)** + **gate link** per FR/NFR. No invention, no silent omission of FR-01..FR-03 / NFR-01..NFR-03.
 
 ---
 
-*Document version: SPEC_TRACKING v1.0.0 | Authored: 2026-06-29 | Phase: 1 — Requirements | Status: APPROVED-pending-B-review*
+## 1. Purpose
+
+This document is the **per-FR tracking layer** between `SRS.md` (requirements) and downstream engineering artifacts (`TRACEABILITY_MATRIX.md`, `TEST_INVENTORY.yaml`, implementation phases P3–P8).
+
+For each FR / NFR registered in `SRS.md`:
+
+- one row is created here with a stable tracker id (`FR-01`, `NFR-01`, …),
+- the **status** reflects the latest known artifact state (P1 → P8),
+- the **owner (role)** indicates which role is accountable for the artifact set,
+- the **gate** indicates which Phase-Exit Gate (Gate 1/2/3/4) the FR participates in.
+
+This file is the source of truth for the *registry*; `TRACEABILITY_MATRIX.md` is the source of truth for *coverage links*.
+
+---
+
+## 2. Status Vocabulary
+
+Single canonical status vocabulary (mixed-case, UPPERCASE keyword + descriptor). Downstream tools MUST match these tokens exactly.
+
+| Status | Meaning | Allowed transitions |
+|--------|---------|---------------------|
+| `DRAFT` | Authored in SRS, not yet peer-approved | → `APPROVED` |
+| `APPROVED` | Peer-reviewed (Agent B = BUSINESS_ANALYST) and accepted; P1 exit | → `IN_PROGRESS` |
+| `IN_PROGRESS` | Implementation underway (P3 author alive) | → `IMPLEMENTED` |
+| `IMPLEMENTED` | Code merged to `main`; Gate 1 not yet run | → `GATE1_PASS` |
+| `GATE1_PASS` | Per-FR Gate 1 (quality dim score ≥ 85) cleared | → `VERIFIED` |
+| `VERIFIED` | Phase 5 acceptance criteria exercised + recorded | → `GATE2_PASS` / `GATE3_PASS` / `GATE4_PASS` |
+| `GATE2_PASS` | Phase 3 exit gate cleared (G2) | terminal |
+| `GATE3_PASS` | Phase 4 exit gate cleared (G3) | terminal |
+| `GATE4_PASS` | Phase 6 final quality gate cleared (G4, 14 dims, score ≥ 85) | terminal |
+| `DEFERRED` | Logged as NFR-99 / FR-deferred in SRS §7; not in active scope | → `APPROVED` (re-promotion) |
+| `REJECTED` | Peer review rejected — Agent A to remediate and resubmit | → `DRAFT` / `APPROVED` |
+
+Forbidden transition: any backward step from a terminal `*_PASS` state (regression requires a new peer-review round).
+
+---
+
+## 3. Functional Requirements (FR) Tracking
+
+One row per FR registered in `SRS.md` §3. The FR IDs are **stable cross-phase handles** referenced by `TRACEABILITY_MATRIX.md` and `TEST_INVENTORY.yaml`.
+
+| FR ID | Title | Source | Owner (Role) | Status | Gate | Test IDs | Notes |
+|-------|-------|--------|--------------|--------|------|----------|-------|
+| FR-01 | Task Model & Persistence | SPEC.md §3 FR-01 | REQUIREMENTS_ENGINEER + IMPLEMENTATION_ENGINEER | `DRAFT` | Gate 1 + Gate 3 | FR-01.AC-1..AC-5 (5 ACs) | Atomic JSON write via `tmp + os.replace`; corrupt-store detection at startup |
+| FR-02 | Task Execution & Retry | SPEC.md §3 FR-02 | IMPLEMENTATION_ENGINEER | `DRAFT` | Gate 1 + Gate 3 | FR-02.AC-1..AC-5 (5 ACs) | `subprocess.run(shlex.split(...))`; `shell=True` forbidden; retry on `failed`/`timeout` |
+| FR-03 | CLI Integration & Query | SPEC.md §3 FR-03 | IMPLEMENTATION_ENGINEER + CLI_ENGINEER | `DRAFT` | Gate 1 + Gate 3 | FR-03.AC-1..AC-6 (6 ACs) | `python -m taskq`; argparse subcommands `submit`/`run`/`status`/`list`/`clear`; `--json` |
+
+---
+
+## 4. Non-Functional Requirements (NFR) Tracking
+
+One row per NFR registered in `SRS.md` §4.
+
+| NFR ID | Title | Source | Owner (Role) | Status | Gate | Test IDs | Notes |
+|--------|-------|--------|--------------|--------|------|----------|-------|
+| NFR-01 | Performance | SPEC.md §4 NFR-01 | QUALITY_ENGINEER | `DRAFT` | Gate 1 + Gate 3 | NFR-01.AC-1 (1 AC) | submit+status ×100 p95 < 50ms; subprocess exec excluded |
+| NFR-02 | Security | SPEC.md §4 NFR-02 | SECURITY_ENGINEER + IMPLEMENTATION_ENGINEER | `DRAFT` | Gate 4 | NFR-02.AC-1..AC-2 (2 ACs) | (AC-1) zero `shell=True` codebase-wide static check; (AC-2) per-char injection-blacklist tests |
+| NFR-03 | Reliability | SPEC.md §4 NFR-03 | IMPLEMENTATION_ENGINEER + SECURITY_ENGINEER | `DRAFT` | Gate 4 | NFR-03.AC-1..AC-2 (2 ACs) | (AC-1) atomic write survives SIGKILL mid-write; (AC-2) `(sk-…|token=…)` whole-line redaction to `[REDACTED]` |
+
+---
+
+## 5. Deferred / Out-of-Scope Items (NFR-99 Tracked)
+
+Row exists iff SRS §7 declares any deferred item. If empty, this section is intentionally **empty** (no row invented) — match the SRS §7 NFR-99 verdict verbatim.
+
+| Tag | Title | Source | Owner (Role) | Status | Notes |
+|-----|-------|--------|--------------|--------|-------|
+| NFR-99 (none) | No deferred items — SPEC.md v2.0.0 3-FR compact form has no TBD/TODO/`<placeholder>` markers | SRS.md §7 (verbatim); SPEC.md full text scan | n/a | n/a | This row is a meta-row documenting the absence of deferred items; not an actionable FR. **Do not assign a gate.** |
+
+---
+
+## 6. Owner Role Legend
+
+The `Owner (Role)` column references the following canonical roles. A row may list multiple roles (comma-separated) when the FR spans disciplines.
+
+| Role | Phase Range | Responsibility |
+|------|-------------|----------------|
+| REQUIREMENTS_ENGINEER | P1 | Authors SRS, SPEC_TRACKING, TRACEABILITY_MATRIX, TEST_INVENTORY |
+| BUSINESS_ANALYST | P1 (peer review only) | Statutory peer reviewer (Agent B) for P1 deliverables |
+| IMPLEMENTATION_ENGINEER | P3 | Authors code satisfying FR-01..FR-03 |
+| CLI_ENGINEER | P3 | Implements `argparse` subcommand surface (FR-03) |
+| SECURITY_ENGINEER | P5 + P6 | Owns NFR-02 (shell=True static check) + NFR-03 (redaction) verification |
+| QUALITY_ENGINEER | P5 + P6 | Owns perf (NFR-01) measurement; orchestrates Gate 3 / Gate 4 |
+
+---
+
+## 7. Gate Mapping Summary
+
+| Gate | Trigger | FRs in scope | NFRs in scope |
+|------|---------|--------------|---------------|
+| Gate 1 | P3 / P5 / P7 / P8 per-FR | FR-01, FR-02, FR-03 | NFR-01 |
+| Gate 2 | P3 exit | (architecture + implementation) | (architecture-level) |
+| Gate 3 | P4 exit | FR-01, FR-02, FR-03 | NFR-01 |
+| Gate 4 | P6 full | (cross-FR) | NFR-02, NFR-03 |
+
+Rationale (per `phase1_plan.md` Hard Rules):
+
+- NFR-01 (performance) is exercised per-FR via micro-bench, so it participates in Gate 1 and Gate 3.
+- NFR-02 (security) and NFR-03 (reliability) are **cross-cutting** concerns and only become gating at Gate 4 (final quality gate), where the 14-dimension rubric and `nfr-2-static-checks` baseline are applied.
+
+---
+
+## 8. Acceptance Criteria Coverage (Cross-Reference Index)
+
+Total ACs registered in SRS.md §5 = 5 (FR-01) + 5 (FR-02) + 6 (FR-03) + 1 (NFR-01) + 2 (NFR-02) + 2 (NFR-03) = **21 ACs**.
+
+| FR / NFR | AC Count | AC IDs |
+|----------|----------|--------|
+| FR-01 | 5 | FR-01.AC-1, FR-01.AC-2, FR-01.AC-3, FR-01.AC-4, FR-01.AC-5 |
+| FR-02 | 5 | FR-02.AC-1, FR-02.AC-2, FR-02.AC-3, FR-02.AC-4, FR-02.AC-5 |
+| FR-03 | 6 | FR-03.AC-1, FR-03.AC-2, FR-03.AC-3, FR-03.AC-4, FR-03.AC-5, FR-03.AC-6 |
+| NFR-01 | 1 | NFR-01.AC-1 |
+| NFR-02 | 2 | NFR-02.AC-1, NFR-02.AC-2 |
+| NFR-03 | 2 | NFR-03.AC-1, NFR-03.AC-2 |
+| **Total** | **21** | — |
+
+Computation rule: AC count is derived **strictly** from `SRS.md` §5. If `SRS.md` §5 changes, recompute and update this section in the same edit.
+
+---
+
+## 9. Completeness Checks
+
+These checks are **validators**, not FR rows. They enforce that the tracking matrix matches SRS.md (the APPROVED source of truth). Run after authoring and after every SRS.md change.
+
+| # | Check | Rule | Pass criterion |
+|---|-------|------|----------------|
+| C1 | FR completeness | Every FR ID in `SRS.md` §3 has a row in §3 of this file | 3 / 3 (FR-01, FR-02, FR-03) |
+| C2 | NFR completeness | Every NFR ID in `SRS.md` §4 has a row in §4 of this file | 3 / 3 (NFR-01, NFR-02, NFR-03) |
+| C3 | AC count consistency | Sum of `AC Count` column in §8 == `SRS.md` §5 row count | 21 == 21 |
+| C4 | Deferred row fidelity | §5 row count == `SRS.md` §7 NFR-99 row count (incl. `(none)` meta-row if SRS says none) | 1 == 1 |
+| C5 | Stable handle uniqueness | No duplicate FR/NFR id across §3, §4, §5 | 0 duplicates |
+| C6 | Status token validity | Every `Status` cell is a token from §2 vocabulary | 100% match |
+| C7 | Gate link validity | Every `Gate` cell is one of `{Gate 1, Gate 2, Gate 3, Gate 4}` | 100% match |
+
+If any check fails → re-edit this file. Do **not** edit `SRS.md` to satisfy the matrix; SRS is APPROVED.
+
+---
+
+## 10. Change Log
+
+| Date | Round | Change | Author |
+|------|-------|--------|--------|
+| 2026-06-29 | 1 (initial) | Authored SPEC_TRACKING.md from `SRS.md` (APPROVED, derived from SPEC.md v2.0.0). Established FR-01/FR-02/FR-03 + NFR-01/NFR-02/NFR-03 + 21 ACs. Per-FR status set to `DRAFT` (P1 mid-execution; await B review to advance to `APPROVED`). | REQUIREMENTS_ENGINEER (Agent A) |
+
+---
+
+*End of SPEC_TRACKING.md — Phase 1 deliverable. Awaiting BUSINESS_ANALYST (Agent B) peer review for status `DRAFT → APPROVED` transition.*

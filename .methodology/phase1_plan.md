@@ -369,36 +369,6 @@ are not re-opened. This bounds backtracking to a single step.
 
   > fr_id uses P1 as phase-level placeholder; replace with FR-XX for FR-specific plans.
 
-### FR Requirements (3 total)
-
-#### FR-01: 任務模型與持久化
-**Task**: 
-
-#### FR-02: 任務執行與重試
-**Task**: 
-
-#### FR-03: CLI 整合與查詢
-**Task**: 
-
-### NFR Non-Functional Requirements (3 total)
-
-#### NFR-01: Performance
-**Requirement**: > `submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行)
-
-The implementation **MUST** achieve a 95th-percentile latency of less than 50 ms for the combined sequence "submit + status" executed 100
-
-#### NFR-02: Security
-**Requirement**: > 全 codebase 禁用 `shell=True`;FR-01 注入字元黑名單必須有測試覆蓋
-
-The implementation **MUST** satisfy both clauses:
-1. 全 codebase 禁用 `shell=True` — `shell=True` **MUST NOT** appear anywhere in the codebase's task-ex
-
-#### NFR-03: Reliability
-**Requirement**: > `tasks.json` 原子寫(進程中斷後仍為合法 JSON);`stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代
-
-The implementation **MUST** satisfy both clauses:
-1. `tasks.json` 原子寫 — wri
-
 ### Phase 1 Deliverables
 - `SRS.md` - Software Requirements Specification (FRs + NFRs)
 - `SPEC_TRACKING.md` - Spec tracking matrix

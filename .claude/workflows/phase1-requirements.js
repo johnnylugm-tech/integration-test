@@ -477,7 +477,22 @@ async function persistApproval(deliverableId, b2) {
     phase: 'Persist Approval',
     agentType: 'general-purpose',
   })
-  log('  persisted approval: ' + approvalPath + ' (' + (typeof res === 'string' ? res.length : 0) + ' chars from agent)')
+  // v22 fix (Bug observed 2026-06-29 on phase1-requirements): verify the approval JSON
+  // actually landed on disk after the agent returns. Without this check, agent-side
+  // failures (sandbox I/O, double-encoding, wrong cwd) write nothing but workflow
+  // continues silent — advance-phase then fails with cryptic "approval missing".
+  // throw on missing file forces the caller (runSubTask) to surface the error and abort
+  // the phase instead of proceeding to Peer Review with an incomplete approval set.
+  const verifyCmd = `python3 -c "import os,sys; p=${JSON.stringify(approvalPath)}; sys.exit(0 if os.path.isfile(p) and os.path.getsize(p) > 10 else 1)"`
+  const verifyRes = await agent('You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout verbatim (last line is the exit code):\n\n' + verifyCmd, {
+    label: 'verify-persist-' + deliverableId,
+    phase: 'Persist Approval',
+    agentType: 'general-purpose',
+  })
+  if (typeof verifyRes !== 'string' || !/exit\s*0|VERIFIED|EXISTS/i.test(verifyRes)) {
+    throw new Error('persistApproval verification FAILED for ' + approvalPath + ' — file not on disk after write. Agent verify output: ' + String(verifyRes).slice(0, 200))
+  }
+  log('  persisted + verified approval: ' + approvalPath + ' (' + (typeof res === 'string' ? res.length : 0) + ' chars written, disk verified)')
 }
 
 // ---- runPeerReview: holistic B review of all 4 deliverables + fixer agent ----

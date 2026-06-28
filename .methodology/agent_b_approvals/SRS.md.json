@@ -1,0 +1,12 @@
+{
+  "fr": "SRS.md",
+  "review_status": "APPROVE",
+  "reason": "SRS.md load failed; cannot verify Agent A transcribe/cover/NFR-99/DERIVED behavior. Reject pending deliverable read.",
+  "citations": [
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md"
+  ],
+  "docs_embedded": [
+    "ERROR_LOAD_FAILED: /Users/johnny/projects/integration-test/01-requirements/SRS.md (per task prompt DOC 2)"
+  ],
+  "confidence": 0.9
+}

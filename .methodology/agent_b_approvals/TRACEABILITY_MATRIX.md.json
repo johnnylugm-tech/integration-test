@@ -1,20 +1,23 @@
 {
   "fr": "TRACEABILITY_MATRIX.md",
   "review_status": "APPROVE",
-  "reason": "TRACEABILITY_MATRIX.md v1.0.0 establishes full bidirectional traceability: Section 2 forward (FR-01/02/03, NFR-01/02/03, C-01..C-07, TASKQ_* x3, R1/R2/R3) all map to specific design modules and TC IDs (1:1 with sub-cases); Section 3 backward map covers every TC ID exhaustively; Section 4 coverage matrices show 100 percent on all dimensions (19 FR-TCs, 12 NFR-TCs, 7 C, 3 CFG, 3 R); Section 5 orphan analysis is NONE; Section 6 carries NFR-99 open-issues from SRS Section 8 forward; Section 8 completeness validation self-checks all required points. Upstream B-2 reviews for SRS.md and SPEC_TRACKING.md returned APPROVE with empty gaps. Trace counts are internally consistent with SRS.md AC Summary (Section 6) and SPEC_TRACKING.md metadata.",
+  "reason": "TRACEABILITY_MATRIX.md establishes full bidirectional traceability. All 21 ACs from SRS.md §5 (FR-01..FR-03 + NFR-01..NFR-03) have one row each in §3 with design elements + test IDs, all marked COVERED. §4 backward link mirrors forward (21/21 parity). §6 sums to 21/21. §7 completeness checks C1–C10 all pass. §5 enumerates 7 cross-cutting concerns; §8 maps all 3 risks (R1/R2/R3) from SRS §8 to mitigating ACs/tests. §9 NFR-99 (none) matches SRS §7. No invention, no orphan tests, no orphan design — every design element is a sub-symbol reachable from the §2.2 module map.",
   "citations": [
-    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:1-268",
-    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:29-211",
-    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:24-78"
+    "01-requirements/TRACEABILITY_MATRIX.md:61-122",
+    "01-requirements/TRACEABILITY_MATRIX.md:127-136",
+    "01-requirements/TRACEABILITY_MATRIX.md:142-152",
+    "01-requirements/TRACEABILITY_MATRIX.md:158-170",
+    "01-requirements/TRACEABILITY_MATRIX.md:178-191",
+    "01-requirements/TRACEABILITY_MATRIX.md:197-203",
+    "01-requirements/TRACEABILITY_MATRIX.md:210-212",
+    "01-requirements/SRS.md:213-237",
+    "01-requirements/SRS.md:254-256",
+    "01-requirements/SRS.md:266-270"
   ],
   "docs_embedded": [
-    "SRS.md Section 2 (C-01..C-07)",
-    "SRS.md Section 3 (FR-01/02/03)",
-    "SRS.md Section 4 (NFR-01/02/03)",
-    "SRS.md Section 5 (TASKQ_* config)",
-    "SRS.md Section 9 (R1/R2/R3)",
-    "SPEC_TRACKING.md Sections 2-5 (FR/NFR/C/Config tables)",
-    "TRACEABILITY_MATRIX.md Sections 2-8 (forward + backward + coverage + validation)"
+    "SRS.md full 21-AC enumeration (FR-01.AC-1..AC-5, FR-02.AC-1..AC-5, FR-03.AC-1..AC-6, NFR-01.AC-1, NFR-02.AC-1..AC-2, NFR-03.AC-1..AC-2)",
+    "SPEC_TRACKING.md status vocabulary + FR/NFR rows (DRAFT → APPROVED transition pending)",
+    "TRACEABILITY_MATRIX.md forward (§3 21 rows) + backward (§4) + cross-cutting (§5) + coverage (§6 21/21) + checks (§7 C1–C10) + risks (§8) + NFR-99 none (§9)"
   ],
   "confidence": 0.9
 }
