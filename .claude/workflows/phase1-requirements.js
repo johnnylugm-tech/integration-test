@@ -53,7 +53,8 @@ log('REPO = ' + REPO)
 const WRITE_SCOPE_TMP = REPO + '/.sessi-work/tmp'
 log('WRITE SCOPE: debug artifacts → ' + WRITE_SCOPE_TMP)
 const PY = REPO + '/.venv/bin/python'
-const MAX_B_ROUNDS = 5  // HR-12
+const MAX_B_ROUNDS = 5  // HR-12 (sub-tasks: functional gate, must converge)
+const MAX_PEER_ROUNDS = 3  // P-01: advisory threshold (peer review = quality check, not functional gate)
 
 // ---- JSON parsing helpers (balanced-brace matcher; matches run-e2e.mjs pattern) ----
 
@@ -311,8 +312,11 @@ async function runBSelfVerify(cfg, b2, round) {
     + '1. Read the deliverable ONCE: Bash `cat ' + REPO + '/' + cfg.diskPath + '`.\n'
     + '2. For ALL gap.citations: check against the content you already read — '
     + 'no additional file reads per citation. Set verified:true if the cited text supports gap.message.\n'
-    + '3. For REJECT.reason claims: extract key terms and run ONE combined grep: '
-    + '`grep -n "term1\\|term2" ' + REPO + '/' + cfg.diskPath + '`. (1 Bash call max)\n'
+    + '3. For REJECT.reason claims: identify the 1-3 most specific noun/verb keywords\n'
+    + '   from each claim, then run ONE combined Bash grep:\n'
+    + '   grep -n "<keyword_1>\\|<keyword_2>" ' + REPO + '/' + cfg.diskPath + '\n'
+    + '   (Replace <keyword_N> with actual words from the claims. 1 Bash call max.\n'
+    + '    If no reason claims exist, skip this step.)\n'
     + '4. Return compact JSON ONLY (no markdown, no commentary):\n'
     + '{"verified_gaps":[{"message":"<short>","citation":"<short>","verified":true|false,"evidence":"<1-line or empty>"}],'
     + '"unverified_reason_claims":["<short fragment>"],'
@@ -444,6 +448,9 @@ async function runSubTask(cfg) {
 }
 
 // ---- runPeerReview: holistic B review of all 4 deliverables + fixer agent ----
+// P-01: MAX_PEER_ROUNDS=3 — peer review is a quality advisory, not a functional gate.
+//        Round MAX_PEER_ROUNDS REJECT → PEER_REVIEW_ADVISORY (non-blocking), not HR-12.
+// W-02: docCache — only reload docs the fixer reports as modified (not all 4 each round).
 async function runPeerReview(approvedDocs) {
   // approvedDocs = [{ diskPath, diskPrefix, label }, ...]
   const peerChecklist =
@@ -453,21 +460,28 @@ async function runPeerReview(approvedDocs) {
     + '- All gaps from sub-task reviews addressed?\n'
     + '- Terminology consistent across all documents?'
   let b2 = null
-  for (let round = 1; round <= MAX_B_ROUNDS; round++) {
-    log('  --- Round ' + round + '/' + MAX_B_ROUNDS + ' ---')
+  let fixerResult = null
+  const docCache = {}  // W-02: persist content across rounds; only reload modified docs
+  for (let round = 1; round <= MAX_PEER_ROUNDS; round++) {
+    log('  --- Round ' + round + '/' + MAX_PEER_ROUNDS + ' ---')
 
-    // Reload all 4 docs (fixer may have edited them in previous round)
-    // Strategy: embed summary only (heading + line count); B uses Bash/Read
-    // for fresh disk view when a deeper check is needed (per buildBPrompt).
-    // Embedding all 4 docs verbatim = 80k+ tokens → attention disperses.
+    // W-02: round 1 → load all docs; subsequent rounds → only reload docs modified by fixer.
+    // Fallback to full reload if fixerResult is null or missing modified_files.
+    const needsReload = new Set(
+      round === 1 || !fixerResult || !fixerResult.modified_files
+        ? approvedDocs.map(function (d) { return d.diskPath })
+        : fixerResult.modified_files
+    )
     const loadedDocs = []
     for (const d of approvedDocs) {
-      // F part 2b: loadFileViaPython (deterministic I/O)
-      const c = await loadFileViaPython(d.diskPath, d.diskPrefix, 'Peer Review')
-      if (c.startsWith('FILE_MISSING') || c.startsWith('ERROR:') || c.length < 50) {
-        return { error: 'Peer Review: ' + d.diskPath + ' load failed (round ' + round + ')', loader_preview: c.slice(0, 200) }
+      if (needsReload.has(d.diskPath)) {
+        const c = await loadFileViaPython(d.diskPath, d.diskPrefix, 'Peer Review')
+        if (c.startsWith('FILE_MISSING') || c.startsWith('ERROR:') || c.length < 50) {
+          return { error: 'Peer Review: ' + d.diskPath + ' load failed (round ' + round + ')', loader_preview: c.slice(0, 200) }
+        }
+        docCache[d.diskPath] = c
       }
-      loadedDocs.push([d.label + ' (heading summary; USE Bash cat for full content)', makeDocSummary(c, { includeFirstLines: true })])
+      loadedDocs.push([d.label + ' (heading summary; USE Bash cat for full content)', makeDocSummary(docCache[d.diskPath], { includeFirstLines: true })])
     }
 
     const bPrompt = buildBPrompt('BUSINESS_ANALYST', 'all 4 P1 deliverables (holistic)', loadedDocs, peerChecklist)
@@ -484,12 +498,12 @@ async function runPeerReview(approvedDocs) {
       phase: 'Peer Review',
       agentType: 'general-purpose',
     }) } catch (e) {
-      if (round === MAX_B_ROUNDS) return { error: 'Peer B agent failed at max rounds', detail: String(e.message ?? e).slice(0, 200) }
+      if (round === MAX_PEER_ROUNDS) return { error: 'Peer B agent failed at max rounds', detail: String(e.message ?? e).slice(0, 200) }
       log('  Peer B agent failed: ' + String(e.message ?? e).slice(0, 80) + ' -- retrying'); continue
     }
     try { b2 = parseAgentJson(bResult, 'PeerB-r' + round) }
     catch (e) {
-      if (round === MAX_B_ROUNDS) return { error: 'Peer B parse failed at max rounds (round ' + round + ')', detail: e.message }
+      if (round === MAX_PEER_ROUNDS) return { error: 'Peer B parse failed at max rounds (round ' + round + ')', detail: e.message }
       log('  Peer B parse failed: ' + e.message.slice(0, 80) + ' -- retrying'); continue
     }
 
@@ -499,12 +513,13 @@ async function runPeerReview(approvedDocs) {
       log('  Peer Review APPROVED (all gaps low)')
       return { b2: b2 }
     }
-    if (round === MAX_B_ROUNDS) {
-      return { error: 'Peer Review did not converge in ' + MAX_B_ROUNDS + ' rounds (HR-12 escalation)', lastB2: b2 }
+    // P-01: last round REJECT → emit advisory (non-blocking), not HR-12 error
+    if (round === MAX_PEER_ROUNDS) {
+      log('  Peer Review did not converge in ' + MAX_PEER_ROUNDS + ' rounds — emitting ADVISORY (non-blocking)')
+      return { b2: b2, peer_review_advisory: { status: 'advisory', round: round, gaps: b2.gaps ?? [], note: 'Deliverables pushed with known gaps; peer review advisory only' } }
     }
 
-    // Fixer: read previous B-2 review JSON, surgically Edit all 4 docs to address high-severity gaps
-    const highGaps = (b2.gaps ?? []).filter(function (g) { return g.severity === 'medium' || g.severity === 'high' })
+    // Fixer: address HIGH/MEDIUM gaps; returns modified_files for W-02 selective reload
     const fixerPrompt =
       'YOU ARE PEER REVIEW FIXER. ROUND ' + round + '.\n'
       + 'REPO: ' + REPO + '\n\n'
@@ -519,13 +534,17 @@ async function runPeerReview(approvedDocs) {
       + '3. Apply Edit tool with surgical changes (do NOT rewrite whole files).\n'
       + '4. After all edits, verify each file still passes the diskPrefix check.\n'
       + '5. Return compact JSON only:\n'
-      + '{"status":"OK","confidence":"high|medium|low","citations":["file:line"],"summary":"<1-2 lines>"}\n\n'
+      + '{"status":"OK","modified_files":["<relative-path-1>","<relative-path-2>"],"confidence":"high|medium|low","summary":"<1-2 lines>"}\n'
+      + '(modified_files: list only the files you actually edited, using their relative paths from the deliverable list above)\n\n'
       + scopeRules('the 4 P1 deliverables (SRS.md, SPEC_TRACKING.md, TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml)', null)
-    await agent(fixerPrompt, {
+    let fixerRaw
+    try { fixerRaw = await agent(fixerPrompt, {
       label: 'peer-fix-r' + round,
       phase: 'Peer Review',
       agentType: 'general-purpose',
-    })
+    }) } catch (e) { fixerRaw = null }
+    try { fixerResult = parseAgentJson(fixerRaw, 'fixer-r' + round) }
+    catch (e) { fixerResult = null; log('  Fixer parse failed — will reload all docs next round') }
     log('  Fixer round ' + round + ' complete; reload + re-review in next round')
   }
   return { error: 'Peer Review: loop exited unexpectedly' }
