@@ -227,7 +227,7 @@ async function abLoop(cfg) {
     let a
     try { a = parseAgentJson(aResult, 'A-' + cfg.key + '-r' + round) }
     catch (e) { log('  A JSON parse fail (likely truncated): ' + e.message.slice(0, 80)); a = null }
-    content = await loadFileViaBash(cfg.diskPath, cfg.diskPrefix || '', cfg.phaseName)
+    content = await loadFileViaPython(cfg.diskPath, cfg.diskPrefix || '', cfg.phaseName)
     if (content.startsWith('ERROR:') || content.length < 50) {
       return { error: cfg.deliverable + ' not found on disk after A (round ' + round + ')', loader_preview: content.slice(0, 200) }
     }
@@ -316,6 +316,73 @@ async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
   return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
 }
 
+// ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----
+//
+// Replaces loadFileViaBash for deterministic I/O. The LLM agent is reduced to
+// a "shell wrapper" — it only runs the python command and relays stdout
+// verbatim. All validation (prefix, length, SHA-256) is done by Python
+// (harness/scripts/file_loader.py), not by the LLM. See phase1 mirror.
+//
+// Returns:
+//   - content text (on status=OK) — same shape as loadFileViaBash for compat
+//   - 'ERROR: ' + relPath + ' not found' sentinel (on status=MISSING)
+//   - 'ERROR: LOADER_FAILED_STATUS_<X>:<path>' (on persistent failure)
+async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
+  opts = opts || {}
+  const maxAttempts = opts.maxAttempts || 3
+  const filePath = REPO + '/' + relPath
+  const expectPrefixArg = expectPrefix ? ' --expect-prefix ' + JSON.stringify(expectPrefix) : ''
+  const jsonOut = '/tmp/load_p2_' + relPath.replace(/[\/.]/g, '_') + '.json'
+  const pythonCmd = 'python3 ' + REPO + '/harness/scripts/file_loader.py --file ' + JSON.stringify(filePath)
+    + expectPrefixArg + ' --content --json-out ' + jsonOut + ' --quiet'
+
+  const prompt = 'You are a SHELL WRAPPER AGENT. Your ONLY task is to run a single shell command and emit the EXACT stdout as your final message.\n\n'
+    + 'COMMAND TO RUN:\n' + pythonCmd + '\n\n'
+    + 'STEPS:\n'
+    + '1. Use the Bash tool to run EXACTLY this command (no modifications).\n'
+    + '2. The Bash tool will return the command output in its tool_result.\n'
+    + '3. Your final assistant message MUST be the verbatim stdout (cat ' + jsonOut + ').\n'
+    + '4. If python3 exits non-zero, return EXACTLY this line: ERROR_LOAD_FAILED: ' + filePath + '\n\n'
+    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
+    + '- DO NOT modify the command. DO NOT add flags. DO NOT skip steps.\n'
+    + '- DO NOT write any preamble or acknowledgment before the JSON output.\n'
+    + '- DO NOT interpret, summarize, or reformat the JSON. Emit bytes verbatim.\n'
+    + '- Your final message = raw stdout bytes only.'
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const res = await agent(prompt, {
+      label: 'loadpy-' + relPath.replace(/[\/.]/g, '-') + '-a' + attempt,
+      phase: phaseName,
+      agentType: 'general-purpose',
+    })
+    const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
+    if (text.startsWith('ERROR_LOAD_FAILED')) return 'ERROR: ' + relPath + ' load failed (Python exit non-zero)'
+    let parsed = null
+    try {
+      const cleaned = text.replace(/^```(?:json)?\s*/m, '').replace(/```\s*$/m, '').trim()
+      parsed = JSON.parse(cleaned)
+    } catch (e) {
+      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' not-JSON (len=' + text.length + ')')
+      continue
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' parsed-not-object')
+      continue
+    }
+    if (parsed.status === 'OK' && typeof parsed.content === 'string') {
+      return parsed.content
+    }
+    if (parsed.status === 'MISSING') {
+      return 'ERROR: ' + relPath + ' not found'
+    }
+    log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' status=' + parsed.status + ' — ' + (parsed.diagnostic || ''))
+    if (parsed.status !== 'PREFIX_MISMATCH' && parsed.status !== 'TOO_SHORT') {
+      return 'ERROR: LOADER_FAILED_STATUS_' + parsed.status + ': ' + relPath
+    }
+  }
+  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Entry & Preflight
 // ════════════════════════════════════════════════════════════════════════
@@ -355,14 +422,14 @@ if (!preflightPass) return { error: 'Phase 2 preflight did not PASS after ' + MA
 // ════════════════════════════════════════════════════════════════════════
 phase('Load Upstream')
 log('cat SRS.md + harness templates for embedding into stateless Agent B prompts')
-const srsContent = await loadFileViaBash('01-requirements/SRS.md', '#', 'Load Upstream')
+const srsContent = await loadFileViaPython('01-requirements/SRS.md', '#', 'Load Upstream')
 if (srsContent.startsWith('ERROR:') || srsContent.length < 50) {
   return { error: 'Failed to load SRS.md for upstream context', loaded_preview: srsContent.slice(0, 200) }
 }
 log('  SRS.md loaded: ' + srsContent.length + ' chars')
-const sadTemplateContent = await loadFileViaBash('harness/templates/SAD.md', '#', 'Load Upstream')
+const sadTemplateContent = await loadFileViaPython('harness/templates/SAD.md', '#', 'Load Upstream')
 log('  harness/templates/SAD.md loaded: ' + sadTemplateContent.length + ' chars')
-const adrTemplateContent = await loadFileViaBash('harness/templates/ADR.md', '#', 'Load Upstream')
+const adrTemplateContent = await loadFileViaPython('harness/templates/ADR.md', '#', 'Load Upstream')
 log('  harness/templates/ADR.md loaded: ' + adrTemplateContent.length + ' chars')
 
 // ════════════════════════════════════════════════════════════════════════
@@ -599,9 +666,9 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   } catch (e) {
     log('  Peer fixer agent failed: ' + String(e.message ?? e).slice(0, 80) + ' — continuing without fix')
   }
-  sadContent = await loadFileViaBash('02-architecture/SAD.md', '# SAD', 'Peer Review')
-  adrContent = await loadFileViaBash('02-architecture/adr/ADR.md', '# Architecture Decision Records', 'Peer Review')
-  testSpecContent = await loadFileViaBash('02-architecture/TEST_SPEC.md', '#', 'Peer Review')
+  sadContent = await loadFileViaPython('02-architecture/SAD.md', '# SAD', 'Peer Review')
+  adrContent = await loadFileViaPython('02-architecture/adr/ADR.md', '# Architecture Decision Records', 'Peer Review')
+  testSpecContent = await loadFileViaPython('02-architecture/TEST_SPEC.md', '#', 'Peer Review')
   log('  Reloaded after fixer: SAD=' + sadContent.length + ' ADR=' + adrContent.length + ' TEST_SPEC=' + testSpecContent.length)
 }
 

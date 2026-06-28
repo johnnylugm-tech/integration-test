@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P3-gate2-20260627`  
-**Phase**: P3 — Implementation  
-**Generated**: 2026-06-27T16:36:21Z
+**Checkpoint**: `P2-entry-20260628`  
+**Phase**: P2 — Architecture & Design  
+**Generated**: 2026-06-28T11:02:04Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -14,9 +14,9 @@
 # 1. Clone (if working directory cleared)
 git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-test && cd integration-test
 
-# 2. Read plan and start Phase 4
-cat .methodology/phase4_plan.md
-# Follow SKILL.md §0.1 Phase 4 entry check, then execute
+# 2. Read plan and continue Phase 2
+cat .methodology/phase2_plan.md
+# Follow the active plan and continue from where you left off
 ```
 
 ---
@@ -31,45 +31,39 @@ git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-te
 git log --oneline -3
 
 # Confirm FSM state
-cat .methodology/state.json   # expected: phase=3 state=RUNNING last_gate=2
+cat .methodology/state.json   # expected: phase=2 state=RUNNING last_gate=2 last_fr=FR-03
 
 # Read active plan
-cat .methodology/phase4_plan.md
+cat .methodology/phase2_plan.md
 ```
 
 | 欄位 | 值 |
 |------|----|
 | Remote | `https://github.com/johnnylugm-tech/integration-test` |
 | Branch | `main` |
-| State | `phase=3 state=RUNNING last_gate=2` |
-| Plan | `.methodology/phase4_plan.md` |
+| State | `phase=2 state=RUNNING last_gate=2 last_fr=FR-03` |
+| Plan | `.methodology/phase2_plan.md` |
 
 ---
 
 ## 任務背景
 
-Gate 2 PASS — quality cycle complete.
+Phase 1 complete (3/3 FRs Gate 1 PASS). Gate 2 (score=94.88). Advancing to Phase 2.
 
 ## 目前執行狀況
 
-Gate 2 PASS: score=94.9.
+Phase 1: 3/3 FRs Gate 1 PASS. Gate 2 (score=94.88) — quality_complete. Ready to begin Phase 2.
 
 ## 接下來的工作
 
-1. Proceed to P4: Testing
-2. Build full test suite (Gate 3 target ≥ 80)
-3. On Gate 3 PASS → call commit_and_push_gate(gate_num=3, ...)
+1. Follow SKILL.md §0.1 Phase 2 entry checklist
+2. Read the Phase 2 plan and execute
 
 ## 注意事項
 
 - 100% follow SKILL.md
 - Do NOT commit `.sessi-work/` or `.methodology/` runtime artifacts
 - Git failures are warnings — they never block the pipeline
-
-## 附加資訊
-
-- **gate**: 2
-- **score**: 94.9
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*
