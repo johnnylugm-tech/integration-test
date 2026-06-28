@@ -2,7 +2,7 @@
 
 **Checkpoint**: `P1-exit-20260628`  
 **Phase**: P1 — Spec & Discovery  
-**Generated**: 2026-06-28T20:38:49Z
+**Generated**: 2026-06-28T20:38:54Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -64,12 +64,17 @@ P1 phase completed — pushed for record.
 **Recently Committed Files:**
   - `.claude/workflows/phase1-requirements.js`
   - `.claude/workflows/phase2-architecture.js`
-  - `.methodology/phase1_plan.md`
-  - `CLAUDE.md`
+  - `.harness/traces/agent_trajectory.jsonl`
+  - `.methodology/state.json`
+  - `01-requirements/SPEC_TRACKING.md`
+  - `01-requirements/SRS.md`
+  - `01-requirements/TRACEABILITY_MATRIX.md`
   - `HANDOVER.md`
   - `TEST_INVENTORY.yaml`
   - `harness`
-  - `.harness/traces/agent_trajectory.jsonl`
+  - `srs_vs_spec_diff.json`
+  - `.methodology/phase1_plan.md`
+  - `CLAUDE.md`
   - `.methodology/.gate1_scores.json`
   - `.methodology/agent_b_approvals/ADR.md.json`
   - `.methodology/agent_b_approvals/SAD.md.json`
@@ -77,11 +82,6 @@ P1 phase completed — pushed for record.
   - `.methodology/agent_b_approvals/SRS.md.json`
   - `.methodology/agent_b_approvals/TEST_INVENTORY.yaml.json`
   - `.methodology/agent_b_approvals/TEST_SPEC.md.json`
-  - `.methodology/agent_b_approvals/TRACEABILITY_MATRIX.md.json`
-  - `.methodology/decision_logs/2026-06-27/GATE_3_001.yaml`
-  - `.methodology/decision_logs/2026-06-27/GATE_3_002.yaml`
-  - `.methodology/decision_logs/2026-06-27/GATE_3_003.yaml`
-  - `.methodology/decision_logs/2026-06-27/GATE_3_004.yaml`
 
 ## 接下來的工作
 
