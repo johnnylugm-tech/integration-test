@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-28
+> **Date**: 2026-06-29
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 1 - Requirements Specification
 > **Status**: Full version (including Phase 1 detailed tasks)
@@ -368,6 +368,28 @@ are not re-opened. This bounds backtracking to a single step.
 
   > fr_id uses P1 as phase-level placeholder; replace with FR-XX for FR-specific plans.
 
+### FR Requirements (3 total)
+
+#### FR-01: Task Model & Persistence — `[SPEC §3 FR-01]`
+**Task**: 
+
+#### FR-02: Task Execution & Retry — `[SPEC §3 FR-02]`
+**Task**: 
+
+#### FR-03: CLI Integration & Query — `[SPEC §3 FR-03]`
+**Task**: 
+
+### NFR Non-Functional Requirements (3 total)
+
+#### NFR-01: Performance — `[SPEC §4 NFR-01]`
+**Requirement**: > DERIVED: SPEC §4 NFR-01 — `submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行) — English translation of canonical Chinese spec; the parenthetical 「不含 subprocess 執行」 is preserved verbatim per 
+
+#### NFR-02: Security — `[SPEC §4 NFR-02]`
+**Requirement**: > DERIVED: SPEC §4 NFR-02 — 全 codebase 禁用 `shell=True`;FR-01 注入字元黑名單必須有測試覆蓋 — English translation of canonical Chinese spec; two clauses split into AC-NFR-02.1 (codebase-wide prohibition) and AC-NFR-0
+
+#### NFR-03: Reliability — `[SPEC §4 NFR-03]`
+**Requirement**: > DERIVED: SPEC §4 NFR-03 — `tasks.json` 原子寫(進程中斷後仍為合法 JSON);`stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代 — English translation of canonical Chinese spec; t
+
 ### Phase 1 Deliverables
 - `SRS.md` - Software Requirements Specification (FRs + NFRs)
 - `SPEC_TRACKING.md` - Spec tracking matrix
@@ -445,6 +467,13 @@ are not re-opened. This bounds backtracking to a single step.
   - `REJECT` → fix all gaps → re-dispatch B. Max 5 rounds (HR-12).
     > If round 5 REJECT: escalate to human — orchestrator cannot self-resolve.
     > Human fix → re-dispatch Agent B (same prompt + updated content) → `APPROVE` required before continuing.
+
+- **[B-APPROVAL]** ✅ Persist Agent B approval JSONs for each deliverable to `.methodology/agent_b_approvals/<id>.json`
+  > Required by `harness_cli.py advance-phase` via `_verify_agent_b_approvals_core`.
+  > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"], "confidence": <0.0-1.0>}`
+  > Phase 1 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[1]`). For Phase 1: SRS, SPEC_TRACKING, TRACEABILITY_MATRIX, TEST_INVENTORY.
+  > `<id>` is the basename WITHOUT extension (e.g. `SRS.md` → `SRS`).
+  > Use Bash + Python (harness_cli.py write-approval subcommand if available, else direct Write tool) — do NOT use Edit (whole-file write only).
 
 - **[B-PUSH]** ✅ PUSH ① — Push to GitHub + HANDOVER.md — retry until success (CHECKPOINT-PEER-REVIEW saved):
   > Run `push-checkpoint` → if blocked, read the error → fix → re-run until green.

@@ -436,6 +436,10 @@ async function runSubTask(cfg) {
 
     if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) {
       log('  APPROVED (all gaps low)' + (b2.x1_veto_overridden ? ' [X1 VETO]' : ''))
+      // Persist Agent B approval JSON (harness _verify_agent_b_approvals_core contract).
+      // filename = basename WITHOUT extension (harness resolves _PHASE_DELIVERABLES[1]=["SRS.md",...] → "SRS").
+      const approvalId = cfg.name.replace(/\.[^.]+$/, '')
+      await persistApproval(approvalId, b2)
       return { content: content, b2: b2 }
     }
     if (round === MAX_B_ROUNDS) {
@@ -445,6 +449,33 @@ async function runSubTask(cfg) {
     log('  Continue to round ' + (round + 1) + ' (A will fix high-severity gaps or REJECT issues)')
   }
   return { error: cfg.name + ': loop exited unexpectedly' }
+}
+
+// ---- persistApproval: write .methodology/agent_b_approvals/<id>.json via LLM agent
+// Why not direct fs.writeFile: workflow JS sandbox has no fs API (playbook §3-§4).
+// Pattern mirrors loadFileViaPython: dispatch a constrained agent that runs Python
+// with the JSON content embedded as a heredoc. One agent per call (deterministic).
+// Called after every B-2 APPROVE so harness_cli.py advance-phase's
+// _verify_agent_b_approvals_core check finds the artifact.
+async function persistApproval(deliverableId, b2) {
+  const approvalsDir = REPO + '/.methodology/agent_b_approvals'
+  const approvalPath = approvalsDir + '/' + deliverableId + '.json'
+  const approvalJson = JSON.stringify({
+    fr: deliverableId,
+    review_status: b2.review_status ?? 'APPROVE',
+    reason: (b2.reason ?? ('Approved ' + deliverableId + ' (reason omitted)')).slice(0, 800),
+    citations: Array.isArray(b2.citations) ? b2.citations.slice(0, 20) : [],
+    docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
+    confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
+  }, null, 2)
+  const pythonCmd = 'python3 -c "import json,os; os.makedirs(' + JSON.stringify(approvalsDir) + ', exist_ok=True); open(' + JSON.stringify(approvalPath) + ',\\'w\\').write(' + JSON.stringify(approvalJson) + ')"'
+  const prompt = 'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout verbatim:\n\n' + pythonCmd + '\n\nNo commentary, no preamble, no other tool calls.'
+  const res = await agent(prompt, {
+    label: 'persist-' + deliverableId,
+    phase: 'Persist Approval',
+    agentType: 'general-purpose',
+  })
+  log('  persisted approval: ' + approvalPath + ' (' + (typeof res === 'string' ? res.length : 0) + ' chars from agent)')
 }
 
 // ---- runPeerReview: holistic B review of all 4 deliverables + fixer agent ----
