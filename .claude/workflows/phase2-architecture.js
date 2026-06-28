@@ -257,8 +257,10 @@ async function abLoop(cfg) {
     if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) {
       log('  APPROVED')
       // Persist Agent B approval JSON (harness _verify_agent_b_approvals_core contract).
-      // filename = basename WITHOUT extension (harness resolves _PHASE_DELIVERABLES[2]=["SAD.md","ADR.md","TEST_SPEC.md"]).
-      const approvalId = cfg.deliverable.replace(/\.[^.]+$/, '')
+      // approval filename = "<did>.json" where did IS the full _PHASE_DELIVERABLES[N]
+      // entry (e.g. "SAD.md" → "SAD.md.json"). DO NOT strip the extension — harness
+      // matches the file via `approvals_dir / f"{did}.json"`.
+      const approvalId = cfg.deliverable
       await persistApproval(approvalId, b2)
       return { ok: true, content, b2 }
     }

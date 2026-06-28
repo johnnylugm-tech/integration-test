@@ -8,37 +8,20 @@
 <!-- harness:auto-start -->
 ## Harness Status _(auto-generated — do not edit this block)_
 
-> Phase: **2 — Architecture** | Last Gate: **Gate 2** | Last FR: FR-03 | Updated: 2026-06-28
+> Phase: **2 — Architecture** | Last Gate: **Gate None** | Updated: 2026-06-28
 
 ### Gate Progress
 | Gate | Score / FRs | Status |
 |------|-------------|--------|
-| Gate 1 | 3/3 FRs | ✅ PASS |
-| Gate 2 | 94.9 | ✅ PASS |
+| Gate 1 | — | ⬜ Not Started |
+| Gate 2 | — | ⬜ Not Started |
 | Gate 3 | — | ⬜ Not Started |
 | Gate 4 | — | ⬜ Not Started |
 
 ### FR Registry (Gate 1)
 | FR ID | Score | Status |
 |-------|-------|--------|
-| FR-01 | 98.3 | ✅ COMPLETE |
-| FR-02 | 98.3 | ✅ COMPLETE |
-| FR-03 | 94.7 | ✅ COMPLETE |
-
-### Architecture Constraints
-- no_shell_true
-- atomic_writes_only
-- no_circular_dependencies
-- single_redaction_owner_executor
-
-### High-Risk Modules
-- taskq.executor
-- taskq.store
-
-### NFR → Dimension Mapping
-- NFR-01 → performance
-- NFR-02 → security
-- NFR-03 → error_handling
+| — | — | No FRs registered yet |
 <!-- harness:auto-end -->
 
 ## Agent Interaction Model
