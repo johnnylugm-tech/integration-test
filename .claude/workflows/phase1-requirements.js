@@ -468,7 +468,7 @@ async function persistApproval(deliverableId, b2) {
     docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
   }, null, 2)
-  const pythonCmd = 'python3 -c "import json,os; os.makedirs(' + JSON.stringify(approvalsDir) + ', exist_ok=True); open(' + JSON.stringify(approvalPath) + ',\\'w\\').write(' + JSON.stringify(approvalJson) + ')"'
+  const pythonCmd = `python3 -c "import json,os; os.makedirs(${JSON.stringify(approvalsDir)}, exist_ok=True); open(${JSON.stringify(approvalPath)}, 'w').write(${JSON.stringify(approvalJson)})"`
   const prompt = 'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout verbatim:\n\n' + pythonCmd + '\n\nNo commentary, no preamble, no other tool calls.'
   const res = await agent(prompt, {
     label: 'persist-' + deliverableId,

@@ -1,181 +1,224 @@
 # Specification Tracking Matrix — taskq
 
-> **Source**: `01-requirements/SRS.md` v1.0.0 (INGESTION of SPEC.md v2.0.0, 2026-06-15).
-> **Mode**: INGESTION — every AC traces back to a SPEC §X citation in SRS.md.
-> **Phase**: 2 — Architecture (per `.methodology/state.json` → `current_phase: 1`, Gate 1 PASS).
-> **Last Updated**: 2026-06-29 (Round 1 authoring).
-> **Owners**: A (Requirements Engineer — this file); downstream phases B (Architecture), C (Implementation), D (Test), E (Verification) will consume and update.
+> Document version: 1.0.0 | 2026-06-29
+> Companion to: `01-requirements/SRS.md` v1.0.0 (APPROVED)
+> Mode: INGESTION (100% derived from approved SRS.md; no invention of new FRs/NFRs/ACs)
+> Purpose: Provide per-AC traceability rows (status / owner / verification locus) for every FR and NFR acceptance criterion in the approved SRS so that Phase 2–8 can resolve targets without re-reading the SRS narrative.
 
 ---
 
-## 1. Purpose
+## 0. Conventions
 
-This document tracks every Functional Requirement (FR) and Non-Functional Requirement (NFR) declared in `SRS.md` through its downstream lifecycle (Architecture → Implementation → Test → Verification → Release). It is the single source of truth for "what must be delivered" and "what state each requirement is in".
-
-Each row anchors to a verifiable artifact. Statuses transition via gates (Gate 1 → Gate 2 → Gate 3 → Gate 4) per `.methodology/phase*_plan.md` and `CLAUDE.md` Gate Status Reference.
-
----
-
-## 2. Functional Requirements (FR) Matrix
-
-| FR ID  | Title                              | AC Count | Status         | Owner (Phase)        | SRS Anchor          | SPEC Citation   | Architecture Ref                | Test Anchor (Phase 3/4) | Verification (Phase 5) | Notes |
-|--------|------------------------------------|----------|----------------|----------------------|---------------------|-----------------|---------------------------------|-------------------------|------------------------|-------|
-| FR-01  | Task Model & Persistence           | 7        | SPECIFIED      | A (REQ) → B (ARCH)   | SRS §3 FR-01        | SPEC §3 FR-01   | `taskq.store` (atomic JSON I/O) | `tests/test_fr01_*.py`  | Gate1-DELTA FR-01      | AC set: 1.1.a–c, 1.2.a–d |
-| FR-02  | Task Execution & Retry             | 7        | SPECIFIED      | A (REQ) → B (ARCH)   | SRS §3 FR-02        | SPEC §3 FR-02   | `taskq.executor` (subprocess)    | `tests/test_fr02_*.py`  | Gate1-DELTA FR-02      | AC set: 2.1.a, 2.2.a–b, 2.3.a, 2.4.a, 2.5.a–b |
-| FR-03  | CLI Integration & Query            | 3        | SPECIFIED      | A (REQ) → B (ARCH)   | SRS §3 FR-03        | SPEC §3 FR-03   | `taskq.cli` (argparse)           | `tests/test_fr03_*.py`  | Gate1-DELTA FR-03      | AC set: 03.table, 03.1.a, 03.2.a |
-
-**FR totals**: 3 FRs, 17 ACs (FR-01: 7 / FR-02: 7 / FR-03: 3 — includes FR-03 command-table AC).
-
----
-
-## 3. Non-Functional Requirements (NFR) Matrix
-
-| NFR ID | Title        | AC Count | Status    | Owner (Phase)        | SRS Anchor       | SPEC Citation | Architecture Constraint       | Test Anchor (Phase 3/4)             | Verification (Phase 5) | Notes |
-|--------|--------------|----------|-----------|----------------------|------------------|---------------|-------------------------------|-------------------------------------|------------------------|-------|
-| NFR-01 | Performance  | 1        | SPECIFIED | A (REQ) → D (TEST)   | SRS §4 NFR-01    | SPEC §4 NFR-01| (perf budget only)            | `tests/perf/test_nfr01_submit_status.py` | Gate1-DELTA NFR-01    | NFR-99 ambiguity flagged in SRS §8 (test harness owns interpretation boundary) |
-| NFR-02 | Security     | 2        | SPECIFIED | A (REQ) → B (ARCH)   | SRS §4 NFR-02    | SPEC §4 NFR-02| `no_shell_true` (hard)        | `tests/test_nfr02_shell_forbidden.py` | Gate1-DELTA NFR-02    | AC-NFR-02.1 (codebase-wide) + AC-NFR-02.2 (FR-01 blacklist coverage) |
-| NFR-03 | Reliability  | 2        | SPECIFIED | A (REQ) → B (ARCH)   | SRS §4 NFR-03    | SPEC §4 NFR-03| `atomic_writes_only`, `single_redaction_owner_executor` | `tests/test_nfr03_*.py`             | Gate1-DELTA NFR-03    | NFR-99 ambiguity flagged in SRS §8 (regex application scope = harness's call) |
-
-**NFR totals**: 3 NFRs, 5 ACs (NFR-01: 1 / NFR-02: 2 / NFR-03: 2).
+- **Status** values:
+  - `DRAFT` — AC identified, not yet claimed by an owner
+  - `OWNED` — owner assigned, AC under planning/implementation
+  - `TESTED` — automated test authored and passing
+  - `VERIFIED` — independent verification (e.g., P5 BASELINE) confirmed the AC
+  - `BLOCKED` — owner cannot proceed; `owner_note` explains
+- **Owner** values (module mapping, transcribed from `.methodology/state.json` Phase 1 mapping):
+  - `taskq.store` — persistence + atomic write + corrupted-store handling (FR-01.3, NFR-03.a)
+  - `taskq.executor` — subprocess invocation, state machine, retry, redaction (FR-02, NFR-02, NFR-03.b)
+  - `taskq.cli` — argparse subcommands, `--json`, exit-code table, `submit` validation, `status`/`list`/`clear` (FR-01.2, FR-03)
+  - `taskq.config` — `TASKQ_HOME`, `TASKQ_TASK_TIMEOUT`, `TASKQ_RETRY_LIMIT` resolution (cross-cutting)
+  - `taskq.redaction` — secret-line redaction (`(sk-[A-Za-z0-9_-]{8,}|token=\S+)` → `[REDACTED]`) (NFR-03.b)
+  - `test harness` — quantitative/structural checks that span modules (NFR-01 p95; NFR-02 shell=True absence scan)
+- **Verification locus**:
+  - `TDD-RED` — failing test written before implementation
+  - `TDD-GREEN` — implementation makes the test pass
+  - `TDD-IMPROVE` — refactor passes while keeping test green
+  - `GATE1` — per-FR Gate 1 PASS evidence
+  - `GATE2` — Phase 2 exit Gate 2 PASS evidence
+  - `GATE3` — Phase 4 exit Gate 3 PASS evidence
+  - `GATE4` — Phase 6 full Gate 4 (14-dim) PASS evidence
+  - `BASELINE` — Phase 5 BASELINE/VERIFICATION_REPORT confirms AC after deltas
+- **Source citation format**: `SRS.md §<n>.<m>.<k> — AC-FR-XX.<y>.z` (or `AC-NFR-XX.<y>`) — exact AC anchor from the approved SRS.
 
 ---
 
-## 4. Acceptance Criteria (AC) Traceability — Complete
+## 1. Functional Requirements Tracking
 
-Every AC from SRS §6 with its downstream anchor.
+### 1.1 FR-01 — 任務模型與持久化 (Task model and persistence)
 
-### 4.1 FR-01 ACs
+| AC ID | Source citation | Status | Owner | Verification locus | Notes |
+|-------|-----------------|--------|-------|--------------------|-------|
+| AC-FR-01.2.a | SRS.md §3 FR-01.2 — "非空" rule | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | Empty/whitespace command → exit 2 + stderr, no storage write. Cross-check with AC-FR-03.3.b (exit-code 2 routing). |
+| AC-FR-01.2.b | SRS.md §3 FR-01.2 — "長度" rule | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | Command length > 1000 → exit 2 + stderr, no storage write. |
+| AC-FR-01.2.c | SRS.md §3 FR-01.2 — "注入字元" rule (NFR-02 binding) | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 → GATE4 | Blacklist `; \| & $ > < \``. Test must enumerate all 7 characters; binds to AC-NFR-02.b. |
+| AC-FR-01.3.a | SRS.md §3 FR-01.3 — "uuid4 前 8 hex" | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | id is first 8 hex chars of uuid4 (lowercase, 0-9a-f). |
+| AC-FR-01.3.b | SRS.md §3 FR-01.3 — "pending / command / created_at" | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | Initial record fields exactly: `id`, `status="pending"`, `command`, `created_at`. |
+| AC-FR-01.3.c | SRS.md §3 FR-01.3 — "tmp + os.replace" (NFR-03 binding) | DRAFT | taskq.store | TDD-RED → TDD-GREEN → GATE1 → GATE2 | Atomic write under `$TASKQ_HOME/tasks.json`. Binds to AC-NFR-03.a. |
+| AC-FR-01.3.d | SRS.md §3 FR-01.3 — "tasks.json 損壞 → exit 1, stderr store corrupted" | DRAFT | taskq.store | TDD-RED → TDD-GREEN → GATE1 → GATE2 | Invalid JSON on startup → exit 1 + stderr `store corrupted`; no silent rebuild. |
 
-| AC ID         | Description                                              | Source Citation       | Test Anchor (Phase 3/4)              | Status    |
-|---------------|----------------------------------------------------------|-----------------------|--------------------------------------|-----------|
-| AC-FR-01.1.a  | Empty/whitespace command rejected (exit 2, no write)     | SPEC §3 FR-01         | `test_fr01_empty_command_rejected`   | SPECIFIED |
-| AC-FR-01.1.b  | Command > 1000 chars rejected (exit 2, no write)         | SPEC §3 FR-01         | `test_fr01_oversize_command_rejected`| SPECIFIED |
-| AC-FR-01.1.c  | Injection chars `;\|&$><\`` rejected (exit 2, no write)  | SPEC §3 FR-01 + NFR-02| `test_fr01_injection_blacklist`      | SPECIFIED |
-| AC-FR-01.2.a  | task id = uuid4 first 8 hex                              | SPEC §3 FR-01         | `test_fr01_id_format`                | SPECIFIED |
-| AC-FR-01.2.b  | status=pending + record command/created_at               | SPEC §3 FR-01         | `test_fr01_pending_record_fields`    | SPECIFIED |
-| AC-FR-01.2.c  | atomic write to $TASKQ_HOME/tasks.json (tmp+os.replace)  | SPEC §3 FR-01         | `test_fr01_atomic_write`             | SPECIFIED |
-| AC-FR-01.2.d  | corrupted tasks.json → exit 1 + stderr `store corrupted` | SPEC §3 FR-01         | `test_fr01_corrupted_store_exit1`    | SPECIFIED |
-
-### 4.2 FR-02 ACs
-
-| AC ID         | Description                                              | Source Citation       | Test Anchor (Phase 3/4)              | Status    |
-|---------------|----------------------------------------------------------|-----------------------|--------------------------------------|-----------|
-| AC-FR-02.1.a  | subprocess.run with shlex.split, capture_output, text, timeout; no shell=True | SPEC §3 FR-02 | `test_fr02_subprocess_invoke`        | SPECIFIED |
-| AC-FR-02.2.a  | state machine pending→running→done\|failed\|timeout      | SPEC §3 FR-02         | `test_fr02_state_machine`            | SPECIFIED |
-| AC-FR-02.2.b  | exit-code-to-status mapping                              | SPEC §3 FR-02         | `test_fr02_exit_to_status`           | SPECIFIED |
-| AC-FR-02.3.a  | record exit_code, stdout_tail (last 2000), stderr_tail (last 2000), duration_ms, finished_at | SPEC §3 FR-02 | `test_fr02_result_fields`     | SPECIFIED |
-| AC-FR-02.4.a  | auto-retry on failed/timeout up to TASKQ_RETRY_LIMIT (default 2) | SPEC §3 FR-02 | `test_fr02_retry_cap`                | SPECIFIED |
-| AC-FR-02.5.a  | single-task mode timeout → exit 4                        | SPEC §3 FR-02         | `test_fr02_timeout_exit4`            | SPECIFIED |
-| AC-FR-02.5.b  | unexpected exception → exit 1 (no bare except:)          | SPEC §3 FR-02         | `test_fr02_unexpected_exit1`         | SPECIFIED |
-
-### 4.3 FR-03 ACs
-
-| AC ID         | Description                                              | Source Citation       | Test Anchor (Phase 3/4)              | Status    |
-|---------------|----------------------------------------------------------|-----------------------|--------------------------------------|-----------|
-| AC-FR-03 (table) | submit/run/status/list/clear behaviors                 | SPEC §3 FR-03         | `test_fr03_command_table`            | SPECIFIED |
-| AC-FR-03.1.a  | --json global flag → single-line JSON                    | SPEC §3 FR-03         | `test_fr03_json_flag_single_line`    | SPECIFIED |
-| AC-FR-03.2.a  | exit codes 0/2/4/1 mapping                               | SPEC §3 FR-03         | `test_fr03_exit_code_mapping`        | SPECIFIED |
-
-### 4.4 NFR-01 AC
-
-| AC ID         | Description                                              | Source Citation       | Test Anchor (Phase 3/4)              | Status    |
-|---------------|----------------------------------------------------------|-----------------------|--------------------------------------|-----------|
-| AC-NFR-01.1   | submit+status 100-iter p95 < 50ms (excluding subprocess) | SPEC §4 NFR-01        | `test_nfr01_p95_under_50ms`          | SPECIFIED |
-
-### 4.5 NFR-02 ACs
-
-| AC ID         | Description                                              | Source Citation       | Test Anchor (Phase 3/4)              | Status    |
-|---------------|----------------------------------------------------------|-----------------------|--------------------------------------|-----------|
-| AC-NFR-02.1   | shell=True forbidden across codebase                     | SPEC §4 NFR-02        | `test_nfr02_no_shell_true_grep`      | SPECIFIED |
-| AC-NFR-02.2   | FR-01 injection blacklist test coverage required         | SPEC §4 NFR-02        | `test_fr01_injection_blacklist` (re-used) | SPECIFIED |
-
-### 4.6 NFR-03 ACs
-
-| AC ID         | Description                                              | Source Citation       | Test Anchor (Phase 3/4)              | Status    |
-|---------------|----------------------------------------------------------|-----------------------|--------------------------------------|-----------|
-| AC-NFR-03.1   | tasks.json atomic write survives interruption            | SPEC §4 NFR-03        | `test_nfr03_atomic_survives_crash`   | SPECIFIED |
-| AC-NFR-03.2   | redaction regex `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` line-level → `[REDACTED]` | SPEC §4 NFR-03 | `test_nfr03_redaction_line_replace`  | SPECIFIED |
+**FR-01 subtotal**: 7 ACs — 0 OWNED, 0 TESTED, 0 VERIFIED.
+**FR-01 verification gate**: Gate 1 (per-FR TDD + impl) + Gate 2 (architecture + impl exit).
 
 ---
 
-## 5. Configuration Requirements (from SRS §5)
+### 1.2 FR-02 — 任務執行與重試 (Task execution and retry)
 
-| Variable             | Default  | Description                                  | Source   | Status    | Owner |
-|----------------------|----------|----------------------------------------------|----------|-----------|-------|
-| `TASKQ_HOME`         | `.taskq` | Data directory                               | SPEC §5  | SPECIFIED | B (ARCH — `config.py`) |
-| `TASKQ_TASK_TIMEOUT` | `10.0`   | Per-task subprocess timeout (seconds)        | SPEC §5  | SPECIFIED | B (ARCH — `config.py`) |
-| `TASKQ_RETRY_LIMIT`  | `2`      | Auto-retry limit on failure                  | SPEC §5  | SPECIFIED | B (ARCH — `config.py`) |
+| AC ID | Source citation | Status | Owner | Verification locus | Notes |
+|-------|-----------------|--------|-------|--------------------|-------|
+| AC-FR-02.2.a | SRS.md §3 FR-02.2 — `subprocess.run(shlex.split(...), capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT)` | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 | Must verify exact kwargs (no `shell=True`, `shlex.split` first arg, `text=True`, `timeout` from config). |
+| AC-FR-02.2.b | SRS.md §3 FR-02.2 — "任何路徑不得使用 shell=True" + NFR-02 codebase scan | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 → GATE4 | Automated test asserting no `shell=True` anywhere under `run`. Binds to AC-NFR-02.a. |
+| AC-FR-02.3.a | SRS.md §3 FR-02.3 — "exit 0 → done" | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 | State transition `running → done` on subprocess exit 0. |
+| AC-FR-02.3.b | SRS.md §3 FR-02.3 — "非 0 → failed" | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 | State transition `running → failed` on non-zero exit. |
+| AC-FR-02.3.c | SRS.md §3 FR-02.3 — "TimeoutExpired → timeout" | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 | `subprocess.TimeoutExpired` caught → `running → timeout`. Binds to AC-FR-02.6.a for exit-code routing. |
+| AC-FR-02.4.a | SRS.md §3 FR-02.4 — fields `exit_code, stdout_tail (2000), stderr_tail (2000), duration_ms, finished_at` | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 | All 5 fields present; tail fields are last 2000 chars (UTF-8). |
+| AC-FR-02.5.a | SRS.md §3 FR-02.5 — auto-retry up to `TASKQ_RETRY_LIMIT` (default 2) on `failed`/`timeout` | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 → GATE2 | Counter cap = `TASKQ_RETRY_LIMIT`; no retry on `done`; no retry beyond cap. |
+| AC-FR-02.6.a | SRS.md §3 FR-02.6 — "single-task mode timeout → exit 4" | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 → GATE2 | Binds to AC-FR-03.3.c (global exit-code 4 for timeout). |
+| AC-FR-02.6.b | SRS.md §3 FR-02.6 — "其他未預期例外 → exit 1(不得裸 except: 吞噬)" | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 → GATE2 | Linter/test asserts no bare `except:`; uncaught → exit 1. Binds to AC-FR-03.3.d. |
 
----
-
-## 6. Constraints Tracking (from SRS §2)
-
-| Constraint ID | Description                                                            | Source         | Owner (Phase) | Status    |
-|---------------|------------------------------------------------------------------------|----------------|---------------|-----------|
-| C-1           | Python 3.11 stdlib only; `python -m taskq` CLI entry; `shell=True` forbidden everywhere; atomic JSON writes (`tmp + os.replace`) | PROJECT_BRIEF  | B (ARCH)      | SPECIFIED |
-| C-2           | Injection character blacklist (`; \| & $ > < \``) on `submit`          | PROJECT_BRIEF  | C (IMPL)      | SPECIFIED |
-| C-3           | `tasks.json` atomic write survives mid-write crash; never silently rebuilt on parse failure; secret-line redaction on `stdout_tail` / `stderr_tail` | PROJECT_BRIEF | C (IMPL) | SPECIFIED |
-| C-4           | `submit` + `status` combined p95 < 50ms over 100 iterations             | PROJECT_BRIEF  | D (TEST)      | SPECIFIED |
+**FR-02 subtotal**: 9 ACs (AC-FR-02.6 contributes 2; SRS §5 summary shows 7 because it counts 2.2.a–b, 2.3.a–c, 2.4.a, 2.5.a, 2.6.a–b = 8; this matrix enumerates one extra check (no bare except) inside AC-FR-02.6.b's notes — see §3 reconciliation).
+**FR-02 verification gate**: Gate 1 (per-FR TDD + impl) + Gate 2 (architecture + impl exit).
 
 ---
 
-## 7. Risks Tracking (from SRS §9)
+### 1.3 FR-03 — CLI 整合與查詢 (CLI integration and query)
 
-| Risk ID | Description                                  | Mitigation         | Source    | Status    |
-|---------|----------------------------------------------|--------------------|-----------|-----------|
-| R1      | concurrent / interrupted writes corrupt the store | NFR-03 (atomic write) | SPEC §4 | MITIGATED-DESIGN |
-| R2      | subprocess hangs                             | FR-02 (`timeout`)  | SPEC §4   | MITIGATED-DESIGN |
-| R3      | secrets leaked to disk                       | NFR-03 (redaction) | SPEC §4   | MITIGATED-DESIGN |
+| AC ID | Source citation | Status | Owner | Verification locus | Notes |
+|-------|-----------------|--------|-------|--------------------|-------|
+| AC-FR-03.1.a | SRS.md §3 FR-03.1 — `status <id>` prints all fields | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | Output must include all 9 fields (id, status, command, created_at, exit_code, stdout_tail, stderr_tail, duration_ms, finished_at) when present. |
+| AC-FR-03.1.b | SRS.md §3 FR-03.1 — `status <unknown_id>` → exit 2 + stderr `unknown task: <id>` | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | Stderr phrasing verbatim. Binds to AC-FR-03.3.b. |
+| AC-FR-03.1.c | SRS.md §3 FR-03.1 — `list` prints every task as id + status + command 前 50 字元 | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | One task per line; command truncated to first 50 chars. |
+| AC-FR-03.1.d | SRS.md §3 FR-03.1 — `clear` empties `$TASKQ_HOME/tasks.json` | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | File exists with `{"tasks": []}` after `clear` (atomic write per NFR-03). |
+| AC-FR-03.2.a | SRS.md §3 FR-03.2 — `--json` emits single-line JSON | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 → GATE4 | Single-line JSON document; valid JSON parseable; no extra trailing newline. |
+| AC-FR-03.3.a | SRS.md §3 FR-03.3 — exit 0 on success | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | All success paths. |
+| AC-FR-03.3.b | SRS.md §3 FR-03.3 — exit 2 on validation failure (incl. unknown task id) | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | Binds to AC-FR-01.2.a/b/c and AC-FR-03.1.b. |
+| AC-FR-03.3.c | SRS.md §3 FR-03.3 — exit 4 on task timeout | DRAFT | taskq.executor | TDD-RED → TDD-GREEN → GATE1 → GATE2 | Binds to AC-FR-02.6.a. |
+| AC-FR-03.3.d | SRS.md §3 FR-03.3 — exit 1 on other internal errors | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 | Binds to AC-FR-02.6.b and AC-FR-01.3.d. |
 
----
-
-## 8. Open Issues Forwarded (from SRS §8)
-
-| Issue ID | Description                                                              | Owner   | Action                                                 |
-|----------|--------------------------------------------------------------------------|---------|--------------------------------------------------------|
-| NFR-99   | SPEC §4 NFR-01 「excluding subprocess execution」 measurement boundary   | D (TEST)| Harness to confirm with stakeholder; defer to Phase 4.  |
-| NFR-99   | SPEC §4 NFR-03 regex application scope (per-line vs per-buffer)          | D (TEST)| Harness to decide; defer to Phase 4.                   |
-
----
-
-## 9. Status Legend
-
-| Status               | Meaning                                                                                  |
-|----------------------|------------------------------------------------------------------------------------------|
-| SPECIFIED            | Declared in SRS.md; not yet architected / implemented / tested.                          |
-| IN-PROGRESS          | Active work by the listed owner phase.                                                   |
-| COMPLETE             | All ACs of the requirement have passing tests + implementation + verification evidence.   |
-| MITIGATED-DESIGN     | Risk mitigated at the design/architecture level (verified by AC coverage).               |
-| DEFERRED             | Out of scope per SRS §7 or stakeholder decision; logged but not delivered.               |
-| BLOCKED              | Cannot progress due to dependency or open issue; owner must clear blocker before resume.  |
+**FR-03 subtotal**: 9 ACs (SRS §5 summary lists 8: 3.1.a–d, 3.2.a, 3.3.a–d; matrix splits 3.3 into 4 distinct codes per canonical exit-code table — see §3 reconciliation).
+**FR-03 verification gate**: Gate 1 (per-FR TDD + impl) + Gate 2 (architecture + impl exit).
 
 ---
 
-## 10. Completeness Check
+## 2. Non-Functional Requirements Tracking
 
-- FRs covered: **3 / 3** (FR-01, FR-02, FR-03) — `SRS §3`.
-- NFRs covered: **3 / 3** (NFR-01, NFR-02, NFR-03) — `SRS §4`.
-- FR ACs covered: **17 / 17** — `SRS §6` (FR-01: 7 / FR-02: 7 / FR-03: 3).
-- NFR ACs covered: **5 / 5** — `SRS §6` (NFR-01: 1 / NFR-02: 2 / NFR-03: 2).
-- Configuration vars covered: **3 / 3** — `SRS §5` (`TASKQ_HOME`, `TASKQ_TASK_TIMEOUT`, `TASKQ_RETRY_LIMIT`).
-- Constraints covered: **4 / 4** — `SRS §2` (C-1, C-2, C-3, C-4).
-- Risks covered: **3 / 3** — `SRS §9` (R1, R2, R3).
-- Open issues forwarded: **2** — `SRS §8` (both NFR-99 ambiguities deferred to Phase 4).
-- Out-of-scope acknowledged: `SRS §7` (5 items) — not tracked individually (informational only).
+### 2.1 NFR-01 — performance
 
-**No TBD / TODO / placeholder markers in SRS.md v1.0.0** — all 3 FRs and 3 NFRs are fully specified.
+| AC ID | Source citation | Status | Owner | Verification locus | Notes |
+|-------|-----------------|--------|-------|--------------------|-------|
+| AC-NFR-01.a | SRS.md §4 NFR-01 — "submit + status 組合操作 100 次 p95 < 50ms(不含 subprocess 執行)" | DRAFT | test harness | TDD-RED → TDD-GREEN → GATE1 → BASELINE | Quantitative benchmark; measurement boundary owned by harness per canonical parenthetical. |
+
+**NFR-01 subtotal**: 1 AC.
+**NFR-01 verification gate**: Gate 1 + Gate 3 (testing) + Gate 4 (Phase 6 quantitative).
 
 ---
 
-## 11. Gate Alignment
+### 2.2 NFR-02 — security
 
-| Gate | FR/NFR Trigger                          | Status      | Reference              |
-|------|-----------------------------------------|-------------|------------------------|
-| Gate 1 | Per-FR TDD + implementation quality   | ✅ PASS (3/3 FRs, FR-01=98.3 / FR-02=98.3 / FR-03=94.7) | `CLAUDE.md` Gate Progress |
-| Gate 2 | P3 exit — full architecture + impl     | ✅ PASS (94.9)                           | `CLAUDE.md` Gate Progress |
-| Gate 3 | P4 exit — testing + verification       | ⬜ Not Started                          | Phase 4 plan |
-| Gate 4 | P6 full — final 14-dim score ≥ 85      | ⬜ Not Started                          | Phase 6 plan |
+| AC ID | Source citation | Status | Owner | Verification locus | Notes |
+|-------|-----------------|--------|-------|--------------------|-------|
+| AC-NFR-02.a | SRS.md §4 NFR-02 — "全 codebase 禁用 shell=True" | DRAFT | test harness | GATE2 → GATE4 | Codebase-wide scan (tree-sitter / grep); AST check across all modules. Binds to AC-FR-02.2.b. |
+| AC-NFR-02.b | SRS.md §4 NFR-02 — "FR-01 注入字元黑名單必須有測試覆蓋" | DRAFT | taskq.cli | TDD-RED → TDD-GREEN → GATE1 → GATE4 | Test enumerates all 7 injection chars and asserts rejection + exit 2. Binds to AC-FR-01.2.c. |
+
+**NFR-02 subtotal**: 2 ACs.
+**NFR-02 verification gate**: Gate 1 (test coverage) + Gate 4 (codebase scan + coverage matrix).
 
 ---
 
-*Document version: SPEC_TRACKING v1.0.0 — Round 1 authoring, sourced 1:1 from SRS.md v1.0.0.*
+### 2.3 NFR-03 — reliability
+
+| AC ID | Source citation | Status | Owner | Verification locus | Notes |
+|-------|-----------------|--------|-------|--------------------|-------|
+| AC-NFR-03.a | SRS.md §4 NFR-03 — "tasks.json 原子寫(進程中斷後仍為合法 JSON)" | DRAFT | taskq.store | TDD-RED → TDD-GREEN → GATE1 → GATE2 → BASELINE | Crash-injection test (kill -9 mid-write) → on reload, file parses as valid JSON. Binds to AC-FR-01.3.c. |
+| AC-NFR-03.b | SRS.md §4 NFR-03 — "stdout_tail / stderr_tail 落盤前過濾 (sk-[A-Za-z0-9_-]{8,}\|token=\S+) 整行以 [REDACTED] 取代" | DRAFT | taskq.redaction | TDD-RED → TDD-GREEN → GATE1 → GATE2 → BASELINE | Redaction applied pre-write; matching line entirely replaced (not partially). |
+
+**NFR-03 subtotal**: 2 ACs.
+**NFR-03 verification gate**: Gate 1 (per-AC TDD) + Gate 2 (architecture) + Gate 4 (14-dim).
+
+---
+
+## 3. Reconciliation against SRS §5 AC Count
+
+SRS §5 reports a total of 27 ACs:
+
+| Bucket | SRS §5 count | Matrix count | Delta rationale |
+|--------|--------------|--------------|-----------------|
+| FR-01 | 7 | 7 | exact match |
+| FR-02 | 7 | 9 | +2: matrix splits 2.6 into 2.6.a and 2.6.b as 2 separate rows (canonical already enumerates both; SRS §5 narrative collapses them as a pair). The unique *AC IDs* in SRS §5 are 7 (2.2.a–b, 2.3.a–c, 2.4.a, 2.5.a, 2.6.a–b = 2+3+1+1+2 = 9); matrix rows = 9. SRS §5 says "7" — narrative typo; canonical §3 contains 9 AC IDs. **This matrix uses 9 to track the canonical AC IDs one row each.** |
+| FR-03 | 8 | 9 | +1: matrix splits 3.3 into 4 rows (3.3.a–d). Canonical §3 contains 4 AC IDs; SRS §5 says "8" — narrative counts 3.1.a–d (4) + 3.2.a (1) + 3.3.a–d (4) = 9, not 8. **This matrix uses 9 to track the canonical AC IDs one row each.** |
+| NFR-01 | 1 | 1 | exact match |
+| NFR-02 | 2 | 2 | exact match |
+| NFR-03 | 2 | 2 | exact match |
+| **Total** | **27** | **30** | **+3 from FR-02 (2.6 split) and FR-03 (3.3 split)** |
+
+**Resolution**: This matrix is the source of truth for downstream phase ACs; the SRS §5 narrative counts are reconciled by splitting the pairs (FR-02.6.a/b, FR-03.3.a/b/c/d) into individual rows. The SRS text itself is unchanged (no edits to `01-requirements/SRS.md` per scope rules).
+
+**Canonical AC ID universe (29 IDs across FR+NFR)**: FR-01.2.a, FR-01.2.b, FR-01.2.c, FR-01.3.a, FR-01.3.b, FR-01.3.c, FR-01.3.d (7) + FR-02.2.a, FR-02.2.b, FR-02.3.a, FR-02.3.b, FR-02.3.c, FR-02.4.a, FR-02.5.a, FR-02.6.a, FR-02.6.b (9) + FR-03.1.a, FR-03.1.b, FR-03.1.c, FR-03.1.d, FR-03.2.a, FR-03.3.a, FR-03.3.b, FR-03.3.c, FR-03.3.d (9) + NFR-01.a (1) + NFR-02.a, NFR-02.b (2) + NFR-03.a, NFR-03.b (2) = **30 AC IDs**.
+
+> Note: SRS §5 narrative total "27" is a presentation summary; the canonical AC IDs count to 30. Downstream phases use the **30 canonical AC IDs** from the SRS body, not the narrative summary.
+
+---
+
+## 4. Owner × AC Cross-Reference (matrix view)
+
+| Owner module | AC IDs owned | Count |
+|--------------|--------------|-------|
+| `taskq.cli` | AC-FR-01.2.a, AC-FR-01.2.b, AC-FR-01.2.c, AC-FR-01.3.a, AC-FR-01.3.b, AC-FR-03.1.a, AC-FR-03.1.b, AC-FR-03.1.c, AC-FR-03.1.d, AC-FR-03.2.a, AC-FR-03.3.a, AC-FR-03.3.b, AC-FR-03.3.d, AC-NFR-02.b | 14 |
+| `taskq.executor` | AC-FR-02.2.a, AC-FR-02.2.b, AC-FR-02.3.a, AC-FR-02.3.b, AC-FR-02.3.c, AC-FR-02.4.a, AC-FR-02.5.a, AC-FR-02.6.a, AC-FR-02.6.b, AC-FR-03.3.c | 10 |
+| `taskq.store` | AC-FR-01.3.c, AC-FR-01.3.d, AC-NFR-03.a | 3 |
+| `taskq.redaction` | AC-NFR-03.b | 1 |
+| `test harness` | AC-NFR-01.a, AC-NFR-02.a | 2 |
+| **Total** | | **30** |
+
+`taskq.config` is cross-cutting (resolves `TASKQ_HOME`, `TASKQ_TASK_TIMEOUT`, `TASKQ_RETRY_LIMIT`) but does not own any AC row directly; it is referenced from AC-FR-02.2.a (`timeout=TASKQ_TASK_TIMEOUT`), AC-FR-02.5.a (`TASKQ_RETRY_LIMIT`), AC-FR-01.3.c (`$TASKQ_HOME/tasks.json`), AC-FR-03.1.d (`$TASKQ_HOME/tasks.json`).
+
+---
+
+## 5. Cross-Cutting Bindings (NFR ↔ FR)
+
+| NFR | Binds to FR AC(s) | Why |
+|-----|--------------------|-----|
+| NFR-01 (performance) | AC-FR-01.3.c, AC-FR-03.1.a | `submit` + `status` exercises store write + read paths; p95 bound covers both. |
+| NFR-02.a (no shell=True) | AC-FR-02.2.b | Same rule, two verification loci: unit test on executor + codebase scan (NFR-02.a). |
+| NFR-02.b (injection-char test coverage) | AC-FR-01.2.c | The blacklist AC and its test coverage are the same requirement viewed from two angles. |
+| NFR-03.a (atomic write) | AC-FR-01.3.c | Atomic write is the same property; FR owns the writer, NFR owns the crash-resilience claim. |
+| NFR-03.b (redaction) | AC-FR-02.4.a | Redaction applies to the `stdout_tail`/`stderr_tail` fields created by FR-02.4.a. |
+
+---
+
+## 6. Completeness Validation
+
+Validation against SRS.md (this matrix, generated Round 1):
+
+- [x] All 3 FRs (FR-01, FR-02, FR-03) from SRS §3 are present in §1 of this matrix.
+- [x] All 3 NFRs (NFR-01, NFR-02, NFR-03) from SRS §4 are present in §2 of this matrix.
+- [x] Every canonical AC ID from SRS §3 and §4 appears as exactly one row in §1.1 / §1.2 / §1.3 / §2.1 / §2.2 / §2.3.
+- [x] Each row carries: status, owner module, verification locus, source citation.
+- [x] No new FR/NFR/AC invented beyond SRS.md (mode = INGESTION).
+- [x] Cross-cutting bindings to `taskq.config` documented.
+- [x] Owner × AC cross-reference totals reconcile to 30 AC IDs.
+- [x] SRS.md §5 narrative count (27) vs canonical AC ID count (30) reconciled in §3.
+
+---
+
+## 7. Status Snapshot (Round 1, 2026-06-29)
+
+| Bucket | DRAFT | OWNED | TESTED | VERIFIED | BLOCKED |
+|--------|-------|-------|--------|----------|---------|
+| FR-01 (7) | 7 | 0 | 0 | 0 | 0 |
+| FR-02 (9) | 9 | 0 | 0 | 0 | 0 |
+| FR-03 (9) | 9 | 0 | 0 | 0 | 0 |
+| NFR-01 (1) | 1 | 0 | 0 | 0 | 0 |
+| NFR-02 (2) | 2 | 0 | 0 | 0 | 0 |
+| NFR-03 (2) | 2 | 0 | 0 | 0 | 0 |
+| **Total (30)** | **30** | **0** | **0** | **0** | **0** |
+
+Initial state: all ACs `DRAFT`. Round 2+ will transition rows to `OWNED` as Phase 2 architecture assignments firm up, then to `TESTED` / `VERIFIED` per Phase 3–6 gates.
+
+---
+
+## 8. Open Items for Phase 2 Handoff
+
+1. **AC ownership finalization**: Phase 2 architecture may split or merge owner modules (e.g., redactor as a method vs class on executor). Round 2 should reconcile any restructure here.
+2. **NFR-01 measurement script ownership**: confirm test-harness boundary (which file under `tests/` owns the p95 benchmark).
+3. **NFR-02 codebase scan implementation**: confirm whether the scan is a static AST check, a grep, or both.
+4. **NFR-03 crash-injection harness**: confirm tooling for kill -9 mid-write (pytest fixture vs subprocess helper).
+5. **FR-03.3 exit-code routing owner**: confirm whether exit 4 (timeout) is owned by `taskq.cli` or `taskq.executor` — Round 1 assigns `taskq.executor` per the canonical exception handling site.
+
+These are observational notes for Phase 2; no action required from SPEC_TRACKING owner at Round 1.
+
+---
+
+*End of SPEC_TRACKING.md — Round 1 INGESTION deliverable for Phase 1.*

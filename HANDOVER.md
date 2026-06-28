@@ -2,7 +2,7 @@
 
 **Checkpoint**: `P1-exit-20260628`  
 **Phase**: P1 — Spec & Discovery  
-**Generated**: 2026-06-28T20:40:07Z
+**Generated**: 2026-06-28T21:18:55Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -53,15 +53,21 @@ P1 phase completed — pushed for record.
 
 ## 交付物清單
 
-- `01-requirements/SRS.md` ✅ (213L)
-- `01-requirements/SPEC_TRACKING.md` ✅ (181L)
-- `01-requirements/TRACEABILITY_MATRIX.md` ✅ (301L)
+- `01-requirements/SRS.md` ✅ (267L)
+- `01-requirements/SPEC_TRACKING.md` ✅ (224L)
+- `01-requirements/TRACEABILITY_MATRIX.md` ✅ (570L)
 
 ## 目前執行狀況
 
 3 FR(s) defined in SRS [FR-01,FR-02,FR-03]. 3/4 deliverables present, Agent-B APPROVED.
 
 **Recently Committed Files:**
+  - `.claude/workflows/phase2-architecture.js`
+  - `.methodology/phase2_plan.md`
+  - `.claude/workflows/phase1-requirements.js`
+  - `.methodology/phase1_plan.md`
+  - `00-summary/Phase1_STAGE_PASS.md`
+  - `harness`
   - `HANDOVER.md`
   - `.harness/traces/agent_trajectory.jsonl`
   - `.methodology/state.json`
@@ -69,19 +75,13 @@ P1 phase completed — pushed for record.
   - `01-requirements/SRS.md`
   - `01-requirements/TRACEABILITY_MATRIX.md`
   - `TEST_INVENTORY.yaml`
-  - `harness`
   - `srs_vs_spec_diff.json`
-  - `.claude/workflows/phase1-requirements.js`
-  - `.claude/workflows/phase2-architecture.js`
-  - `.methodology/phase1_plan.md`
   - `CLAUDE.md`
   - `.methodology/.gate1_scores.json`
   - `.methodology/agent_b_approvals/ADR.md.json`
   - `.methodology/agent_b_approvals/SAD.md.json`
   - `.methodology/agent_b_approvals/SPEC_TRACKING.md.json`
   - `.methodology/agent_b_approvals/SRS.md.json`
-  - `.methodology/agent_b_approvals/TEST_INVENTORY.yaml.json`
-  - `.methodology/agent_b_approvals/TEST_SPEC.md.json`
 
 ## 接下來的工作
 
