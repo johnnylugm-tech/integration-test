@@ -1,16 +1,9 @@
 {
   "state": "RUNNING",
-  "current_phase": 1,
+  "current_phase": 2,
   "last_gate": null,
   "last_fr": null,
-  "last_update": "2026-06-28T17:58:23.299867+00:00",
-  "last_push_checkpoint": "2026-06-28T20:40:10.425786+00:00",
-  "last_push_checkpoint_phase": 1,
-  "phase_completed": {
-    "1": {
-      "sha": "677c3b6d004d390f247706c011a9bb944ee6df4e",
-      "timestamp": "2026-06-28T20:40:10.462645+00:00"
-    }
-  },
-  "test_inventory_checksum": "141d7630f0d3b0ed8f993eae1d37b4fb158598139df8c1e42fc1ce2b8064a855"
+  "last_update": "2026-06-28T21:25:15.564193+00:00",
+  "phase_truth_passed": true,
+  "last_milestone_command": "advance-phase --completed-phase 1"
 }

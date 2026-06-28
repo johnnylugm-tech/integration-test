@@ -370,25 +370,25 @@ are not re-opened. This bounds backtracking to a single step.
 
 ### FR Requirements (3 total)
 
-#### FR-01: Task Model & Persistence — `[SPEC §3 FR-01]`
+#### FR-01: 任務模型與持久化 (Task model and persistence)
 **Task**: 
 
-#### FR-02: Task Execution & Retry — `[SPEC §3 FR-02]`
+#### FR-02: 任務執行與重試 (Task execution and retry)
 **Task**: 
 
-#### FR-03: CLI Integration & Query — `[SPEC §3 FR-03]`
+#### FR-03: CLI 整合與查詢 (CLI integration and query)
 **Task**: 
 
 ### NFR Non-Functional Requirements (3 total)
 
-#### NFR-01: Performance — `[SPEC §4 NFR-01]`
-**Requirement**: > DERIVED: SPEC §4 NFR-01 — `submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行) — English translation of canonical Chinese spec; the parenthetical 「不含 subprocess 執行」 is preserved verbatim per 
+#### NFR-01: 1 (1.a)
+**Requirement**: Quantitative (p95 < 50ms)
 
-#### NFR-02: Security — `[SPEC §4 NFR-02]`
-**Requirement**: > DERIVED: SPEC §4 NFR-02 — 全 codebase 禁用 `shell=True`;FR-01 注入字元黑名單必須有測試覆蓋 — English translation of canonical Chinese spec; two clauses split into AC-NFR-02.1 (codebase-wide prohibition) and AC-NFR-0
+#### NFR-02: 2 (2.a–b)
+**Requirement**: Codebase scan + test coverage
 
-#### NFR-03: Reliability — `[SPEC §4 NFR-03]`
-**Requirement**: > DERIVED: SPEC §4 NFR-03 — `tasks.json` 原子寫(進程中斷後仍為合法 JSON);`stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代 — English translation of canonical Chinese spec; t
+#### NFR-03: 2 (3.a–b)
+**Requirement**: Crash-injection + regex output check
 
 ### Phase 1 Deliverables
 - `SRS.md` - Software Requirements Specification (FRs + NFRs)
@@ -471,8 +471,8 @@ are not re-opened. This bounds backtracking to a single step.
 - **[B-APPROVAL]** ✅ Persist Agent B approval JSONs for each deliverable to `.methodology/agent_b_approvals/<id>.json`
   > Required by `harness_cli.py advance-phase` via `_verify_agent_b_approvals_core`.
   > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"], "confidence": <0.0-1.0>}`
-  > Phase 1 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[1]`). For Phase 1: SRS, SPEC_TRACKING, TRACEABILITY_MATRIX, TEST_INVENTORY.
-  > `<id>` is the basename WITHOUT extension (e.g. `SRS.md` → `SRS`).
+  > Phase 1 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[1]`). For Phase 1: SRS.md, SPEC_TRACKING.md, TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml.
+  > `<id>` MUST match the full _PHASE_DELIVERABLES[N] entry EXACTLY, including file extension (e.g. `SRS.md` → file `SRS.md.json`). Harness matches `approvals_dir / f"{did}.json"` directly without stem-stripping.
   > Use Bash + Python (harness_cli.py write-approval subcommand if available, else direct Write tool) — do NOT use Edit (whole-file write only).
 
 - **[B-PUSH]** ✅ PUSH ① — Push to GitHub + HANDOVER.md — retry until success (CHECKPOINT-PEER-REVIEW saved):
