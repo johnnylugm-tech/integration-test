@@ -46,6 +46,9 @@ if (args && typeof args === 'object' && typeof args.repo === 'string' && args.re
 const PY = REPO + '/.venv/bin/python'
 // HR-12: safety ceiling; observed P2 runs converge in ≤2 rounds — lower only if cost is a concern
 const MAX_B_ROUNDS = 5
+// P-01 mirror: peer review is a quality advisory, not a functional gate.
+// Round 3 REJECT → PEER_REVIEW_ADVISORY (non-blocking) instead of HR-12.
+const MAX_PEER_ROUNDS = 3
 log('REPO = ' + REPO + ' | PY = ' + PY)
 
 // ---- J: WRITE SCOPE convention for LLM agent debug artifacts ----
@@ -597,10 +600,11 @@ if (!constPass) return { error: 'Phase 2 constitution check FAIL after 5 attempt
 // Phase: Peer Review (holistic Agent B — SAD + ADR + TEST_SPEC)
 // ════════════════════════════════════════════════════════════════════════
 phase('Peer Review')
-log('Agent B (TECH_LEAD) holistic review of all 3 P2 deliverables; max 5 rounds')
+log('Agent B (TECH_LEAD) holistic review of all 3 P2 deliverables; max 3 rounds (P-01 advisory, not HR-12)')
 let peerB2 = null
-for (let round = 1; round <= MAX_B_ROUNDS; round++) {
-  log('  --- Peer round ' + round + '/' + MAX_B_ROUNDS + ' ---')
+let peerReviewAdvisory = null
+for (let round = 1; round <= MAX_PEER_ROUNDS; round++) {
+  log('  --- Peer round ' + round + '/' + MAX_PEER_ROUNDS + ' ---')
   // v15: budget guard — gracefully exit if running low (Bug #3 mitigation)
   if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 100000) {
     log('  Peer Review budget low (' + Math.round((budget.remaining() || 0) / 1000) + 'k remaining) — exiting gracefully')
@@ -622,12 +626,20 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
     + '- Every fr_module_traceability entry points to a real SAD §2 module?\n- NFR target fields measurable (not N/A/empty)?'),
     { label: 'peer-b-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
   ) } catch (e) {
-    if (round === MAX_B_ROUNDS) return { error: 'Peer B agent failed at max rounds (round ' + round + ')', detail: String(e.message ?? e).slice(0, 200) }
+    if (round === MAX_PEER_ROUNDS) {
+      peerReviewAdvisory = { status: 'advisory', round, reason: 'Peer B agent failed at max rounds: ' + String(e.message ?? e).slice(0, 200), gaps: [] }
+      log('  PEER_REVIEW_ADVISORY: B agent failed at round ' + round + ' — continuing (non-blocking)')
+      break
+    }
     log('  Peer B agent failed: ' + String(e.message ?? e).slice(0, 80) + ' — retrying'); continue
   }
   try { peerB2 = parseAgentJson(bResult, 'PeerB-r' + round) }
   catch (e) {
-    if (round === MAX_B_ROUNDS) return { error: 'Peer B parse failed at max rounds (round ' + round + ')', detail: e.message, raw: String(bResult ?? '').slice(-400) }
+    if (round === MAX_PEER_ROUNDS) {
+      peerReviewAdvisory = { status: 'advisory', round, reason: 'Peer B parse failed at max rounds: ' + e.message, gaps: [] }
+      log('  PEER_REVIEW_ADVISORY: B parse failed at round ' + round + ' — continuing (non-blocking)')
+      break
+    }
     log('  Peer B parse failed: ' + e.message.slice(0, 80) + ' — retrying'); continue
   }
   log('  Peer B-2: ' + peerB2.review_status + ' | gaps=' + (peerB2.gaps ?? []).length + ' | high=' + (hasHighGap(peerB2.gaps) ? 'yes' : 'no'))
@@ -637,7 +649,12 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   log('  ' + summarizeVerify(peerB2, peerB2.verify))
 
   if (peerB2.review_status === 'APPROVE' && !hasHighGap(peerB2.gaps)) { log('  APPROVED'); break }
-  if (round === MAX_B_ROUNDS) return { error: 'Peer Review did not converge in ' + MAX_B_ROUNDS + ' rounds (HR-12 escalation)', lastB2: peerB2 }
+  // P-01: round MAX_PEER_ROUNDS REJECT → emit PEER_REVIEW_ADVISORY (non-blocking), continue to Push.
+  if (round === MAX_PEER_ROUNDS) {
+    peerReviewAdvisory = { status: 'advisory', round, reason: peerB2.reason ?? 'Peer review did not converge', gaps: peerB2.gaps ?? [] }
+    log('  PEER_REVIEW_ADVISORY: round ' + round + ' REJECT with ' + (peerB2.gaps ?? []).length + ' gaps — continuing to Push (non-blocking)')
+    break
+  }
   // Holistic gaps span multiple files → dispatch a fixer agent
   log('  Peer review found gaps — dispatching fixer for round ' + (round + 1))
   // v15: wrap fixer agent() in try/catch — fixer failures should not crash workflow (Bug #2)
@@ -657,6 +674,7 @@ for (let round = 1; round <= MAX_B_ROUNDS; round++) {
   testSpecContent = await loadFileViaPython('02-architecture/TEST_SPEC.md', '#', 'Peer Review')
   log('  Reloaded after fixer: SAD=' + sadContent.length + ' ADR=' + adrContent.length + ' TEST_SPEC=' + testSpecContent.length)
 }
+if (peerReviewAdvisory) log('  → Peer Review ended with advisory: ' + peerReviewAdvisory.reason.slice(0, 100))
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Push (push-checkpoint --phase 2; retry until success, NO --no-verify)
