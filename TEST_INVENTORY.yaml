@@ -3,14 +3,19 @@
 # derive_test_cases.md into 02-architecture/TEST_SPEC.md (P2).
 # Naming convention (per CLAUDE.md D4 + matrix §4.4): JS uses
 # `it('test_frNN_xxx')` / Python uses `def test_frNN_xxx`.
-# 1:1 mapping with TRACEABILITY_MATRIX.md §2 forward trace:
-#   * Every AC row in §2.1..§2.6 ⇒ one tc_id entry below.
-#   * Parametrized ranges (e.g. 7 injection chars) are EXPANDED into
-#     independent tc_ids (TC-FR01-04a..TC-FR01-04g).
-#   * Cross-cuts are signalled via cross_ref_frs / cross_ref_nfrs metadata,
-#     NOT by collapsing or omitting entries.
+# File-path scheme matches TRACEABILITY_MATRIX.md §2 / §3 / §4 (one file per
+# canonical AC, e.g. `tests/test_fr01_empty_command_rejected.py`). When an
+# AC is parametrized (e.g. 7 injection chars), each sub-case lives in the
+# SAME matrix-named file using pytest parametrize — the file name is the
+# matrix anchor, the test function is the per-sub-case identifier.
+# Canonical cross-ref schema (used uniformly below):
+#   cross_ref_frs         — list of FR IDs this tc touches
+#   cross_ref_nfrs        — list of NFR IDs this tc touches
+#   cross_ref_constraints — list of C-N IDs (SRS §2 declared range: C-1..C-4)
+#   cross_ref_risks       — list of R-N IDs (SRS §9 declared range: R1..R3)
+#   cross_ref_ac          — list of canonical AC IDs from SRS §6
 test_inventory:
-  format_version: "1.1"
+  format_version: "1.2"
   project: "taskq"
   source_spec: "SPEC.md v2.0.0 (2026-06-15)"
   source_requirements: "01-requirements/SRS.md v1.0 (APPROVED 2026-06-28)"
@@ -21,9 +26,11 @@ test_inventory:
 
   # -------------------------------------------------------------------------
   # FR-01 — Task Model & Persistence (taskq.store + taskq.cli.submit)
-  # Matrix §2.1 rows: V1, V2, V3, AC1..AC7  (AC4 expanded into 7 sub-cases)
-  # Matrix §4.1 count: 10  (with 7-parametrized counted once at matrix level;
-  #                       here expanded to 12 to honour 1:1 contract rule)
+  # Matrix §2.1 rows: 7 ACs (AC-FR-01.1.a/.b/.c, AC-FR-01.2.a/.b/.c/.d)
+  # Matrix §4.1 count: 7  (matrix lists ONE test file per AC; AC4 expansion to
+  #                       7 sub-cases is YAML-level decomposition, not matrix)
+  # YAML expansion: 14 tc_ids (1, 1b whitespace sub-case, 2, 3a..g (7) injection,
+  #                       4 id-format, 5 pending-fields, 6 corrupted-store, 7 atomic)
   # -------------------------------------------------------------------------
   fr01:
     title: "任務模型與持久化 (Task Model & Persistence)"
@@ -32,139 +39,153 @@ test_inventory:
     owning_module: "taskq.store + taskq.cli.submit"
     tests:
       - tc_id: TC-FR01-01
-        ac: FR-01.AC1
-        cross_ref_v: [FR-01.V1]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_empty
+        ac: AC-FR-01.1.a
+        cross_ref_ac: [AC-FR-01.1.a]
+        cross_ref_frs: [FR-01]
+        test_file: tests/test_fr01_empty_command_rejected.py
+        test_function: test_fr01_empty_command_rejected
         layer: unit
         type: cli_validator
         asserts:
           - "exit_code == 2"
           - "stderr non-empty (validation message)"
           - "tasks.json unchanged (no write)"
-      - tc_id: TC-FR01-02
-        ac: FR-01.AC2
-        cross_ref_v: [FR-01.V1]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_whitespace
+      - tc_id: TC-FR01-01b
+        ac: AC-FR-01.1.a
+        cross_ref_ac: [AC-FR-01.1.a]
+        cross_ref_frs: [FR-01]
+        test_file: tests/test_fr01_empty_command_rejected.py
+        test_function: test_fr01_whitespace_only_rejected
         layer: unit
         type: cli_validator
         asserts:
-          - "exit_code == 2"
-          - "stderr non-empty"
-          - "tasks.json unchanged"
-      - tc_id: TC-FR01-03
-        ac: FR-01.AC3
-        cross_ref_v: [FR-01.V2]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_too_long
+          - "whitespace-only command rejected (exit 2, no write)"
+        note: "Sub-case for whitespace-only inputs; same matrix-anchored file as TC-FR01-01 (pytest parametrize)."
+      - tc_id: TC-FR01-02
+        ac: AC-FR-01.1.b
+        cross_ref_ac: [AC-FR-01.1.b]
+        cross_ref_frs: [FR-01]
+        test_file: tests/test_fr01_oversize_command_rejected.py
+        test_function: test_fr01_oversize_command_rejected
         layer: unit
         type: cli_validator
         asserts:
           - "exit_code == 2"
           - "tasks.json unchanged (length > 1000 chars)"
-      - tc_id: TC-FR01-04a
-        ac: FR-01.AC4
-        cross_ref_v: [FR-01.V3]
-        cross_ref_nfrs: [NFR-02.AC2]
-        cross_ref_constraints: [C-05]
-        cross_ref_risks: [R4]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_injection_chars[0]
+      - tc_id: TC-FR01-03a
+        ac: AC-FR-01.1.c
+        cross_ref_ac: [AC-FR-01.1.c, AC-NFR-02.2]
+        cross_ref_frs: [FR-01]
+        cross_ref_nfrs: [NFR-02]
+        cross_ref_constraints: [C-2]
+        test_file: tests/test_fr01_injection_blacklist.py
+        test_function: test_fr01_injection_blacklist[0]
         layer: unit
         type: cli_validator_injection
         injection_char: ";"
         asserts:
           - "exit_code == 2"
           - "tasks.json unchanged"
-      - tc_id: TC-FR01-04b
-        ac: FR-01.AC4
-        cross_ref_v: [FR-01.V3]
-        cross_ref_nfrs: [NFR-02.AC2]
-        cross_ref_constraints: [C-05]
-        cross_ref_risks: [R4]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_injection_chars[1]
+      - tc_id: TC-FR01-03b
+        ac: AC-FR-01.1.c
+        cross_ref_ac: [AC-FR-01.1.c, AC-NFR-02.2]
+        cross_ref_frs: [FR-01]
+        cross_ref_nfrs: [NFR-02]
+        cross_ref_constraints: [C-2]
+        test_file: tests/test_fr01_injection_blacklist.py
+        test_function: test_fr01_injection_blacklist[1]
         layer: unit
         type: cli_validator_injection
         injection_char: "|"
         asserts:
           - "exit_code == 2"
           - "tasks.json unchanged"
-      - tc_id: TC-FR01-04c
-        ac: FR-01.AC4
-        cross_ref_v: [FR-01.V3]
-        cross_ref_nfrs: [NFR-02.AC2]
-        cross_ref_constraints: [C-05]
-        cross_ref_risks: [R4]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_injection_chars[2]
+      - tc_id: TC-FR01-03c
+        ac: AC-FR-01.1.c
+        cross_ref_ac: [AC-FR-01.1.c, AC-NFR-02.2]
+        cross_ref_frs: [FR-01]
+        cross_ref_nfrs: [NFR-02]
+        cross_ref_constraints: [C-2]
+        test_file: tests/test_fr01_injection_blacklist.py
+        test_function: test_fr01_injection_blacklist[2]
         layer: unit
         type: cli_validator_injection
         injection_char: "&"
         asserts:
           - "exit_code == 2"
           - "tasks.json unchanged"
-      - tc_id: TC-FR01-04d
-        ac: FR-01.AC4
-        cross_ref_v: [FR-01.V3]
-        cross_ref_nfrs: [NFR-02.AC2]
-        cross_ref_constraints: [C-05]
-        cross_ref_risks: [R4]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_injection_chars[3]
+      - tc_id: TC-FR01-03d
+        ac: AC-FR-01.1.c
+        cross_ref_ac: [AC-FR-01.1.c, AC-NFR-02.2]
+        cross_ref_frs: [FR-01]
+        cross_ref_nfrs: [NFR-02]
+        cross_ref_constraints: [C-2]
+        test_file: tests/test_fr01_injection_blacklist.py
+        test_function: test_fr01_injection_blacklist[3]
         layer: unit
         type: cli_validator_injection
         injection_char: "$"
         asserts:
           - "exit_code == 2"
           - "tasks.json unchanged"
-      - tc_id: TC-FR01-04e
-        ac: FR-01.AC4
-        cross_ref_v: [FR-01.V3]
-        cross_ref_nfrs: [NFR-02.AC2]
-        cross_ref_constraints: [C-05]
-        cross_ref_risks: [R4]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_injection_chars[4]
+      - tc_id: TC-FR01-03e
+        ac: AC-FR-01.1.c
+        cross_ref_ac: [AC-FR-01.1.c, AC-NFR-02.2]
+        cross_ref_frs: [FR-01]
+        cross_ref_nfrs: [NFR-02]
+        cross_ref_constraints: [C-2]
+        test_file: tests/test_fr01_injection_blacklist.py
+        test_function: test_fr01_injection_blacklist[4]
         layer: unit
         type: cli_validator_injection
         injection_char: ">"
         asserts:
           - "exit_code == 2"
           - "tasks.json unchanged"
-      - tc_id: TC-FR01-04f
-        ac: FR-01.AC4
-        cross_ref_v: [FR-01.V3]
-        cross_ref_nfrs: [NFR-02.AC2]
-        cross_ref_constraints: [C-05]
-        cross_ref_risks: [R4]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_injection_chars[5]
+      - tc_id: TC-FR01-03f
+        ac: AC-FR-01.1.c
+        cross_ref_ac: [AC-FR-01.1.c, AC-NFR-02.2]
+        cross_ref_frs: [FR-01]
+        cross_ref_nfrs: [NFR-02]
+        cross_ref_constraints: [C-2]
+        test_file: tests/test_fr01_injection_blacklist.py
+        test_function: test_fr01_injection_blacklist[5]
         layer: unit
         type: cli_validator_injection
         injection_char: "<"
         asserts:
           - "exit_code == 2"
           - "tasks.json unchanged"
-      - tc_id: TC-FR01-04g
-        ac: FR-01.AC4
-        cross_ref_v: [FR-01.V3]
-        cross_ref_nfrs: [NFR-02.AC2]
-        cross_ref_constraints: [C-05]
-        cross_ref_risks: [R4]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_injection_chars[6]
+      - tc_id: TC-FR01-03g
+        ac: AC-FR-01.1.c
+        cross_ref_ac: [AC-FR-01.1.c, AC-NFR-02.2]
+        cross_ref_frs: [FR-01]
+        cross_ref_nfrs: [NFR-02]
+        cross_ref_constraints: [C-2]
+        test_file: tests/test_fr01_injection_blacklist.py
+        test_function: test_fr01_injection_blacklist[6]
         layer: unit
         type: cli_validator_injection
         injection_char: "`"
         asserts:
           - "exit_code == 2"
           - "tasks.json unchanged"
+      - tc_id: TC-FR01-04
+        ac: AC-FR-01.2.a
+        cross_ref_ac: [AC-FR-01.2.a]
+        cross_ref_frs: [FR-01]
+        test_file: tests/test_fr01_id_format.py
+        test_function: test_fr01_id_format
+        layer: unit
+        type: id_format
+        asserts:
+          - "task.id length == 8 hex chars (uuid4 prefix)"
       - tc_id: TC-FR01-05
-        ac: FR-01.AC5
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_valid
+        ac: AC-FR-01.2.b
+        cross_ref_ac: [AC-FR-01.2.b]
+        cross_ref_frs: [FR-01]
+        test_file: tests/test_fr01_pending_record_fields.py
+        test_function: test_fr01_pending_record_fields
         layer: integration
         type: cli_store_write
         asserts:
@@ -176,11 +197,12 @@ test_inventory:
           - "task.command matches submitted command"
           - "task.created_at is ISO 8601 timestamp"
       - tc_id: TC-FR01-06
-        ac: FR-01.AC6
-        cross_ref_constraints: [C-07]
-        cross_ref_risks: [R5]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_corrupt_store_exit1
+        ac: AC-FR-01.2.d
+        cross_ref_ac: [AC-FR-01.2.d]
+        cross_ref_frs: [FR-01]
+        cross_ref_constraints: [C-3]
+        test_file: tests/test_fr01_corrupted_store_exit1.py
+        test_function: test_fr01_corrupted_store_exit1
         layer: integration
         type: store_load_failure
         asserts:
@@ -188,23 +210,30 @@ test_inventory:
           - "stderr contains literal 'store corrupted'"
           - "tasks.json NOT silently rebuilt on disk"
       - tc_id: TC-FR01-07
-        ac: FR-01.AC7
-        cross_ref_nfrs: [NFR-03.AC1]
-        cross_ref_constraints: [C-02]
+        ac: AC-FR-01.2.c
+        cross_ref_ac: [AC-FR-01.2.c, AC-NFR-03.1]
+        cross_ref_frs: [FR-01]
+        cross_ref_nfrs: [NFR-03]
+        cross_ref_constraints: [C-1, C-3]
         cross_ref_risks: [R1]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_atomic_write_invariant_submit
+        test_file: tests/test_fr01_atomic_write.py
+        test_function: test_fr01_atomic_write
         layer: cross_cutting
         type: atomic_write_invariant
         asserts:
+          - "atomic write to $TASKQ_HOME/tasks.json (tmp + os.replace)"
           - "tasks.json parses as valid JSON after submit"
           - "no partial / truncated writes observed"
         note: "Cross-cut invariant; re-executed by P5 verification across full submit/run sequence."
 
   # -------------------------------------------------------------------------
   # FR-02 — Task Execution & Retry (taskq.executor — High-Risk Module)
-  # Matrix §2.2 rows: AC1..AC12 + AC6a + AC6b
-  # Matrix §4.1 count: 14
+  # Matrix §2.2 rows: 7 ACs (AC-FR-02.1.a, AC-FR-02.2.a/.b, AC-FR-02.3.a,
+  #                         AC-FR-02.4.a, AC-FR-02.5.a/.b)
+  # Matrix §4.1 count: 7  (matrix lists ONE test file per AC)
+  # YAML expansion: 9 tc_ids (7 canonical AC anchors + 2 retry sub-cases for
+  #                       AC-FR-02.4.a; TC-FR02-05 grep-anchor removed — now
+  #                       owned by TC-NFR02-01 to avoid duplicate coverage)
   # -------------------------------------------------------------------------
   fr02:
     title: "任務執行與重試 (Task Execution & Retry)"
@@ -213,144 +242,112 @@ test_inventory:
     owning_module: "taskq.executor (high-risk)"
     tests:
       - tc_id: TC-FR02-01
-        ac: FR-02.AC1
-        test_file: tests/test_fr02_run.py
-        test_function: test_run_done
+        ac: AC-FR-02.1.a
+        cross_ref_ac: [AC-FR-02.1.a]
+        cross_ref_frs: [FR-02]
+        cross_ref_constraints: [C-1]
+        test_file: tests/test_fr02_subprocess_invoke.py
+        test_function: test_fr02_subprocess_invoke
         layer: integration
-        type: executor_success
+        type: executor_subprocess_invoke
         asserts:
-          - "exit_code == 0"
-          - "task.status == 'done'"
-          - "task.exit_code == 0"
+          - "subprocess.run invoked with shlex.split, capture_output, text, timeout"
+          - "shell=True absent from source (cross-cut; full check at TC-NFR02-01)"
       - tc_id: TC-FR02-02
-        ac: FR-02.AC2
-        cross_ref: [FR-02.AC6]
-        test_file: tests/test_fr02_run.py
-        test_function: test_run_failed_with_retries
+        ac: AC-FR-02.2.a
+        cross_ref_ac: [AC-FR-02.2.a]
+        cross_ref_frs: [FR-02]
+        test_file: tests/test_fr02_state_machine.py
+        test_function: test_fr02_state_machine
         layer: integration
-        type: executor_failure_retry
+        type: executor_state_machine
         asserts:
-          - "task.status == 'failed' after retries"
-          - "task.exit_code != 0"
-          - "total subprocess invocations bounded by TASKQ_RETRY_LIMIT"
+          - "pending → running → done | failed | timeout"
       - tc_id: TC-FR02-03
-        ac: FR-02.AC3
-        cross_ref: [FR-02.AC11]
+        ac: AC-FR-02.2.b
+        cross_ref_ac: [AC-FR-02.2.b, AC-FR-02.4.a, AC-FR-02.5.a]
+        cross_ref_frs: [FR-02]
         cross_ref_risks: [R2]
-        test_file: tests/test_fr02_run.py
-        test_function: test_run_timeout_exit4
+        test_file: tests/test_fr02_exit_to_status.py
+        test_function: test_fr02_exit_to_status
         layer: integration
-        type: executor_timeout
+        type: executor_exit_to_status
         asserts:
-          - "task.status == 'timeout'"
-          - "exit_code == 4 after retry exhaustion"
+          - "exit 0 → status 'done'"
+          - "non-zero → status 'failed'"
+          - "TimeoutExpired → status 'timeout' (with exit 4 in single-task mode after retries)"
       - tc_id: TC-FR02-04
-        ac: FR-02.AC4
-        test_file: tests/test_fr02_run.py
-        test_function: test_run_stdout_tail
+        ac: AC-FR-02.3.a
+        cross_ref_ac: [AC-FR-02.3.a]
+        cross_ref_frs: [FR-02]
+        test_file: tests/test_fr02_result_fields.py
+        test_function: test_fr02_result_fields
         layer: integration
         type: executor_output_capture
         asserts:
-          - "stdout_tail == 'hello\\n' for 'echo hello'"
-          - "stderr_tail is empty"
-          - "duration_ms >= 0"
-          - "finished_at is set"
-      - tc_id: TC-FR02-05
-        ac: FR-02.AC5
-        cross_ref_nfrs: [NFR-02.AC1]
-        cross_ref_constraints: [C-01]
-        test_file: tests/test_fr02_run.py
-        test_function: test_no_shell_true_invariant
-        layer: cross_cutting
-        type: static_grep
-        asserts:
-          - "grep -rn 'shell=True' src/ returns 0 matches"
-        note: "Codebase-wide invariant; static check, not a runtime test."
+          - "stdout_tail == last 2000 chars of captured stdout"
+          - "stderr_tail == last 2000 chars of captured stderr"
+          - "exit_code, duration_ms, finished_at recorded"
       - tc_id: TC-FR02-06
-        ac: FR-02.AC6
-        test_file: tests/test_fr02_run.py
-        test_function: test_retry_cap_default
+        ac: AC-FR-02.4.a
+        cross_ref_ac: [AC-FR-02.4.a]
+        cross_ref_frs: [FR-02]
+        test_file: tests/test_fr02_retry_cap.py
+        test_function: test_fr02_retry_cap
         layer: integration
         type: executor_retry_cap
         asserts:
           - "default retry cap (TASKQ_RETRY_LIMIT=2) honored"
           - "total invocations bounded"
+          - "retry triggered on failed/timeout, NOT on done"
       - tc_id: TC-FR02-06a
-        ac: FR-02.AC6a
-        test_file: tests/test_fr02_run.py
-        test_function: test_retry_cap_zero
+        ac: AC-FR-02.4.a
+        cross_ref_ac: [AC-FR-02.4.a]
+        cross_ref_frs: [FR-02]
+        test_file: tests/test_fr02_retry_cap.py
+        test_function: test_fr02_retry_cap_zero
         layer: integration
         type: executor_retry_cap_override
         asserts:
-          - "TASKQ_RETRY_LIMIT=0 → exactly 1 invocation, no retry"
+          - "TASKQ_RETRY_LIMIT=0 → exactly 1 invocation, no retry (config-override sub-case of AC-FR-02.4.a)"
+        note: "Config-override sub-case; same matrix-anchored file as TC-FR02-06 (pytest parametrize)."
       - tc_id: TC-FR02-06b
-        ac: FR-02.AC6b
-        test_file: tests/test_fr02_run.py
-        test_function: test_retry_on_timeout
+        ac: AC-FR-02.4.a
+        cross_ref_ac: [AC-FR-02.4.a]
+        cross_ref_frs: [FR-02]
+        test_file: tests/test_fr02_retry_cap.py
+        test_function: test_fr02_retry_on_timeout
         layer: integration
         type: executor_retry_condition
         asserts:
-          - "retry is triggered on timeout result, not only on failed"
+          - "retry is triggered on timeout result, not only on failed (sub-case of AC-FR-02.4.a)"
+        note: "Retry-condition sub-case; same matrix-anchored file as TC-FR02-06 (pytest parametrize)."
       - tc_id: TC-FR02-07
-        ac: FR-02.AC7
-        test_file: tests/test_fr02_run.py
-        test_function: test_no_retry_on_done
+        ac: AC-FR-02.5.a
+        cross_ref_ac: [AC-FR-02.5.a]
+        cross_ref_frs: [FR-02]
+        test_file: tests/test_fr02_timeout_exit4.py
+        test_function: test_fr02_timeout_exit4
         layer: integration
-        type: executor_retry_condition
+        type: executor_timeout_exit
         asserts:
-          - "on status 'done' no retry is attempted"
-          - "total invocations == 1"
+          - "single-task mode + timeout result → exit 4 after retry exhaustion"
       - tc_id: TC-FR02-08
-        ac: FR-02.AC8
-        cross_ref_constraints: [C-08]
-        cross_ref_risks: [R6]
-        test_file: tests/test_fr02_run.py
-        test_function: test_unexpected_exception_exit1
+        ac: AC-FR-02.5.b
+        cross_ref_ac: [AC-FR-02.5.b]
+        cross_ref_frs: [FR-02]
+        test_file: tests/test_fr02_unexpected_exit1.py
+        test_function: test_fr02_unexpected_exit1
         layer: integration
         type: executor_error_propagation
         asserts:
           - "unexpected exception → exit 1"
           - "no bare 'except:' masks the error (lint-enforced)"
-      - tc_id: TC-FR02-09
-        ac: FR-02.AC9
-        cross_ref_risks: [R7]
-        test_file: tests/test_fr02_run.py
-        test_function: test_stdout_tail_2000
-        layer: integration
-        type: executor_output_tail
-        asserts:
-          - "output > 2000 chars → stdout_tail is exactly last 2000 chars"
-      - tc_id: TC-FR02-10
-        ac: FR-02.AC10
-        test_file: tests/test_fr02_run.py
-        test_function: test_taskq_home_override
-        layer: integration
-        type: config_override
-        asserts:
-          - "TASKQ_HOME=<custom> → tasks.json written at $TASKQ_HOME"
-          - "default .taskq/ not used"
-      - tc_id: TC-FR02-11
-        ac: FR-02.AC11
-        test_file: tests/test_fr02_run.py
-        test_function: test_taskq_task_timeout_override
-        layer: integration
-        type: config_override
-        asserts:
-          - "TASKQ_TASK_TIMEOUT=0.05 → timeout path (status 'timeout', exit 4)"
-      - tc_id: TC-FR02-12
-        ac: FR-02.AC12
-        test_file: tests/test_fr02_run.py
-        test_function: test_taskq_retry_limit_override
-        layer: integration
-        type: config_override
-        asserts:
-          - "TASKQ_RETRY_LIMIT=3 → retry cap honors override"
-          - "final status 'failed'"
 
   # -------------------------------------------------------------------------
   # FR-03 — CLI Integration & Query (taskq.cli)
-  # Matrix §2.3 rows: AC1..AC8
-  # Matrix §4.1 count: 7 (AC8 = P8 static check)
+  # Matrix §2.3 rows: 3 (AC-FR-03 table / AC-FR-03.1.a / AC-FR-03.2.a)
+  # Matrix §4.1 count: 3  (table behaviour is ONE test anchor, NOT decomposed)
   # -------------------------------------------------------------------------
   fr03:
     title: "CLI 整合與查詢 (CLI Integration & Query)"
@@ -359,80 +356,46 @@ test_inventory:
     owning_module: "taskq.cli"
     tests:
       - tc_id: TC-FR03-01
-        ac: FR-03.AC1
-        test_file: tests/test_fr03_cli.py
-        test_function: test_status_existing
+        ac: AC-FR-03 (table)
+        cross_ref_ac: [AC-FR-03 (table)]
+        cross_ref_frs: [FR-03]
+        test_file: tests/test_fr03_command_table.py
+        test_function: test_fr03_command_table
         layer: integration
-        type: cli_query
+        type: cli_command_table
         asserts:
-          - "'status <id>' on existing task returns all fields"
-          - "exit_code == 0"
+          - "submit / run / status / list / clear behaviors per SPEC §3 FR-03 table"
+          - "status <existing> → exit 0 + all fields"
+          - "status <unknown> → exit 2 + stderr 'unknown task: <id>'"
+          - "list → id + status + first 50 chars of command"
+          - "clear → tasks.json empty + exit 0"
+        note: "Single matrix anchor (matrix §4 row 15) covers all 5 subcommands; not decomposed per matrix intent."
       - tc_id: TC-FR03-02
-        ac: FR-03.AC2
-        test_file: tests/test_fr03_cli.py
-        test_function: test_status_unknown
-        layer: integration
-        type: cli_query
-        asserts:
-          - "'status <unknown>' → exit_code == 2"
-          - "stderr contains 'unknown task: <id>'"
-      - tc_id: TC-FR03-03
-        ac: FR-03.AC3
-        test_file: tests/test_fr03_cli.py
-        test_function: test_list_three_tasks
-        layer: integration
-        type: cli_query
-        asserts:
-          - "'list' on 3 tasks → exactly 3 entries"
-          - "each entry has id + status + command-prefix (≤50 chars)"
-      - tc_id: TC-FR03-04
-        ac: FR-03.AC4
-        test_file: tests/test_fr03_cli.py
-        test_function: test_clear
-        layer: integration
-        type: cli_mutation
-        asserts:
-          - "'clear' → tasks.json is empty"
-          - "exit_code == 0"
-      - tc_id: TC-FR03-05
-        ac: FR-03.AC5
-        test_file: tests/test_fr03_cli.py
-        test_function: test_json_flag
+        ac: AC-FR-03.1.a
+        cross_ref_ac: [AC-FR-03.1.a]
+        cross_ref_frs: [FR-03]
+        test_file: tests/test_fr03_json_flag_single_line.py
+        test_function: test_fr03_json_flag_single_line
         layer: integration
         type: cli_output_format
         asserts:
           - "'--json' flag → single-line JSON output"
-      - tc_id: TC-FR03-06
-        ac: FR-03.AC6
-        cross_ref_frs: [FR-01]
-        test_file: tests/test_fr03_cli.py
-        test_function: test_fr01_violation_through_cli_exit2
+      - tc_id: TC-FR03-03
+        ac: AC-FR-03.2.a
+        cross_ref_ac: [AC-FR-03.2.a]
+        cross_ref_frs: [FR-03]
+        test_file: tests/test_fr03_exit_code_mapping.py
+        test_function: test_fr03_exit_code_mapping
         layer: integration
-        type: cli_validator_reuse
+        type: cli_exit_code_mapping
         asserts:
-          - "FR-01 validation violation submitted via CLI → exit_code == 2"
-      - tc_id: TC-FR03-07
-        ac: FR-03.AC7
-        cross_ref_frs: [FR-02]
-        test_file: tests/test_fr03_cli.py
-        test_function: test_run_timeout_exit4_cli
-        layer: integration
-        type: cli_executor_reuse
-        asserts:
-          - "'run' timeout → exit_code == 4 (re-uses FR-02 exit code)"
-      - tc_id: TC-FR03-08
-        ac: FR-03.AC8
-        test_file: tests/test_fr03_cli.py
-        test_function: test_env_example_declares_three_vars
-        layer: static_check
-        type: config_static
-        asserts:
-          - ".env.example at project root declares TASKQ_HOME, TASKQ_TASK_TIMEOUT, TASKQ_RETRY_LIMIT"
-        note: "Owner = P8 (config deliverable). Deferred to Gate 1 exit re-eval after P8."
+          - "exit codes 0 (success) / 2 (validation / unknown id) / 4 (timeout) / 1 (internal error)"
+          - "FR-01 validation violation via CLI → exit 2"
+          - "FR-02 timeout via CLI → exit 4"
 
   # -------------------------------------------------------------------------
   # NFR-01 — Performance
-  # Matrix §2.4 rows: AC1
+  # Matrix §3.1 rows: AC-NFR-01.1
   # Matrix §4.1 count: 1 (P5 benchmark; subject to NFR-99.1 stakeholder confirmation)
   # -------------------------------------------------------------------------
   nfr01:
@@ -442,9 +405,12 @@ test_inventory:
     owning_module: "taskq.cli + taskq.store"
     tests:
       - tc_id: TC-NFR01-01
-        ac: NFR-01.AC1
-        test_file: tests/test_nfr01_perf.py
-        test_function: test_p95_latency_under_50ms
+        ac: AC-NFR-01.1
+        cross_ref_ac: [AC-NFR-01.1]
+        cross_ref_nfrs: [NFR-01]
+        cross_ref_constraints: [C-4]
+        test_file: tests/perf/test_nfr01_p95_under_50ms.py
+        test_function: test_nfr01_p95_under_50ms
         layer: cross_cutting
         type: benchmark
         asserts:
@@ -454,8 +420,9 @@ test_inventory:
 
   # -------------------------------------------------------------------------
   # NFR-02 — Security (codebase-wide)
-  # Matrix §2.5 rows: AC1, AC2
-  # NFR-02.AC2 is fully covered by FR-01 TC-FR01-04a..g (cross_ref below).
+  # Matrix §3.2 rows: 2 ACs (AC-NFR-02.1 grep audit, AC-NFR-02.2 injection coverage)
+  # Matrix §4.1 count: 2  (matrix re-uses FR-01 test for AC-NFR-02.2)
+  # AC-NFR-02.2 is fully covered by FR-01 TC-FR01-03a..g (cross_ref below).
   # -------------------------------------------------------------------------
   nfr02:
     title: "security (no shell=True + injection blacklist)"
@@ -464,32 +431,37 @@ test_inventory:
     owning_module: "codebase-wide invariant"
     tests:
       - tc_id: TC-NFR02-01
-        ac: NFR-02.AC1
-        cross_ref_frs: [FR-02]
-        cross_ref_constraints: [C-01]
-        test_file: tests/test_nfr02_security.py
-        test_function: test_no_shell_true_in_source
+        ac: AC-NFR-02.1
+        cross_ref_ac: [AC-NFR-02.1]
+        cross_ref_nfrs: [NFR-02]
+        cross_ref_frs: [FR-01, FR-02]
+        cross_ref_constraints: [C-1]
+        test_file: tests/test_nfr02_no_shell_true_grep.py
+        test_function: test_nfr02_no_shell_true_grep
         layer: cross_cutting
         type: static_grep
         asserts:
           - "grep -rn 'shell=True' src/ → 0 matches"
-        note: "Re-run at Gate 3 (P5 audit) as part of acceptance."
+        note: "Single owner of the no-shell-True invariant. Replaces former TC-FR02-05 (duplicate). Re-run at Gate 3 (P5 audit) as part of acceptance."
       - tc_id: TC-NFR02-02
-        ac: NFR-02.AC2
+        ac: AC-NFR-02.2
+        cross_ref_ac: [AC-NFR-02.2, AC-FR-01.1.c]
+        cross_ref_nfrs: [NFR-02]
         cross_ref_frs: [FR-01]
-        cross_ref_constraints: [C-05]
-        cross_ref_risks: [R4]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_submit_injection_chars_coverage
+        cross_ref_constraints: [C-2]
+        test_file: tests/test_fr01_injection_blacklist.py
+        test_function: test_fr01_injection_blacklist_coverage
         layer: cross_cutting
         type: coverage_meta
         asserts:
           - "all 7 injection chars (; | & $ > < `) have explicit parametrized tests on submit"
-        note: "Cross-cut assertion; the 7 underlying tc_ids live under FR-01 (TC-FR01-04a..g). Listed here as a separate contract item so NFR-02.AC2 has its own tc_id entry."
+        note: "Cross-cut assertion; the 7 underlying tc_ids live under FR-01 (TC-FR01-03a..g). Listed here as a separate contract item so AC-NFR-02.2 has its own tc_id entry."
 
   # -------------------------------------------------------------------------
   # NFR-03 — Reliability (taskq.store + taskq.executor)
-  # Matrix §2.6 rows: AC1..AC5
+  # Matrix §3.3 rows: 2 ACs (AC-NFR-03.1 atomic write, AC-NFR-03.2 redaction)
+  # Matrix §4.1 count: 2 (+ 1 enforcement anchor §5.2 test_nfr03_redaction_ownership_grep)
+  # YAML expansion: 5 tc_ids (AC-NFR-03.2 → stdout/stderr × sk/token variants + no-match)
   # -------------------------------------------------------------------------
   nfr03:
     title: "reliability (atomic write + secret redaction)"
@@ -498,73 +470,87 @@ test_inventory:
     owning_module: "taskq.store + taskq.executor"
     tests:
       - tc_id: TC-NFR03-01
-        ac: NFR-03.AC1
+        ac: AC-NFR-03.1
+        cross_ref_ac: [AC-NFR-03.1, AC-FR-01.2.c]
+        cross_ref_nfrs: [NFR-03]
         cross_ref_frs: [FR-01]
-        cross_ref_constraints: [C-02]
+        cross_ref_constraints: [C-1, C-3]
         cross_ref_risks: [R1]
-        test_file: tests/test_fr01_submit.py
-        test_function: test_atomic_write_invariant_full_sequence
+        test_file: tests/test_nfr03_atomic_survives_crash.py
+        test_function: test_nfr03_atomic_survives_crash
         layer: cross_cutting
         type: atomic_write_invariant
         asserts:
           - "tasks.json parses as valid JSON after any submit/run sequence"
           - "no partial writes observed across full sequence"
-        note: "Cross-cut; re-validated at Gate 3 (P5)."
+        note: "Cross-cut; re-validated at Gate 3 (P5). Same matrix-anchored file as TC-FR01-07 atomic invariant."
       - tc_id: TC-NFR03-02
-        ac: NFR-03.AC2
-        cross_ref_constraints: [C-06]
+        ac: AC-NFR-03.2
+        cross_ref_ac: [AC-NFR-03.2]
+        cross_ref_nfrs: [NFR-03]
+        cross_ref_frs: [FR-02]
         cross_ref_risks: [R3]
-        test_file: tests/test_fr02_run.py
-        test_function: test_redact_sk_secret
+        test_file: tests/test_nfr03_redaction_line_replace.py
+        test_function: test_nfr03_redact_sk_secret_stdout
         layer: integration
         type: redaction
         asserts:
           - "stdout_tail line matching 'sk-XXXXXXXX' (≥8 alnum/_/-) → replaced by '[REDACTED]'"
       - tc_id: TC-NFR03-03
-        ac: NFR-03.AC3
-        cross_ref_constraints: [C-06]
+        ac: AC-NFR-03.2
+        cross_ref_ac: [AC-NFR-03.2]
+        cross_ref_nfrs: [NFR-03]
+        cross_ref_frs: [FR-02]
         cross_ref_risks: [R3]
-        test_file: tests/test_fr02_run.py
-        test_function: test_redact_token_secret
+        test_file: tests/test_nfr03_redaction_line_replace.py
+        test_function: test_nfr03_redact_token_secret_stdout
         layer: integration
         type: redaction
         asserts:
           - "stdout_tail line matching 'token=…' → replaced by '[REDACTED]'"
+        note: "Sub-case of AC-NFR-03.2; same matrix-anchored file as TC-NFR03-02 (pytest parametrize)."
       - tc_id: TC-NFR03-04
-        ac: NFR-03.AC4
-        cross_ref_constraints: [C-06]
+        ac: AC-NFR-03.2
+        cross_ref_ac: [AC-NFR-03.2]
+        cross_ref_nfrs: [NFR-03]
+        cross_ref_frs: [FR-02]
         cross_ref_risks: [R3]
-        test_file: tests/test_fr02_run.py
-        test_function: test_redact_sk_secret_stderr
+        test_file: tests/test_nfr03_redaction_line_replace.py
+        test_function: test_nfr03_redact_sk_secret_stderr
         layer: integration
         type: redaction
         asserts:
           - "stderr_tail line matching 'sk-XXXXXXXX' → replaced by '[REDACTED]'"
+        note: "Sub-case of AC-NFR-03.2; same matrix-anchored file as TC-NFR03-02 (pytest parametrize)."
       - tc_id: TC-NFR03-05
-        ac: NFR-03.AC5
-        cross_ref_constraints: [C-06]
-        test_file: tests/test_fr02_run.py
-        test_function: test_redact_no_match_preserved
+        ac: AC-NFR-03.2
+        cross_ref_ac: [AC-NFR-03.2]
+        cross_ref_nfrs: [NFR-03]
+        cross_ref_frs: [FR-02]
+        test_file: tests/test_nfr03_redaction_line_replace.py
+        test_function: test_nfr03_redact_no_match_preserved
         layer: integration
         type: redaction
         asserts:
           - "non-matching content preserved unchanged (no false redaction)"
+        note: "Sub-case of AC-NFR-03.2 (no-match guard); same matrix-anchored file as TC-NFR03-02 (pytest parametrize)."
 
   # =========================================================================
   # Coverage summary — MUST equal the sum of enumerated tests entries above
   # =========================================================================
   coverage_summary:
-    total_test_cases: 43
+    total_test_cases: 34
     by_fr:
       FR-01:
-        tc_count: 13
-        tc_ids: [TC-FR01-01, TC-FR01-02, TC-FR01-03, TC-FR01-04a, TC-FR01-04b, TC-FR01-04c, TC-FR01-04d, TC-FR01-04e, TC-FR01-04f, TC-FR01-04g, TC-FR01-05, TC-FR01-06, TC-FR01-07]  # 13
-      FR-02:
         tc_count: 14
-        tc_ids: [TC-FR02-01, TC-FR02-02, TC-FR02-03, TC-FR02-04, TC-FR02-05, TC-FR02-06, TC-FR02-06a, TC-FR02-06b, TC-FR02-07, TC-FR02-08, TC-FR02-09, TC-FR02-10, TC-FR02-11, TC-FR02-12]  # 14
+        tc_ids: [TC-FR01-01, TC-FR01-01b, TC-FR01-02, TC-FR01-03a, TC-FR01-03b, TC-FR01-03c, TC-FR01-03d, TC-FR01-03e, TC-FR01-03f, TC-FR01-03g, TC-FR01-04, TC-FR01-05, TC-FR01-06, TC-FR01-07]  # 14
+      # FR-01 enumeration: 1, 1b, 2, 3a..g (7), 4, 5, 6, 7 = 14
+      FR-02:
+        tc_count: 9
+        tc_ids: [TC-FR02-01, TC-FR02-02, TC-FR02-03, TC-FR02-04, TC-FR02-06, TC-FR02-06a, TC-FR02-06b, TC-FR02-07, TC-FR02-08]  # 9
       FR-03:
-        tc_count: 8
-        tc_ids: [TC-FR03-01, TC-FR03-02, TC-FR03-03, TC-FR03-04, TC-FR03-05, TC-FR03-06, TC-FR03-07, TC-FR03-08]
+        tc_count: 3
+        tc_ids: [TC-FR03-01, TC-FR03-02, TC-FR03-03]
       NFR-01:
         tc_count: 1
         tc_ids: [TC-NFR01-01]
@@ -574,18 +560,18 @@ test_inventory:
       NFR-03:
         tc_count: 5
         tc_ids: [TC-NFR03-01, TC-NFR03-02, TC-NFR03-03, TC-NFR03-04, TC-NFR03-05]
-    by_fr_total: 43
+    by_fr_total: 34
     by_layer:
       unit:
-        count: 10
-        tc_ids: [TC-FR01-01, TC-FR01-02, TC-FR01-03, TC-FR01-04a, TC-FR01-04b, TC-FR01-04c, TC-FR01-04d, TC-FR01-04e, TC-FR01-04f, TC-FR01-04g]
+        count: 11
+        tc_ids: [TC-FR01-01, TC-FR01-01b, TC-FR01-02, TC-FR01-03a, TC-FR01-03b, TC-FR01-03c, TC-FR01-03d, TC-FR01-03e, TC-FR01-03f, TC-FR01-03g, TC-FR01-04]
       integration:
-        count: 26
-        tc_ids: [TC-FR01-05, TC-FR01-06, TC-FR02-01, TC-FR02-02, TC-FR02-03, TC-FR02-04, TC-FR02-06, TC-FR02-06a, TC-FR02-06b, TC-FR02-07, TC-FR02-08, TC-FR02-09, TC-FR02-10, TC-FR02-11, TC-FR02-12, TC-FR03-01, TC-FR03-02, TC-FR03-03, TC-FR03-04, TC-FR03-05, TC-FR03-06, TC-FR03-07, TC-NFR03-02, TC-NFR03-03, TC-NFR03-04, TC-NFR03-05]
+        count: 18
+        tc_ids: [TC-FR01-05, TC-FR01-06, TC-FR02-01, TC-FR02-02, TC-FR02-03, TC-FR02-04, TC-FR02-06, TC-FR02-06a, TC-FR02-06b, TC-FR02-07, TC-FR02-08, TC-FR03-01, TC-FR03-02, TC-FR03-03, TC-NFR03-02, TC-NFR03-03, TC-NFR03-04, TC-NFR03-05]
       cross_cutting:
-        count: 6
-        tc_ids: [TC-FR01-07, TC-FR02-05, TC-NFR01-01, TC-NFR02-01, TC-NFR02-02, TC-NFR03-01]
+        count: 5
+        tc_ids: [TC-FR01-07, TC-NFR01-01, TC-NFR02-01, TC-NFR02-02, TC-NFR03-01]
       static_check:
-        count: 1
-        tc_ids: [TC-FR03-08]
-    by_layer_total: 43
+        count: 0
+        tc_ids: []
+    by_layer_total: 34
