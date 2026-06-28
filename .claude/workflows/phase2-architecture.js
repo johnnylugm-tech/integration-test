@@ -254,11 +254,45 @@ async function abLoop(cfg) {
     // X1 self-verify (mirrors phase1 §B-2.5; observability, NOT veto)
     b2.verify = await runBSelfVerify(cfg, b2, round)
     log('  ' + summarizeVerify(b2, b2.verify))
-    if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) { log('  APPROVED'); return { ok: true, content, b2 } }
+    if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) {
+      log('  APPROVED')
+      // Persist Agent B approval JSON (harness _verify_agent_b_approvals_core contract).
+      // filename = basename WITHOUT extension (harness resolves _PHASE_DELIVERABLES[2]=["SAD.md","ADR.md","TEST_SPEC.md"]).
+      const approvalId = cfg.deliverable.replace(/\.[^.]+$/, '')
+      await persistApproval(approvalId, b2)
+      return { ok: true, content, b2 }
+    }
     if (round === MAX_B_ROUNDS) return { error: cfg.deliverable + ': B did not converge in ' + MAX_B_ROUNDS + ' rounds (HR-12 escalation)', lastB2: b2 }
     // APPROVE+high OR REJECT → A fixes next round
   }
   return { error: cfg.deliverable + ' loop exhausted unexpectedly' }
+}
+
+// ---- persistApproval: write .methodology/agent_b_approvals/<id>.json via LLM agent
+// Mirror of phase1-requirements.js persistApproval. Kept local (not shared) because
+// workflow JS sandbox forbids require/import (playbook §3-§4). Both workflows carry
+// the same helper so behavior is identical across phases.
+// Called after every B-2 APPROVE so harness_cli.py advance-phase's
+// _verify_agent_b_approvals_core check finds the artifact.
+async function persistApproval(deliverableId, b2) {
+  const approvalsDir = REPO + '/.methodology/agent_b_approvals'
+  const approvalPath = approvalsDir + '/' + deliverableId + '.json'
+  const approvalJson = JSON.stringify({
+    fr: deliverableId,
+    review_status: b2.review_status ?? 'APPROVE',
+    reason: (b2.reason ?? ('Approved ' + deliverableId + ' (reason omitted)')).slice(0, 800),
+    citations: Array.isArray(b2.citations) ? b2.citations.slice(0, 20) : [],
+    docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
+    confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
+  }, null, 2)
+  const pythonCmd = 'python3 -c "import json,os; os.makedirs(' + JSON.stringify(approvalsDir) + ', exist_ok=True); open(' + JSON.stringify(approvalPath) + ',\'w\').write(' + JSON.stringify(approvalJson) + ')"'
+  const prompt = 'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout verbatim:\n\n' + pythonCmd + '\n\nNo commentary, no preamble, no other tool calls.'
+  const res = await agent(prompt, {
+    label: 'persist-' + deliverableId,
+    phase: 'Persist Approval',
+    agentType: 'general-purpose',
+  })
+  log('  persisted approval: ' + approvalPath + ' (' + (typeof res === 'string' ? res.length : 0) + ' chars from agent)')
 }
 
 // ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----
@@ -649,39 +683,8 @@ if (!pushOk) return { error: 'push-checkpoint --phase 2 did not succeed in 5 att
 // Phase: Advance (advance-phase --completed 2 → Phase 3 entry)
 // ════════════════════════════════════════════════════════════════════════
 phase('Advance')
-log('Write 3 Agent B approval JSONs to .methodology/agent_b_approvals/ (Bug #114 mitigation)')
-// Phase 2 has _PHASE_DELIVERABLES = ["SAD.md", "ADR.md", "TEST_SPEC.md"]. advance-phase
-// runs verify-agent-b which expects each deliverable's approval file with
-// review_status=APPROVE, reason ≥40 chars, citations[], docs_embedded[].
-// Bug #114 (origin: phase 6) showed auto-persist only writes HR-01.json, so
-// the orchestrator must write the rest. We use peerB2 (the most recent
-// holistic review) to seed each approval's reason/citations.
-{
-  const approvalDir = REPO + '/.methodology/agent_b_approvals'
-  const docsEmbedded = ['SRS.md', 'SAD.md']
-  for (const did of ['SAD.md', 'ADR.md', 'TEST_SPEC.md']) {
-    const approval = {
-      review_status: peerB2 && peerB2.review_status === 'APPROVE' ? 'APPROVE' : 'APPROVE',
-      reason: (peerB2 && peerB2.reason) ? peerB2.reason + ' | Holistic peer review approved ' + did + ' as part of P2 deliverable set.' : 'P2 deliverable ' + did + ' approved via holistic peer review of SAD/ADR/TEST_SPEC. Module decomposition, NFR traceability, and architecture constraints all satisfied per P2 review checklist.',
-      citations: (peerB2 && Array.isArray(peerB2.citations) && peerB2.citations.length > 0) ? peerB2.citations : ['02-architecture/SAD.md', '02-architecture/adr/ADR.md', '02-architecture/TEST_SPEC.md'],
-      docs_embedded: docsEmbedded,
-      verify_metadata: peerB2 && peerB2.verify ? {
-        rule: 'B-2.5 X1 self-verify (mirrors phase1 §B-2.5)',
-        verified_gaps: (peerB2.verify.verified_gaps ?? []).filter(function (g) { return g.verified }).length,
-        unverified_reason_claims: (peerB2.verify.unverified_reason_claims ?? []).length,
-        recalibrated_review: peerB2.verify.recalibrated_review ?? 'APPROVE',
-      } : null,
-      round: peerB2 && peerB2.verify ? 1 : 1,
-      timestamp: new Date().toISOString(),
-    }
-    const path = approvalDir + '/' + did + '.json'
-    const fs = await import('node:fs')
-    fs.mkdirSync(approvalDir, { recursive: true })
-    fs.writeFileSync(path, JSON.stringify(approval, null, 2))
-    log('  wrote approval JSON: ' + path)
-  }
-}
-
+// Approval JSONs (SAD.md/ADR.md/TEST_SPEC.md) are now persisted by abLoop exit
+// (persistApproval helper) — not here. See bc913a0 / pending P2 parity commit.
 log('advance-phase --completed 2 + confirm HANDOVER.md reflects Phase 3 entry')
 const advanceReport = await agent(
   'YOU ARE THE PHASE-2 ADVANCE ORCHESTRATOR.\n'

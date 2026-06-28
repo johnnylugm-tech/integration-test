@@ -2,12 +2,10 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-06-29
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 2 - Architecture Design
 > **Status**: Full version (including Phase 2 detailed tasks)
-> **Mode**: Dynamic (load-context at execution time)
-
 
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
@@ -68,14 +66,6 @@ Phase 2 designs the system architecture based on SRS, producing SAD and ADR.
   3. harness importable (submodule, PYTHONPATH, or vendored `quality_gate/`)
   4. Phase 2 confirmed in `.methodology/state.json` (`advance-phase` already run)
   > If stale: run `python3 harness_cli.py init-project --phase 2 --project . --overwrite`
-
-### 🔄 [PHASE-CONTEXT] — Load Before Starting
-
-```bash
-python3 harness_cli.py load-context --phase 2 --project . --json \
-  > .sessi-work/phase2_ctx.json
-```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
 
 ### Task Decomposition (Dependency Analysis)
 
@@ -336,6 +326,17 @@ are not re-opened. This bounds backtracking to a single step.
 
   > fr_id uses P2 as phase-level placeholder; replace with FR-XX for FR-specific plans.
 
+### FR Architecture Mapping (3 total)
+
+#### FR-01: Task Model & Persistence — `[SPEC §3 FR-01]`
+**Requirement**: 
+
+#### FR-02: Task Execution & Retry — `[SPEC §3 FR-02]`
+**Requirement**: 
+
+#### FR-03: CLI Integration & Query — `[SPEC §3 FR-03]`
+**Requirement**: 
+
 ### SAB Generation (Machine-Readable Architecture Baseline)
 
 > **CONTRACT**: The SAB block in SAD.md §5 is parsed by
@@ -497,6 +498,13 @@ are not re-opened. This bounds backtracking to a single step.
     > If round 5 REJECT: escalate to human — orchestrator cannot self-resolve.
     > Human fix → re-dispatch Agent B (same prompt + updated content) → `APPROVE` required before continuing.
 
+- **[B-APPROVAL]** ✅ Persist Agent B approval JSONs for each deliverable to `.methodology/agent_b_approvals/<id>.json`
+  > Required by `harness_cli.py advance-phase` via `_verify_agent_b_approvals_core`.
+  > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"], "confidence": <0.0-1.0>}`
+  > Phase 2 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[2]`). For Phase 1: SRS, SPEC_TRACKING, TRACEABILITY_MATRIX, TEST_INVENTORY.
+  > `<id>` is the basename WITHOUT extension (e.g. `SRS.md` → `SRS`).
+  > Use Bash + Python (harness_cli.py write-approval subcommand if available, else direct Write tool) — do NOT use Edit (whole-file write only).
+
 - **[B-PUSH]** ✅ PUSH ② — Push to GitHub + HANDOVER.md — retry until success (CHECKPOINT-PEER-REVIEW saved):
   > Run `push-checkpoint` → if blocked, read the error → fix → re-run until green.
   > Do NOT use `--no-verify` to bypass.
@@ -509,6 +517,11 @@ are not re-opened. This bounds backtracking to a single step.
 
 ### Phase 2 → Phase 3: Implementation
 
+- Generate Phase 3 plan:
+  ```bash
+  python3 harness_cli.py plan-phase --phase 3 --project . \
+    --output .methodology/phase3_plan.md
+  ```
 - Advance FSM to Phase 3 (writes new HANDOVER.md + local commit):
   ```bash
   python3 harness_cli.py advance-phase --completed 2 --project .
