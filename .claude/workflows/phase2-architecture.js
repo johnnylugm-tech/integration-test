@@ -168,14 +168,14 @@ async function runBSelfVerify(cfg, b2, round) {
     + 'have actual evidence on disk. You are NOT asked to re-review the '
     + 'deliverable — only to check that what B claimed is true.\n\n'
     + 'Previous B review JSON:\n' + JSON.stringify(b2, null, 2) + '\n\n'
-    + 'Steps:\n'
-    + '1. For each gap.citation (file:line range): run via Bash '
-    + '`sed -n "A,Bp" <abs_path>`. Compare output to gap.message. '
-    + 'Set verified:true if the cited range supports the claim.\n'
-    + '2. For REJECT.reason: parse into atomic claims. For each claim, '
-    + 'USE Bash grep/cat to confirm. Add unverified fragments to '
-    + 'unverified_reason_claims.\n'
-    + '3. Return compact JSON ONLY (no markdown, no commentary):\n'
+    + 'DELIVERABLE: ' + REPO + '/' + cfg.diskPath + '\n\n'
+    + 'Steps (MAX 6 Bash calls total — stop and return what you have if you reach 6):\n'
+    + '1. Read the deliverable ONCE: Bash `cat ' + REPO + '/' + cfg.diskPath + '`.\n'
+    + '2. For ALL gap.citations: check against the content you already read — '
+    + 'no additional file reads per citation. Set verified:true if the cited text supports gap.message.\n'
+    + '3. For REJECT.reason claims: extract key terms and run ONE combined grep: '
+    + '`grep -n "term1\\|term2" ' + REPO + '/' + cfg.diskPath + '`. (1 Bash call max)\n'
+    + '4. Return compact JSON ONLY (no markdown, no commentary):\n'
     + '{"verified_gaps":[{"message":"<short>","citation":"<short>","verified":true|false,"evidence":"<1-line or empty>"}],'
     + '"unverified_reason_claims":["<short fragment>"],'
     + '"recalibrated_review":"APPROVE"|"REJECT",'
@@ -256,64 +256,6 @@ async function abLoop(cfg) {
     // APPROVE+high OR REJECT → A fixes next round
   }
   return { error: cfg.deliverable + ' loop exhausted unexpectedly' }
-}
-
-// ---- Bash file loader (plan-faithful revision; mirrors phase1-requirements v11) ----
-// v11 fix: use contains() instead of startsWith() — file first lines may have
-// variations (em-dash vs hyphen, trailing spaces, BOM). Anchor check is
-// "does the expected distinctive string appear anywhere in the first 500
-// chars?" Plus maxAttempts=5 retry for cross-file fabrication resilience.
-//
-// v14 fix: substring indexOf is too strict for H1 variants like
-// `# ADR — Architecture Decision Records: taskq` (em-dash separator between
-// short prefix and distinctive spec name). Real failure observed in P2
-// Sub-Task 2 — anchor `# Architecture Decision Records` did NOT match the
-// loaded ADR.md because `# ADR — ` was in between. Fix: regex allows an
-// optional `# <short-prefix> — ` (em-dash, hyphen, colon, or space) BEFORE
-// the distinctive anchor substring. Still rejects cross-file fabrication
-// (anchor must appear on H1 line within first 500 chars).
-async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
-  opts = opts || {}
-  const maxAttempts = opts.maxAttempts || 5
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const res = await agent(
-      'You are a CAT AGENT. Your ONLY task is to run `cat` on a file and emit the EXACT stdout as your final message.\n\n'
-      + 'FILE PATH: ' + REPO + '/' + relPath + '\n\n'
-      + 'STEPS:\n'
-      + '1. Use the Bash tool to run EXACTLY this command: cat ' + REPO + '/' + relPath + '\n'
-      + '2. The Bash tool will return the file content in its tool_result.\n'
-      + '3. Your final assistant message MUST be the verbatim tool_result content — copy every byte in order.\n'
-      + '4. If the tool_result indicates the file does not exist, return EXACTLY: ERROR: ' + relPath + ' not found\n\n'
-      + 'CRITICAL OUTPUT RULES (violations = failure):\n'
-      + '- DO NOT write any preamble or acknowledgment before the file content.\n'
-      + '- DO NOT write any commentary, summary, or explanation after the file content.\n'
-      + '- Your final message = file content only. Nothing else.',
-      { label: 'load-' + relPath.replace(/[\/.]/g, '-') + '-a' + attempt, phase: phaseName, agentType: 'general-purpose' },
-    )
-    const content = (typeof res === 'string' ? res : String(res ?? '')).trim()
-    if (content.startsWith('ERROR:')) return content
-    if (content.length < 50) {
-      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + content.length + ')')
-      continue
-    }
-    if (expectPrefix) {
-      const head = content.slice(0, 500)
-      // v14: anchor must appear on an H1 line (`# `) — tolerate arbitrary prefix
-      // text BEFORE the anchor on that line. Handles variants like
-      // `# ADR — Architecture Decision Records: taskq` (em-dash prefix) and
-      // `# Architecture Decision Records: taskq` (bare). Strip leading "# " from
-      // expectPrefix if present so we don't double-match the H1 marker.
-      const stripped = expectPrefix.replace(/^#\s*/, '')
-      const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
-      if (!anchorRe.test(head)) {
-        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' content-mismatch (expected anchor "' + expectPrefix + '", got: ' + content.slice(0, 80) + ')')
-        continue
-      }
-    }
-    return content
-  }
-  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
 }
 
 // ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----

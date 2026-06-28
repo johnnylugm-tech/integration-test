@@ -113,67 +113,6 @@ function hasHighGap(gaps) {
   })
 }
 
-// ---- loadFileViaBash: unified Bash cat agent (replaces v10 loadDeliverable + brief loader) ----
-// Per plan A-2: A returns compact JSON; orchestrator reads content from disk.
-// Per playbook §9.5/§8.2: Bash cat is more reliable than Read tool.
-// expectPrefix catches cross-file fabrication.
-//
-// v14 fix (port from phase2-architecture): substring indexOf is too strict
-// for H1 variants like `# ADR — Architecture Decision Records: taskq` (em-dash
-// separator between short prefix and distinctive spec name). Use regex to
-// tolerate `# <short-prefix> <sep> ` (sep ∈ em-dash U+2014 / hyphen / colon /
-// space) BEFORE the distinctive anchor. Still rejects cross-file fabrication.
-async function loadFileViaBash(relPath, expectPrefix, phaseName, opts) {
-  opts = opts || {}
-  const maxAttempts = opts.maxAttempts || 5
-  const filePath = REPO + '/' + relPath
-  const prompt = 'You are a CAT AGENT. Your ONLY task is to run `cat` on a file and emit the EXACT stdout as your final message.\n\n'
-    + 'FILE PATH: ' + filePath + '\n\n'
-    + 'STEPS:\n'
-    + '1. Use the Bash tool to run EXACTLY this command: cat ' + filePath + '\n'
-    + '2. The Bash tool will return the file content in its tool_result.\n'
-    + '3. Your final assistant message MUST be the verbatim tool_result content — copy every byte in order.\n'
-    + '4. If the tool_result indicates the file does not exist (e.g. "cat: <path>: No such file or directory"), return EXACTLY this line: FILE_MISSING: ' + filePath + '\n\n'
-    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
-    + '- DO NOT write any preamble or acknowledgment before the file content.\n'
-    + '- DO NOT write any commentary, summary, or explanation after the file content.\n'
-    + '- Your final message = file content only. Nothing else.'
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const res = await agent(prompt, {
-      label: 'load-' + relPath.replace(/[\/.]/g, '-') + '-a' + attempt,
-      phase: phaseName,
-      agentType: 'general-purpose',
-    })
-    const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
-    if (text.startsWith('FILE_MISSING')) return text
-    if (text.length < 50) {
-      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + text.length + ')')
-      continue
-    }
-    // v14: tolerate H1 variants like `# ADR — Architecture Decision Records: taskq`
-    // or `# Architecture Decision Records: taskq` (no prefix). Match an optional
-    // `# <short-prefix> <sep> ` (sep ∈ em-dash U+2014 / hyphen / colon / space)
-    // BEFORE the distinctive anchor string. Anchor must appear on an H1 line.
-    if (expectPrefix) {
-      const head = text.slice(0, 500)
-      // v14: anchor must appear on an H1 line (`# `) — tolerate arbitrary prefix
-      // text BEFORE the anchor on that line. Handles variants like
-      // `# ADR — Architecture Decision Records: taskq` (em-dash prefix) and
-      // `# Architecture Decision Records: taskq` (bare). Strip leading "# " from
-      // expectPrefix if present so we don't double-match the H1 marker.
-      const stripped = expectPrefix.replace(/^#\s*/, '')
-      const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
-      if (!anchorRe.test(head)) {
-        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' content-mismatch (expected anchor "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
-        continue
-      }
-    }
-    return text
-  }
-  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
-}
-
 // ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----
 //
 // Replaces loadFileViaBash for cases where we want deterministic I/O instead
@@ -255,7 +194,6 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
     }
     // v15: defense-in-depth prefix check on returned content. Catches
     // hallucinated content whose H1 doesn't match the expected anchor.
-    // Mirrors loadFileViaBash pattern at line 157-170.
     if (expectPrefix) {
       const head = text.slice(0, 500)
       const stripped = expectPrefix.replace(/^#\s*/, '')
@@ -368,14 +306,14 @@ async function runBSelfVerify(cfg, b2, round) {
     + 'have actual evidence on disk. You are NOT asked to re-review the '
     + 'deliverable — only to check that what B claimed is true.\n\n'
     + 'Previous B review JSON:\n' + JSON.stringify(b2, null, 2) + '\n\n'
-    + 'Steps:\n'
-    + '1. For each gap.citation (file:line range): run via Bash '
-    + '`sed -n "A,Bp" <abs_path>`. Compare output to gap.message. '
-    + 'Set verified:true if the cited range supports the claim.\n'
-    + '2. For REJECT.reason: parse into atomic claims. For each claim, '
-    + 'USE Bash grep/cat to confirm. Add unverified fragments to '
-    + 'unverified_reason_claims.\n'
-    + '3. Return compact JSON ONLY (no markdown, no commentary):\n'
+    + 'DELIVERABLE: ' + REPO + '/' + cfg.diskPath + '\n\n'
+    + 'Steps (MAX 6 Bash calls total — stop and return what you have if you reach 6):\n'
+    + '1. Read the deliverable ONCE: Bash `cat ' + REPO + '/' + cfg.diskPath + '`.\n'
+    + '2. For ALL gap.citations: check against the content you already read — '
+    + 'no additional file reads per citation. Set verified:true if the cited text supports gap.message.\n'
+    + '3. For REJECT.reason claims: extract key terms and run ONE combined grep: '
+    + '`grep -n "term1\\|term2" ' + REPO + '/' + cfg.diskPath + '`. (1 Bash call max)\n'
+    + '4. Return compact JSON ONLY (no markdown, no commentary):\n'
     + '{"verified_gaps":[{"message":"<short>","citation":"<short>","verified":true|false,"evidence":"<1-line or empty>"}],'
     + '"unverified_reason_claims":["<short fragment>"],'
     + '"recalibrated_review":"APPROVE"|"REJECT",'
