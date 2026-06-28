@@ -280,9 +280,7 @@ async function abLoop(cfg) {
 // Called after every B-2 APPROVE so harness_cli.py advance-phase's
 // _verify_agent_b_approvals_core check finds the artifact.
 async function persistApproval(deliverableId, b2) {
-  const approvalsDir = REPO + '/.methodology/agent_b_approvals'
-  const approvalPath = approvalsDir + '/' + deliverableId + '.json'
-  const approvalJson = JSON.stringify({
+  const approvalPayload = JSON.stringify({
     fr: deliverableId,
     review_status: b2.review_status ?? 'APPROVE',
     reason: (b2.reason ?? ('Approved ' + deliverableId + ' (reason omitted)')).slice(0, 800),
@@ -290,28 +288,16 @@ async function persistApproval(deliverableId, b2) {
     docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
   }, null, 2)
-  // v18 fix parity + v22 disk verification (Bugs observed 2026-06-29 on phase1-requirements):
-  // template literal (not string concat) avoids \\' escape parsing bug; verify agent
-  // confirms the file actually landed on disk before persistApproval returns, so a
-  // silent write failure surfaces as a thrown error instead of a cryptic advance-phase
-  // "approval missing" later.
-  const pythonCmd = `python3 -c "import json,os; os.makedirs(${JSON.stringify(approvalsDir)}, exist_ok=True); open(${JSON.stringify(approvalPath)}, 'w').write(${JSON.stringify(approvalJson)})"`
-  const prompt = 'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout verbatim:\n\n' + pythonCmd + '\n\nNo commentary, no preamble, no other tool calls.'
-  const res = await agent(prompt, {
-    label: 'persist-' + deliverableId,
-    phase: 'Persist Approval',
-    agentType: 'general-purpose',
-  })
-  const verifyCmd = `python3 -c "import os,sys; p=${JSON.stringify(approvalPath)}; sys.exit(0 if os.path.isfile(p) and os.path.getsize(p) > 10 else 1)"`
-  const verifyRes = await agent('You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout verbatim (last line is the exit code):\n\n' + verifyCmd, {
-    label: 'verify-persist-' + deliverableId,
-    phase: 'Persist Approval',
-    agentType: 'general-purpose',
-  })
-  if (typeof verifyRes !== 'string' || !/exit\s*0|VERIFIED|EXISTS/i.test(verifyRes)) {
-    throw new Error('persistApproval verification FAILED for ' + approvalPath + ' — file not on disk after write. Agent verify output: ' + String(verifyRes).slice(0, 200))
+  const cliPath = REPO + '/harness/harness_cli.py'
+  const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' + JSON.stringify(deliverableId) + ' --json ' + JSON.stringify(approvalPayload)
+  const res = await agent(
+    'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout + exit code verbatim:\n\n' + cmd + '\n\nNo commentary, no preamble, no other tool calls.',
+    { label: 'persist-' + deliverableId, phase: 'Persist Approval', agentType: 'general-purpose' },
+  )
+  if (typeof res !== 'string' || !/\[write-approval\]\s*OK/.test(res)) {
+    throw new Error('persistApproval FAILED for ' + deliverableId + ' (harness_cli.py write-approval did not return OK). Agent output: ' + String(res).slice(0, 400))
   }
-  log('  persisted + verified approval: ' + approvalPath + ' (' + (typeof res === 'string' ? res.length : 0) + ' chars written, disk verified)')
+  log('  persisted approval: ' + deliverableId + ' via harness_cli.py write-approval')
 }
 
 // ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----
