@@ -261,9 +261,28 @@ async function abLoop(cfg) {
     }
     log('  B-2: ' + b2.review_status + ' | gaps=' + (b2.gaps ?? []).length + ' | high=' + (hasHighGap(b2.gaps) ? 'yes' : 'no'))
 
-    // X1 self-verify (mirrors phase1 §B-2.5; observability, NOT veto)
+    // X1 self-verify (mirrors phase1 §B-2.5; observability layer)
     b2.verify = await runBSelfVerify(cfg, b2, round)
     log('  ' + summarizeVerify(b2, b2.verify))
+
+    // X1 VETO GUARD (parity with phase1-requirements Bug v17 fix — observed firing
+    // on phase1 2026-06-29). Without this, B can hallucinate a REJECT in a late
+    // round (e.g. "SAD.md failed to load" when the file exists and is complete) and
+    // burn all MAX_B_ROUNDS even though X1 self-verify correctly flags the claim as
+    // false (recalibrated_review=APPROVE + confidence=high). Promoting REJECT →
+    // APPROVE is safe because: (a) X1 has direct disk access to verify the claim;
+    // (b) APPROVE+high is only emitted when X1 found the gap unverified; (c) gap
+    // data stays attached to b2 (x1_veto_overridden flag) for downstream visibility.
+    if (b2.review_status === 'REJECT' &&
+        b2.verify &&
+        b2.verify.recalibrated_review === 'APPROVE' &&
+        b2.verify.confidence === 'high') {
+      log('  X1 VETO — B hallucination confirmed by self-verify (recalibrated_review=APPROVE, confidence=high); promoting REJECT → APPROVE')
+      b2.review_status = 'APPROVE'
+      b2.gaps = []
+      b2.x1_veto_overridden = true
+    }
+
     if (b2.review_status === 'APPROVE' && !hasHighGap(b2.gaps)) {
       log('  APPROVED')
       // Persist Agent B approval JSON (harness _verify_agent_b_approvals_core contract).
@@ -432,7 +451,7 @@ if (!preflightPass) return { error: 'Phase 2 preflight did not PASS after ' + MA
 // ════════════════════════════════════════════════════════════════════════
 phase('Load Upstream')
 log('cat SRS.md + harness templates for embedding into stateless Agent B prompts')
-const srsContent = await loadFileViaPython('01-requirements/SRS.md', '#', 'Load Upstream')
+const srsContent = await loadFileViaPython('01-requirements/SRS.md', '# Software Requirements Specification', 'Load Upstream')
 if (srsContent.startsWith('ERROR:') || srsContent.length < 50) {
   return { error: 'Failed to load SRS.md for upstream context', loaded_preview: srsContent.slice(0, 200) }
 }
@@ -448,10 +467,11 @@ log('  harness/templates/ADR.md loaded: ' + adrTemplateContent.length + ' chars'
 phase('Sub-Task 1/3 — SAD.md')
 log('abLoop: SAD authoring (ARCHITECT A + TECH_LEAD B; max 5 rounds; HR-12 escalate)')
 const sad = await abLoop({
-  phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/SAD.md', diskPrefix: '#',
+  phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/SAD.md', diskPrefix: '# Software Architecture Document',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 1/3 SAD.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/SAD.md\n\n'
+    + '**REQUIRED H1 (must include "Software Architecture Document")**: the file MUST start with `# Software Architecture Document (SAD) — \`<project>\`` (or any H1 line containing the phrase "Software Architecture Document"). The orchestrator loader validates this H1 anchor via startswith — a non-conforming first line fails the load step.\n\n'
     + 'Steps:\n'
     + '1. Self-check (Bash): `test -f ' + REPO + '/02-architecture/SAD.md`. If EXISTS, Read it (current state).\n'
     + '2. Author Software Architecture Document. REQUIRED:\n'
@@ -484,10 +504,11 @@ let sadContent = sad.content, sadB2 = sad.b2
 phase('Sub-Task 2/3 — ADR.md')
 log('abLoop: ADR authoring (extract decisions from APPROVED SAD.md; downstream ADR-Constitution gate)')
 const adr = await abLoop({
-  phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/adr/ADR.md', diskPrefix: '#',
+  phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/adr/ADR.md', diskPrefix: '# Architecture Decision Records',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 2/3 ADR.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/adr/ADR.md\n\n'
+    + '**REQUIRED H1 (must include "Architecture Decision Records")**: the file MUST start with `# Architecture Decision Records (ADR) — \`<project>\`` (or any H1 line containing the phrase "Architecture Decision Records"). Individual decisions go under `## ADR-NNN: <title>` sub-headings beneath this H1. The orchestrator loader validates this H1 anchor via startswith — a non-conforming first line fails the load step.\n\n'
     + 'Steps:\n'
     + '1. Self-check (Bash): `test -f ' + REPO + '/02-architecture/adr/ADR.md`. If EXISTS, Read it.\n'
     + '2. Extract key architecture decisions from SAD.md (read ' + REPO + '/02-architecture/SAD.md). Write individual ADR entries. EACH ADR: context, decision, consequences, alternatives considered. Cover tech stack (Python 3.11 stdlib-only), patterns (ThreadPoolExecutor, atomic write, circuit breaker), interfaces. Remove any `<!-- harness:template-stub -->` markers.\n'
@@ -534,10 +555,11 @@ if (!(typeof adrConstReport === 'string' && /ADR-CONSTITUTION:\s*PASS/.test(adrC
 phase('Sub-Task 3/3 — TEST_SPEC.md')
 log('abLoop: TEST_SPEC authoring (per-FR test catalog; v2.9.1 B.3 table-row shape; check-test-spec-consistency)')
 const testSpec = await abLoop({
-  phaseName: 'Sub-Task 3/3 — TEST_SPEC.md', key: 'test-spec', deliverable: 'TEST_SPEC.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/TEST_SPEC.md', diskPrefix: '#',
+  phaseName: 'Sub-Task 3/3 — TEST_SPEC.md', key: 'test-spec', deliverable: 'TEST_SPEC.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/TEST_SPEC.md', diskPrefix: '# TEST_SPEC.md',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 3/3 TEST_SPEC.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/TEST_SPEC.md\n\n'
+    + '**REQUIRED H1 (must include "TEST_SPEC")**: the file MUST start with `# TEST_SPEC.md — <subtitle>` (or any H1 line containing "TEST_SPEC"). Per-FR catalogs go under `### FR-XX:` headers beneath this H1. The orchestrator loader validates this H1 anchor via startswith — a non-conforming first line fails the load step.\n\n'
     + 'Steps:\n'
     + '1. Self-check (Bash): `test -f ' + REPO + '/02-architecture/TEST_SPEC.md`. If EXISTS, Read it.\n'
     + '2. Generate Test Specification Catalog. CRITICAL shape (v2.9.1 B.3): each FR is a `### FR-XX: ...` header FOLLOWED BY TABLE ROWS (a prose-only doc FAILS the D4 spec-coverage parser).\n'
@@ -624,6 +646,10 @@ phase('Peer Review')
 log('Agent B (TECH_LEAD) holistic review of all 3 P2 deliverables; max 3 rounds (P-01 advisory, not HR-12)')
 let peerB2 = null
 let peerReviewAdvisory = null
+// W-02 (parity with phase1 runPeerReview): fixer reports which deliverables it
+// edited; only those get reloaded next round instead of all 3 (saves ~2 loadpy
+// agents/round). null → fall back to full reload.
+let peerFixerResult = null
 for (let round = 1; round <= MAX_PEER_ROUNDS; round++) {
   log('  --- Peer round ' + round + '/' + MAX_PEER_ROUNDS + ' ---')
   // v15: budget guard — gracefully exit if running low (Bug #3 mitigation)
@@ -665,10 +691,11 @@ for (let round = 1; round <= MAX_PEER_ROUNDS; round++) {
   }
   log('  Peer B-2: ' + peerB2.review_status + ' | gaps=' + (peerB2.gaps ?? []).length + ' | high=' + (hasHighGap(peerB2.gaps) ? 'yes' : 'no'))
 
-  // X1 self-verify (observability layer; mirrors phase1 §B-2.5)
-  peerB2.verify = await runBSelfVerify({ key: 'peer', deliverable: 'P2 deliverables (holistic)', phaseName: 'Peer Review' }, peerB2, round)
-  log('  ' + summarizeVerify(peerB2, peerB2.verify))
-
+  // NOTE: no X1 self-verify here. X1 (runBSelfVerify) targets a SINGLE deliverable
+  // via cfg.diskPath; a holistic peer review spans 3 files and has no single
+  // diskPath, so calling it here cat'd an undefined path and produced a useless
+  // verify=0/N. phase1-requirements runPeerReview likewise does not X1-verify the
+  // holistic review — parity preserved.
   if (peerB2.review_status === 'APPROVE' && !hasHighGap(peerB2.gaps)) { log('  APPROVED'); break }
   // P-01: round MAX_PEER_ROUNDS REJECT → emit PEER_REVIEW_ADVISORY (non-blocking), continue to Push.
   if (round === MAX_PEER_ROUNDS) {
@@ -679,21 +706,38 @@ for (let round = 1; round <= MAX_PEER_ROUNDS; round++) {
   // Holistic gaps span multiple files → dispatch a fixer agent
   log('  Peer review found gaps — dispatching fixer for round ' + (round + 1))
   // v15: wrap fixer agent() in try/catch — fixer failures should not crash workflow (Bug #2)
+  let peerFixerRaw = null
   try {
-    await agent(
+    peerFixerRaw = await agent(
       'YOU ARE ARCHITECT (holistic fixer). Fix peer-review gaps across P2 deliverables.\n'
       + 'REPO: ' + REPO + '\n\nPeer review B-2 JSON:\n' + JSON.stringify(peerB2, null, 2) + '\n\n'
       + 'Apply surgical Edits to whichever of 02-architecture/SAD.md, 02-architecture/adr/ADR.md, 02-architecture/TEST_SPEC.md are affected. Address all medium/high gaps.\n\n'
-      + 'SCOPE RULES:\n- DO NOT run phase-transition/push/run-gate.\n- DO NOT modify harness/.\n- ONLY edit the 3 P2 deliverables. Report what you changed.',
+      + 'Return compact JSON ONLY (no prose):\n'
+      + '{"status":"OK","modified_files":["02-architecture/SAD.md"],"summary":"<1-2 lines>"}\n'
+      + '(modified_files: list ONLY the deliverables you actually edited, using the EXACT relative paths above: "02-architecture/SAD.md", "02-architecture/adr/ADR.md", "02-architecture/TEST_SPEC.md".)\n\n'
+      + 'SCOPE RULES:\n- DO NOT run phase-transition/push/run-gate.\n- DO NOT modify harness/.\n- ONLY edit the 3 P2 deliverables.',
       { label: 'peer-fix-r' + round, phase: 'Peer Review', agentType: 'general-purpose' },
     )
   } catch (e) {
     log('  Peer fixer agent failed: ' + String(e.message ?? e).slice(0, 80) + ' — continuing without fix')
   }
-  sadContent = await loadFileViaPython('02-architecture/SAD.md', '#', 'Peer Review')
-  adrContent = await loadFileViaPython('02-architecture/adr/ADR.md', '#', 'Peer Review')
-  testSpecContent = await loadFileViaPython('02-architecture/TEST_SPEC.md', '#', 'Peer Review')
-  log('  Reloaded after fixer: SAD=' + sadContent.length + ' ADR=' + adrContent.length + ' TEST_SPEC=' + testSpecContent.length)
+  try { peerFixerResult = parseAgentJson(peerFixerRaw, 'peer-fixer-r' + round) }
+  catch (e) { peerFixerResult = null; log('  Peer fixer JSON parse failed — will reload all 3 docs') }
+
+  // W-02: reload only the deliverables the fixer reported editing (fallback: all 3).
+  const peerModified = peerFixerResult && Array.isArray(peerFixerResult.modified_files) ? peerFixerResult.modified_files : null
+  const peerReload = new Set(peerModified || ['02-architecture/SAD.md', '02-architecture/adr/ADR.md', '02-architecture/TEST_SPEC.md'])
+  if (peerReload.has('02-architecture/SAD.md')) sadContent = await loadFileViaPython('02-architecture/SAD.md', '# Software Architecture Document', 'Peer Review')
+  if (peerReload.has('02-architecture/adr/ADR.md')) adrContent = await loadFileViaPython('02-architecture/adr/ADR.md', '# Architecture Decision Records', 'Peer Review')
+  if (peerReload.has('02-architecture/TEST_SPEC.md')) testSpecContent = await loadFileViaPython('02-architecture/TEST_SPEC.md', '# TEST_SPEC.md', 'Peer Review')
+  // F2 (parity with phase1 runPeerReview 566-569): a failed reload must NOT feed an
+  // 'ERROR:' sentinel string into next round's B summary as if it were content.
+  for (const [lbl, c] of [['SAD.md', sadContent], ['ADR.md', adrContent], ['TEST_SPEC.md', testSpecContent]]) {
+    if (c.startsWith('ERROR:') || c.length < 50) {
+      return { error: 'Peer Review: ' + lbl + ' reload failed (round ' + round + ')', loader_preview: c.slice(0, 200) }
+    }
+  }
+  log('  Reloaded after fixer (' + (peerModified ? peerModified.length + ' modified' : 'all 3, fixer JSON unavailable') + '): SAD=' + sadContent.length + ' ADR=' + adrContent.length + ' TEST_SPEC=' + testSpecContent.length)
 }
 if (peerReviewAdvisory) log('  → Peer Review ended with advisory: ' + peerReviewAdvisory.reason.slice(0, 100))
 
@@ -737,6 +781,11 @@ const advanceReport = await agent(
   + 'SCOPE RULES:\n- DO NOT re-do P2.\n- DO NOT modify harness/ (HR-17).\n- ONLY advance-phase + verify HANDOVER.md.',
   { label: 'advance', phase: 'Advance', agentType: 'general-purpose' },
 )
+// F1 (parity with phase1 advance 1079-1081): advance-phase can FAIL on Phase Truth
+// (<90%); do NOT report "complete" when P3 was never entered.
+if (!/ADVANCE:\s*PASS/.test(String(advanceReport ?? ''))) {
+  return { error: 'advance-phase --completed 2 did not PASS', raw: String(advanceReport ?? '').slice(-600) }
+}
 
 log('Phase 2 workflow complete. Open .methodology/phase3_plan.md to continue.')
 return {

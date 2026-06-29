@@ -869,7 +869,7 @@ const pythonCmd = PY + ' ' + REPO + '/harness_cli.py read-file --file ' + JSON.s
 # 防止 LLM agent 把 "fabricated content" 注入並 startswith 假 prefix
 ```
 
-**所有 caller 一覽** (after v33):
+**所有 caller 一覽** (phase2 值經 2026-06-29 playbook-review batch 更新為具體 H1 prefix;見表後註):
 
 | phase | deliverable | diskPrefix |
 |-------|-------------|------------|
@@ -877,12 +877,14 @@ const pythonCmd = PY + ' ' + REPO + '/harness_cli.py read-file --file ' + JSON.s
 | 1 | SPEC_TRACKING.md | `# Specification Tracking Matrix` |
 | 1 | TRACEABILITY_MATRIX.md | `# Traceability Matrix` |
 | 1 | TEST_INVENTORY.yaml | `# TEST_INVENTORY.yaml` |
-| 2 | 02-architecture/SAD.md | `# SAD` |
+| 2 | 02-architecture/SAD.md | `# Software Architecture Document` |
 | 2 | 02-architecture/adr/ADR.md | `# Architecture Decision Records` |
-| 2 | 02-architecture/TEST_SPEC.md | `#` |
+| 2 | 02-architecture/TEST_SPEC.md | `# TEST_SPEC.md` |
 | 1 | PROJECT_BRIEF.md | `# Project Brief` |
 
-**workflow JS 自身 anchorRe** (`loadFileViaPython` 內 `replace(/^#\s*/, '')`) 對帶不帶 `#` 都相容。
+> **phase2 diskPrefix 演進** (誠實記錄): v33 原值 `# SAD` / `# Architecture Decision Records` / `#`。v33 的 `# SAD` 與磁盤真實首行 `# Software Architecture Document (SAD) — <project>` 不 startswith → PREFIX_MISMATCH → v34 (`cc87246`) 退守為一律 `'#'` 讓 load 成功。但 `'#'` 對任何 markdown H1 都成立 = **diskPrefix 防錯歸零**(無法分辨 SAD/ADR/TEST_SPEC,無法抓 A 寫殘缺),弱於 phase1。2026-06-29 playbook-review batch 治本(對齊 phase1 §9.3 模式):三個 sub-task A prompt 補 **REQUIRED H1** 指示(強制首行 startswith 具體 prefix),diskPrefix 改回上表具體值,恢復強防錯。SRS upstream 同批由 `'#'` 對齊為 `# Software Requirements Specification`。
+
+**workflow JS 自身 anchorRe** (`loadFileViaPython` 內 `replace(/^#\s*/, '')`) 對帶不帶 `#` 都相容;但 **server-side `read-file --expect-prefix` 是嚴格 startswith**(鐵律 5),以 server 為準 → A prompt 必須讓首行精確 startswith 具體 prefix(phrase 緊接 `# ` 之後)。
 
 #### 真因 3: persistApproval 雙重 JSON encode (v31 引入)
 
