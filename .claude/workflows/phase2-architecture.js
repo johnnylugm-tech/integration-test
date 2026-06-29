@@ -328,29 +328,41 @@ async function persistApproval(deliverableId, b2) {
   throw new Error('persistApproval FAILED for ' + deliverableId + ' after ' + MAX_OUTER_ATTEMPTS + ' attempts. Last error: ' + lastErr)
 }
 
-// ---- loadFileViaPython: mcp__filesystem__read_file + v16 fallback (v30) ----
+// ---- loadFileViaPython: deterministic Bash + harness_cli.py read-file (v33) ----
 //
-// Mirror of phase1-requirements.js v30 loadFileViaPython. v29 mcp primary +
-// v16 single-line Bash + harness_cli.py read-file fallback. See phase1 for full
-// v17/v22/v29/v30 history.
+// Mirror of phase1-requirements.js v33 loadFileViaPython. Drops the v29 MCP read
+// path (which failed at large-context stages — the sub-agent emits
+// ERROR_LOAD_FAILED without invoking the MCP tool) in favour of a single-step Bash
+// tool-call running the deterministic `harness_cli.py read-file` + `cat` relay,
+// which does not depend on an MCP server in the headless run. NOTE: read-file's
+// prefix check is a first-line startswith() (file_loader Bug v8 guard), so all
+// expectPrefix values passed below lead with "#". See phase1 for full rationale.
 async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
   opts = opts || {}
   const maxAttempts = opts.maxAttempts || 3
   const filePath = REPO + '/' + relPath
-  const prompt = [
-    'Read a file using ONLY the mcp__filesystem__* tools (NO Bash, NO Read, NO cat, NO python).',
-    '',
-    'STEP 1 — mcp__filesystem__read_file with EXACTLY: file = ' + filePath,
-    '',
-    'STEP 2 — Reply with the EXACT verbatim text content returned by read_file.',
-    '   - NO preamble, NO acknowledgement, NO explanation.',
-    '   - DO NOT echo the tool name or any instruction text.',
-    '   - DO NOT add markdown fences, headers, or summary wrappers.',
-    '   - Your final message body = the raw text bytes of the file.',
-    '   - If the file is missing or any tool error occurs: reply EXACTLY: ERROR_LOAD_FAILED: ' + filePath,
-  ].join('\n')
+  const expectPrefixArg = expectPrefix ? ' --expect-prefix ' + JSON.stringify(expectPrefix) : ''
+  const safeName = relPath.replace(/[\/.]/g, '_')
+  const contentOut = '/tmp/load_' + safeName + '.txt'
+  const jsonOut = '/tmp/load_' + safeName + '.json'
+  const pythonCmd = PY + ' ' + REPO + '/harness_cli.py read-file --file ' + JSON.stringify(filePath)
+    + expectPrefixArg + ' --content --content-out ' + contentOut + ' --json-out ' + jsonOut + ' --quiet'
 
-  let lastReason = ''
+  const prompt = 'You are a SHELL WRAPPER AGENT. Your ONLY job is to run ONE shell command and emit ONE file content verbatim.\n\n'
+    + 'STEPS (DO NOT DEVIATE):\n'
+    + '1. Use the Bash tool to run EXACTLY this command (no modifications):\n'
+    + '   ' + pythonCmd + '\n\n'
+    + '2. Use the Bash tool to run `cat ' + contentOut + '` — read the content file from disk.\n\n'
+    + '3. Your final assistant message = the EXACT output of `cat ' + contentOut + '` (verbatim bytes).\n\n'
+    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
+    + '- DO NOT generate or paraphrase content based on your memory/inference.\n'
+    + '- ALWAYS read the actual file from disk. NEVER hallucinate file content.\n'
+    + '- DO NOT echo the JSON file. Only echo the content file.\n'
+    + '- DO NOT write any preamble or acknowledgment.\n'
+    + '- DO NOT add commentary, summary, or explanation.\n'
+    + '- Your final message = the verbatim cat output only.\n'
+    + '- If the command fails, return EXACTLY: ERROR_LOAD_FAILED: ' + filePath
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await agent(prompt, {
       label: 'loadpy-' + relPath.replace(/[\/.]/g, '-') + '-a' + attempt,
@@ -358,10 +370,12 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
       agentType: 'general-purpose',
     })
     const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
-    if (text.startsWith('ERROR_LOAD_FAILED')) { lastReason = 'mcp-error'; break }
+    if (text.startsWith('ERROR_LOAD_FAILED')) {
+      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' ERROR_LOAD_FAILED')
+      continue
+    }
     if (text.length < 50) {
-      lastReason = 'too-short(len=' + text.length + ')'
-      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' ' + lastReason)
+      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + text.length + ')')
       continue
     }
     if (expectPrefix) {
@@ -370,35 +384,13 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
       const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
       if (!anchorRe.test(head)) {
-        lastReason = 'prefix-mismatch'
-        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' ' + lastReason + ' (expected "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
+        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' content-prefix-mismatch (expected "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
         continue
       }
     }
     return text
   }
-
-  // v32 fallback: inline Python read — bypasses harness_cli.py flag ambiguity.
-  // See phase1-requirements.js for full rationale.
-  log('  [' + relPath + '] mcp attempts exhausted (reason=' + lastReason + '); falling back to inline Python read')
-  const cmd = PY + ' -c \'import sys; sys.stdout.write(open(sys.argv[1],"r",encoding="utf-8").read())\' ' + JSON.stringify(filePath)
-  const fbRes = await agent(
-    'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout + exit code verbatim:\n\n' + cmd + '\n\nNo commentary, no preamble, no other tool calls.',
-    { label: 'loadpy-fallback-' + relPath.replace(/[\/.]/g, '-'), phase: phaseName, agentType: 'general-purpose' },
-  )
-  const fbText = (typeof fbRes === 'string' ? fbRes : String(fbRes ?? ''))
-  if (fbText.length >= 50) {
-    if (expectPrefix) {
-      const head = fbText.slice(0, 500)
-      const stripped = expectPrefix.replace(/^#\s*/, '')
-      const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
-      if (anchorRe.test(head)) return fbText
-    } else {
-      return fbText
-    }
-  }
-  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS + FALLBACK: ' + relPath
+  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
 }
 
 // ════════════════════════════════════════════════════════════════════════

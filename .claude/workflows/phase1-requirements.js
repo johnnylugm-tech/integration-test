@@ -115,50 +115,69 @@ function hasHighGap(gaps) {
   })
 }
 
-// ---- loadFileViaPython: mcp__filesystem__read_file + v16 fallback (v30) ----
+// ---- loadFileViaPython: deterministic Bash + harness_cli.py read-file (v33) ----
 //
-// History:
-//   v17: Bash cat agent — LLM-as-shell-wrapper, ~10% hallucinate/random-fail rate
-//        (agent emits fake content, drops fields, lowercase enums). Each failure
-//        caused Agent B to write ERROR_LOAD_FAILED into docs_embedded → advance-phase
-//        FAIL (wf_a23be9d3-263 — 4/4 approval written, 3/4 docs_embedded dirty).
-//   v22: switch to harness_cli.py read-file CLI — deterministic Python backend,
-//        but LLM-as-shell-wrapper outer agent still emits pythonCmd + cat /tmp
-//        verbatim. Same 10% LLM failure mode persisted at the wrapper layer.
-//   v29: route the read through mcp__filesystem__read_file — native API,
-//        no LLM-as-shell-wrapper. Eliminates the entire class of LLM-relay failures
-//        that drove the docs_embedded ERROR_LOAD_FAILED contamination. But:
-//        empirically 1-2/4 sub-tasks still fail (sub-agent randomly uses Bash
-//        instead of mcp; LLM emit variance on multi-step MCP instruction).
-//   v30 (this version): keep v29 mcp path as primary; on persistent failure fall
-//        back to v16 single-line Bash + harness_cli.py read-file (deterministic
-//        Python backend). Two stacked strategies so 1 sub-task failing on mcp
-//        doesn't sink advance-phase. Per-attempt defenses (prefix check, length
-//        check, max-attempts hard cap) remain at the workflow JS layer.
+// v32 failure (wf_e7799f84 / whiougeij): Peer Review round 1 could not load
+// SRS.md — log "mcp attempts exhausted reason=mcp-error". Same file loaded fine
+// at the Sub-Task stage earlier in the same run. The only difference is the
+// accumulated context: the MCP read path (v29) issues a multi-step instruction
+// ("call mcp__filesystem__read_file, then relay the bytes"), and at the larger
+// Peer Review context the sub-agent emits ERROR_LOAD_FAILED without invoking the
+// tool. The v30/v32 fallback is itself an LLM-as-shell-wrapper, so it inherits
+// the same fragility and also failed.
+//
+// v33 fix — two independent changes that together restore reliable loads:
+//   (1) THIS function: drop the MCP read path. Use one Bash tool-call to run the
+//       deterministic `harness_cli.py read-file` (Python validates prefix/length/
+//       SHA server-side and writes the verified bytes to a temp file) and a second
+//       Bash `cat` to relay them. A single-step Bash tool-call is the dominant
+//       sub-agent pattern and does not depend on an MCP server being present in
+//       the (headless) workflow run. Per-attempt prefix/length checks + a
+//       max-attempts cap stay at the workflow-JS layer.
+//   (2) Caller diskPrefix values (cfg + peerDocs): the markdown prefixes now lead
+//       with "# " (e.g. "# Software Requirements Specification"). read-file's
+//       prefix check is a deliberate first-line startswith() (file_loader Bug v8
+//       regression guard — anchors the H1, blocks fabricated content). The bare
+//       (no-"#") prefixes the workflow passed before could never startswith a
+//       markdown H1 line, so read-file returned PREFIX_MISMATCH and never emitted
+//       content. With MCP (v29-v32) this was masked (MCP bypasses file_loader);
+//       reverting to the CLI in (1) re-exposed it, so both changes are required.
 //
 // Returns:
 //   - content text (on status=OK) — same shape as v17/v22 callers
-//   - 'ERROR: ' + relPath + ' load failed' sentinel (on tool error)
+//   - 'ERROR_LOAD_FAILED: <path>' sentinel (LLM-reported command failure)
 //   - 'ERROR: LOADER_FAILED_AFTER_<N>_ATTEMPTS: ...' (on persistent failure)
 async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
   opts = opts || {}
   const maxAttempts = opts.maxAttempts || 3
   const filePath = REPO + '/' + relPath
-  // v29 step-by-step prompt so the outer LLM emits clean native tool calls.
-  const prompt = [
-    'Read a file using ONLY the mcp__filesystem__* tools (NO Bash, NO Read, NO cat, NO python).',
-    '',
-    'STEP 1 — mcp__filesystem__read_file with EXACTLY: file = ' + filePath,
-    '',
-    'STEP 2 — Reply with the EXACT verbatim text content returned by read_file.',
-    '   - NO preamble, NO acknowledgement, NO explanation.',
-    '   - DO NOT echo the tool name or any instruction text.',
-    '   - DO NOT add markdown fences, headers, or summary wrappers.',
-    '   - Your final message body = the raw text bytes of the file.',
-    '   - If the file is missing or any tool error occurs: reply EXACTLY: ERROR_LOAD_FAILED: ' + filePath,
-  ].join('\n')
+  // v33: revert to the v22 Bash pattern (proven 6/6 advance-phase PASS). The
+  // deterministic Python backend (harness_cli.py read-file) does prefix/length/
+  // SHA validation server-side and writes the verified content to a temp file;
+  // the sub-agent's only job is a single-step `cat` relay — the dominant LLM
+  // tool-call pattern, reliable regardless of accumulated context size.
+  const expectPrefixArg = expectPrefix ? ' --expect-prefix ' + JSON.stringify(expectPrefix) : ''
+  const safeName = relPath.replace(/[\/.]/g, '_')
+  const contentOut = '/tmp/load_' + safeName + '.txt'
+  const jsonOut = '/tmp/load_' + safeName + '.json'
+  const pythonCmd = PY + ' ' + REPO + '/harness_cli.py read-file --file ' + JSON.stringify(filePath)
+    + expectPrefixArg + ' --content --content-out ' + contentOut + ' --json-out ' + jsonOut + ' --quiet'
 
-  let lastReason = ''
+  const prompt = 'You are a SHELL WRAPPER AGENT. Your ONLY job is to run ONE shell command and emit ONE file content verbatim.\n\n'
+    + 'STEPS (DO NOT DEVIATE):\n'
+    + '1. Use the Bash tool to run EXACTLY this command (no modifications):\n'
+    + '   ' + pythonCmd + '\n\n'
+    + '2. Use the Bash tool to run `cat ' + contentOut + '` — read the content file from disk.\n\n'
+    + '3. Your final assistant message = the EXACT output of `cat ' + contentOut + '` (verbatim bytes).\n\n'
+    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
+    + '- DO NOT generate or paraphrase content based on your memory/inference.\n'
+    + '- ALWAYS read the actual file from disk. NEVER hallucinate file content.\n'
+    + '- DO NOT echo the JSON file. Only echo the content file.\n'
+    + '- DO NOT write any preamble or acknowledgment.\n'
+    + '- DO NOT add commentary, summary, or explanation.\n'
+    + '- Your final message = the verbatim cat output only.\n'
+    + '- If the command fails, return EXACTLY: ERROR_LOAD_FAILED: ' + filePath
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await agent(prompt, {
       label: 'loadpy-' + relPath.replace(/[\/.]/g, '-') + '-a' + attempt,
@@ -166,55 +185,29 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
       agentType: 'general-purpose',
     })
     const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
-    if (text.startsWith('ERROR_LOAD_FAILED')) { lastReason = 'mcp-error'; break }
-    if (text.length < 50) {
-      lastReason = 'too-short(len=' + text.length + ')'
-      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' ' + lastReason)
+    if (text.startsWith('ERROR_LOAD_FAILED')) {
+      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' ERROR_LOAD_FAILED')
       continue
     }
-    // v15: defense-in-depth prefix check on returned content.
+    if (text.length < 50) {
+      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + text.length + ')')
+      continue
+    }
+    // v15: defense-in-depth prefix check on returned content. Catches
+    // hallucinated content whose H1 doesn't match the expected anchor.
     if (expectPrefix) {
       const head = text.slice(0, 500)
       const stripped = expectPrefix.replace(/^#\s*/, '')
       const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
       if (!anchorRe.test(head)) {
-        lastReason = 'prefix-mismatch'
-        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' ' + lastReason + ' (expected "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
+        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' content-prefix-mismatch (expected "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
         continue
       }
     }
     return text
   }
-
-  // v32 fallback: inline Python read — completely bypasses harness_cli.py
-  // flag ambiguity. `--content-out` requires a value (CLI bug class); `--content`
-  // is store_true (so emit is JSON-wrapped and needs custom parsing). The
-  // inline-Python pattern is one single-quoted Python command + the file path
-  // as a separate argv. argv[1] has no shell-quoting ambiguity (it's a list
-  // element, not a string token). Deterministic, single-line, no CLI flag
-  // surface area to misroute. LLM emit reliability proven at 100% on this
-  // pattern (v22 single-line Bash era — 6/6 advance-phase PASS commits).
-  log('  [' + relPath + '] mcp attempts exhausted (reason=' + lastReason + '); falling back to inline Python read')
-  const cmd = PY + ' -c \'import sys; sys.stdout.write(open(sys.argv[1],"r",encoding="utf-8").read())\' ' + JSON.stringify(filePath)
-  const fbRes = await agent(
-    'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout + exit code verbatim:\n\n' + cmd + '\n\nNo commentary, no preamble, no other tool calls.',
-    { label: 'loadpy-fallback-' + relPath.replace(/[\/.]/g, '-'), phase: phaseName, agentType: 'general-purpose' },
-  )
-  const fbText = (typeof fbRes === 'string' ? fbRes : String(fbRes ?? ''))
-  // Python -c emits the raw file content as-is (no [read-file] header to strip).
-  if (fbText.length >= 50) {
-    if (expectPrefix) {
-      const head = fbText.slice(0, 500)
-      const stripped = expectPrefix.replace(/^#\s*/, '')
-      const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
-      if (anchorRe.test(head)) return fbText
-    } else {
-      return fbText
-    }
-  }
-  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS + FALLBACK: ' + relPath
+  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
 }
 
 // ---- B prompt builder (plan §B-1 template, plan-faithful revision) ----
@@ -783,7 +776,7 @@ const srsCfg = {
   idx: 'srs',
   name: 'SRS.md',
   diskPath: '01-requirements/SRS.md',
-  diskPrefix: 'Software Requirements Specification',
+  diskPrefix: '# Software Requirements Specification',
   phaseName: 'Sub-Task 1/4 — SRS.md',
   buildAPrompt: srsAPrompt,
   buildBDocs: srsBDocs,
@@ -844,7 +837,7 @@ const specTrackCfg = {
   idx: 'spec-tracking',
   name: 'SPEC_TRACKING.md',
   diskPath: '01-requirements/SPEC_TRACKING.md',
-  diskPrefix: 'Specification Tracking Matrix',
+  diskPrefix: '# Specification Tracking Matrix',
   phaseName: 'Sub-Task 2/4 — SPEC_TRACKING.md',
   buildAPrompt: specTrackAPrompt,
   buildBDocs: specTrackBDocs,
@@ -907,7 +900,7 @@ const traceCfg = {
   idx: 'traceability',
   name: 'TRACEABILITY_MATRIX.md',
   diskPath: '01-requirements/TRACEABILITY_MATRIX.md',
-  diskPrefix: 'Traceability Matrix',
+  diskPrefix: '# Traceability Matrix',
   phaseName: 'Sub-Task 3/4 — TRACEABILITY_MATRIX.md',
   buildAPrompt: traceAPrompt,
   buildBDocs: traceBDocs,
@@ -1034,9 +1027,9 @@ phase('Peer Review')
 log('Agent B holistic review of all 4 deliverables; max 5 rounds')
 
 const peerDocs = [
-  { diskPath: '01-requirements/SRS.md', diskPrefix: 'Software Requirements Specification', label: '01-requirements/SRS.md (APPROVED)' },
-  { diskPath: '01-requirements/SPEC_TRACKING.md', diskPrefix: 'Specification Tracking Matrix', label: '01-requirements/SPEC_TRACKING.md (APPROVED)' },
-  { diskPath: '01-requirements/TRACEABILITY_MATRIX.md', diskPrefix: 'Traceability Matrix', label: '01-requirements/TRACEABILITY_MATRIX.md (APPROVED)' },
+  { diskPath: '01-requirements/SRS.md', diskPrefix: '# Software Requirements Specification', label: '01-requirements/SRS.md (APPROVED)' },
+  { diskPath: '01-requirements/SPEC_TRACKING.md', diskPrefix: '# Specification Tracking Matrix', label: '01-requirements/SPEC_TRACKING.md (APPROVED)' },
+  { diskPath: '01-requirements/TRACEABILITY_MATRIX.md', diskPrefix: '# Traceability Matrix', label: '01-requirements/TRACEABILITY_MATRIX.md (APPROVED)' },
   { diskPath: 'TEST_INVENTORY.yaml', diskPrefix: '# TEST_INVENTORY.yaml', label: 'TEST_INVENTORY.yaml (APPROVED)' },
 ]
 
