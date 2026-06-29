@@ -973,3 +973,112 @@ const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
 5. **commit message 必須誠實** — 不要寫「6/6 PASS 由於此 fix」之類無 transcript 佐證的因果;若 fix 真治本,smoke test + test suite + workflow re-run 全綠已足夠。
 6. **每次 fix 改完先看 diff** — runtime artifact (state.json / approval JSON / deliverable) 不該跟 workflow JS 一起 commit;分開 commit 避免污染 review。
 
+---
+
+## 附錄 D: Phase 3-8 same-pattern 修復盤點 (2026-06-29)
+
+**範圍**: 對 v33 (`c9d49ad`) + v33b (`dd6b242`) 同型 bug 在 phase3-8 workflow JS 的盤點與修法。4 個 bug class + 4 commits 計畫,實際只做 2 個 (Step 2 + Step 4 跳過,原因見每節)。
+
+### D.0 盤點方法
+
+1. 直接 grep phase3-8 6 個 workflow JS 對 v33/v33b 三個函數名稱 → **0 match**。phase3-8 完全不用 `loadFileViaPython` / `persistApproval` / `diskPrefix`,所以 v33 三個 fix 不重複做。
+2. 派 Explore agent 盤點 phase3-8 自己的 I/O + approval 模式,找出 v33/v33b **同型**的 bug class。
+3. 派 Plan agent 設計 4 個 class 的修法,並標明哪些是已被 Explore agent 證實 (有 log/line),哪些只是 Plan agent 推論。
+
+### D.1 結果摘要
+
+| Class | 計畫 | 實際 | commit | 跳過原因 |
+|-------|------|------|--------|----------|
+| A (frIds inlining) | p5:238 file-pointer | ✅ 做了 | `ae1bbc1` | — |
+| B (outer try/catch around `agent()`) | 5 phases × ~24 wraps | ⏭️ 跳過 | — | **未驗證** — 沒有 transcript 證實 phase3-8 因 agent throw 而 abort。Plan agent 把嚴重度定為「中」是推論,不是事實。改 6 檔 ~200 行 diff 風險 > 收益。改為「追蹤, 待有 fail transcript 再修」 |
+| C (workflow-side approval writer) | p6 重構 + `writeApprovalJson` helper | ✅ 做了 | `36a49c5` | — |
+| D (multi-line compound bash collapse/split) | p6:130, p6:216, p8:281 | ⏭️ 跳過 | — | **未驗證** — 重新對位 plan 提的 3 個 line 後,只有 p6 Gate 4 step 2 (DA challenge) 算 v27 spirit 真因,但 Gate 4 是 critical path (失敗要整 phase6 重 run),改的風險高於收益。改為「追蹤, 待有 fail transcript 才修」 |
+
+### D.2 Class A — p5:238 frIds file-pointer (`ae1bbc1`)
+
+**真因** (已驗證): phase5 verification-docs prompt 內嵌 `frIds.join(', ')` 作為可讀 list。30+ FR 時 prompt 超窗 (v33 spirit)。
+
+**修法**:
+- 改用 `${ctxFile}` 檔案指標 + sub-agent 跑一行 Python sub-bash 列舉:
+  ```js
+  '` + PY + ' -c "import json,sys; d=json.load(open(\\'' + ctxFile + '\\')); [print(fr) for fr in d.get(\'fr_ids\',[])]"`'
+  ```
+- prompt 本身保持固定大小,FR list 從 ctxFile 在執行時讀取
+
+**驗證**:
+- `node --check` 過
+- `ctxFile` 已在 p5:143 定義 (Load FRs)
+- `frIds` 仍被 p5:190-203 (per-FR loop) + p5:195 (log) 用,沒破壞
+
+**共通性**: p3:301 + p4:254 的 `gate1Pass.join(',')` 灌入 `--fr-ids A,B` argv **不修** (驗證過 `harness_cli.py push-milestone` line 10339 收 single comma-separated string,chunking 不可行 + 不算 v33 spirit)。
+
+### D.3 Class B — outer try/catch around `agent()` (跳過)
+
+**真因假設** (未驗證): Plan agent 推論 phase3-p5、p7、p8 的 Gate / per-FR loop 內 `agent()` 沒 try/catch wrap,若 agent throw (rate limit / transient API error) workflow 整 phase fail。
+
+**為何跳過**:
+1. **沒有 transcript 證據** — 沒找到 phase3-8 因 agent throw 而 abort 的紀錄
+2. **v22/v28 spirit 是 retry 在 orchestrator** — 這些 phase 已有 `for (let round = 1; round <= 3; round++)` outer loop,**就是 orchestrator-level retry**;只是沒把 try/catch 包 `agent()`
+3. **改 6 檔 ~24 wraps ≈ 200 行 diff** — 風險高,缺乏證據不該動
+4. **p6 Gate 4 已有 try/catch** (line 119-144) 作為唯一先例 — 若真的有 throw 問題,p6 為何沒問題?
+
+**追蹤位置**: 留 6 個 phase 的 per-FR + per-round loop 給未來真因證據 (例如某次 workflow run 出現 `agent() threw`,留下 transcript + 對應 phase 行號)。
+
+### D.4 Class C — p6 workflow writes 4 approval JSON (`36a49c5`)
+
+**真因** (已驗證): phase6 Peer Review 原本由 sub-agent 同時 review + 用 Write tool 寫 4 份 approval JSON (`QUALITY_REPORT.md.json`, `RELEASE_NOTES.md.json`, `FINAL_SIGN_OFF.md.json`, `quality_manifest.json`)。若 sub-agent 寫出 v33b 同型 double-encode (JSON string-of-string),CLI `write-approval` 的 `size >= 10 bytes` verify 過,advance-phase `_verify_agent_b_approvals_core` 才 `data.get("review_status")` on str → AttributeError (跟 v33b 同一條失敗路徑)。
+
+**修法** (鏡像 phase1+phase2 `persistApproval` v33b 6/6 PASS):
+1. 加 `writeApprovalJson(deliverableId, obj)` helper (line 32-67): 走 `harness_cli.py write-approval --json '...'`,shell-wrapper agent 跑命令,regex match `[write-approval]\s*OK`,outer 3-attempt retry
+2. Peer Review 重構為 2 stage:
+   - Stage 1: sub-agent 只 review 4 個 deliverable,回傳**結構化 JSON verdict** (parseAgentJson),不寫任何 file
+   - Stage 2: workflow 對每個 verdict 呼叫 `writeApprovalJson` 4 次,workflow 自己寫 4 個 file
+
+**docs_embedded 契約** (重要!): 每個 verdict 的 `docs_embedded` 必須列**所有 4 個 required embedded docs** (`QUALITY_REPORT.md`, `RELEASE_NOTES.md`, `FINAL_SIGN_OFF.md`, `VERIFICATION_REPORT.md`),不是只列被 review 的那個。`_verify_agent_b_approvals_core` 對**每個 verdict** 跑 `_REQUIRED_EMBEDDED_DOCS[6]` 集合 AND check,任一 required 缺就 fail。
+
+**驗證**:
+- `writeApprovalJson` smoke: 4/4 deliverable `exit=0`,寫入後 `json.load()` 是 dict,`review_status=APPROVE`
+- `harness_cli.py verify-agent-b-approvals --phase 6` → ✓ All 4 Agent B approvals verified
+- `node --check` 過
+
+**共通性**: `writeApprovalJson` 是 phase1+phase2 `persistApproval` 的純鏡像,行為一致;helper 不耦合 phase 邏輯,可重複用於任何需要 workflow 寫 approval 的場景 (若未來加 phase 9/10)。
+
+### D.5 Class D — multi-line compound bash collapse/split (跳過)
+
+**真因假設** (部分驗證): Plan agent 標 3 個位置
+- p6:130 (Gate 4 step 2 DA challenge multi-step)
+- p6:216 (Release Docs 2 deliverables)
+- p8:281 (TDD-PRECHECK multi-step)
+
+**重新對位後的現況**:
+- p6 Gate 4 現 line 174 — 6 個 sequential **單行** bash in 1 prompt (step 0-5),**不是 v27 spirit 的 multi-line compound** (v27 失敗是 12 行 nested for/if/then/sleep/break)
+- p6 Release Docs 現 line 220 — 2 個 Write tool calls (不是 bash)
+- p6 Peer Review 現 line 247 — 已由 commit 36a49c5 重構
+- p8 final push 現 line 275 — 3 個 sequential 單行 bash,每個 in 自己 step,加上模糊列舉 5 個 tool 沒明確 step sequence
+
+**為何跳過**:
+1. **重新對位後,3 個位置只有 p6 Gate 4 step 2 (DA challenge) 算 v27 spirit 真因** — sub-agent 在 step 2 內部要 spawn 另一個 agent (claude sub-agent) + 寫 gate4_result.json,3 個 sequential logical operation in 1 prompt。但 Gate 4 是 critical path (失敗要整 phase6 重 run),改的風險高
+2. **沒有 transcript 證實** — 沒看到 phase6 因 multi-line compound bash 而 fail
+3. **p8 final push 的模糊列舉** (「confirm gitleaks + ruff + mypy + pytest + spec-coverage all pass. Fix blockers」) 確實是改進點,但屬於「clearer instruction」不是 bug fix
+
+**追蹤位置**:
+- p6 Gate 4 step 2 — 若某次 run transcript 看到 DA challenge evidence 寫入不完整,拆 sub-agent
+- p8 final push step 1 — 若某次 run transcript 看到 TDD-PRECHECK 只跑部分 tool,改用 explicit numbered sub-steps
+
+### D.6 共通性邊界 (守住)
+
+| 改動 | 影響 phase | 不動 |
+|------|------------|--------|
+| p5:238 file-pointer | p5 only | p3/p4 argv chunking (CLI 不支持 + 非 v33 spirit) |
+| p6 Peer Review 重構 + `writeApprovalJson` helper | p6 only | p1+phase2 helper (v33b 6/6 PASS 維持) |
+| Class B/D (跳過) | — | 6 phases per-FR loop / Gate 4 / final push 都保留現狀 |
+
+### D.7 教訓 (本輪)
+
+1. **Plan agent 的「嚴重度」標籤要質疑** — Plan agent 把 Class B/D 都標「中」,但只靠推論,沒有 transcript。實作前**必須**問:有沒有 fail log 支持這個嚴重度?若沒有,**未驗證的修法風險 > 收益**。
+2. **line 號要重新對位** — 改一個檔案(line number 改變)後,Plan agent 提的「line X」就 stale,必須重 grep 找現位置。本輪 Plan agent 提的 p6:130/p6:216 在 commit 36a49c5 後已不存在。
+3. **CLI argparse 契約要驗證** — 假設某 CLI option 支持重複 args (chunking) 是常見錯誤,argparse 行為要直接看原始碼。Plan agent 提的 `--fr-ids A,B --fr-ids C,D` 會 fail,因為 `push-milestone` line 10339 收 single string。
+4. **v33/v33b fix 的共通性盤點要分兩層** — 一層是「同函數」(phase3-8 沒這些函數,盤點結果 0);一層是「同型 bug class」(大 context / multi-line bash / sub-agent write JSON)。本輪發現的 4 個 class 都是後者。
+5. **修一個 bug,可能暴露另一個契約** — 寫 Class C 時,symptom 測出 `_REQUIRED_EMBEDDED_DOCS[6]` 要求每個 verdict 列所有 required docs,不是只列自己 review 的那個。這個契約原本被 sub-agent 自由發揮的 Write tool 隱藏,workflow 接手後契約立即浮現。
+
+
