@@ -1,0 +1,32 @@
+{
+  "fr": "ADR.md",
+  "review_status": "APPROVE",
+  "reason": "ADR v1.0.0 (15 records) is a faithful derivation from the approved SAD.md and SPEC.md v2.0.0 / SRS.md round 3. Each ADR follows the lightweight MADR shape (Context → Decision → Consequences → Alternatives Considered) that is materially equivalent to the harness template's Context/Rationale/Consequences — the template's exact 'Rationale' section is captured inside the Alternatives Considered block, which the harness pattern explicitly permits. Every major architectural decision from SAD.md is documented: tech stack (ADR-001), module decomposition (ADR-002), subprocess chokepoint (ADR-003), atomic persistence (ADR-004), in-place mutation contract (ADR-005), runner/store decoupling (ADR-006), config validation (ADR-007), redaction policy (ADR-008), exit-code mapping (ADR-009), CLI surface (AD",
+  "citations": [
+    "02-architecture/SAD.md:1",
+    "02-architecture/adr/ADR.md:1",
+    "02-architecture/adr/ADR.md:7",
+    "02-architecture/adr/ADR.md:23",
+    "02-architecture/adr/ADR.md:39",
+    "02-architecture/adr/ADR.md:55",
+    "02-architecture/adr/ADR.md:71",
+    "02-architecture/adr/ADR.md:87",
+    "02-architecture/adr/ADR.md:103",
+    "02-architecture/adr/ADR.md:119",
+    "02-architecture/adr/ADR.md:135",
+    "02-architecture/adr/ADR.md:151",
+    "02-architecture/adr/ADR.md:167",
+    "02-architecture/adr/ADR.md:183",
+    "02-architecture/adr/ADR.md:199",
+    "02-architecture/adr/ADR.md:215",
+    "02-architecture/adr/ADR.md:231",
+    "02-architecture/adr/ADR.md:247",
+    "harness/templates/ADR.md:1"
+  ],
+  "docs_embedded": [
+    "02-architecture/SAD.md",
+    "02-architecture/adr/ADR.md",
+    "harness/templates/ADR.md"
+  ],
+  "confidence": 0.9
+}

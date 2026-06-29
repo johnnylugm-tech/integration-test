@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "51b1e4da46dc65a26dd06b52d1afe08d766daa89",
-  "content_sha256": "a1e3be233d69558c283740905be1c8b5ef166efddc9196062e79d14b1cd5baff",
+  "git_sha": "01fba0db587e4da1f9fe7aed22246d30a4974f8a",
+  "content_sha256": "dae4d678017025b1ee256768372635835d5342d53178f94302c16c798373b5f9",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -49,7 +49,7 @@
         "srs_section": "SAD.md",
         "code_files": [],
         "test_files": [],
-        "sad_module": "runner.py",
+        "sad_module": "cli/cli.py",
         "priority": "HIGH"
       },
       "FR-02": {
@@ -58,7 +58,7 @@
         "srs_section": "SAD.md",
         "code_files": [],
         "test_files": [],
-        "sad_module": "runner.py",
+        "sad_module": "runner/runner.py",
         "priority": "HIGH"
       },
       "FR-03": {
@@ -67,7 +67,7 @@
         "srs_section": "SAD.md",
         "code_files": [],
         "test_files": [],
-        "sad_module": "cli.py",
+        "sad_module": "cli/cli.py",
         "priority": "HIGH"
       }
     },

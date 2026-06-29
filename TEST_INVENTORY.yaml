@@ -364,12 +364,12 @@ test_inventory:
       - ac_ids: [AC-NFR-02-01]
         hook: 'grep -rn "shell=True" src/'
         phase: P5 static scan + P6 Gate 4 re-scan
-        owner: @phase5-static + @phase6-quality
+        owner: "@phase5-static + @phase6-quality"
       - ac_ids: [AC-NFR-03-01]
         hook: "test_nfr03_001_atomic_write_sigkill_chaos (P4 chaos fixture: SIGKILL mid-write, asserts post-state parses as legal JSON)"
         tc_id_name: test_nfr03_001_atomic_write_sigkill_chaos
         phase: P4 chaos test
-        owner: @phase4-test
+        owner: "@phase4-test"
         file_path: tests/test_nfr03_reliability.py
         distinct_from: test_fr01_005_atomic_write_survives_interrupt (FR-01 unit test; AC-FR-01-05 owner)
 
@@ -405,3 +405,39 @@ test_inventory:
       - "AC-FR-03-01 (negative) <-> AC-FR-03-03: test_fr03_001b_status_unknown_id_exit2 cross_refs AC-FR-03-03"
       - "AC-FR-03-03 <-> multiple FR-01/02 ACs: test_fr03_003_exit_code_matrix cross_refs AC-FR-01-01/02/03/06, AC-FR-02-05/06"
       - "AC-NFR-01-01 <-> AC-FR-01-04 + AC-FR-03-01: perf_fr03_nfr01_p95_under_50ms cross_refs both"
+
+# ----------------------------------------------------------------------------
+# Schema-conformance view: top-level `fr_tests` + `cross_cutting` sections
+# required by `harness_cli.py validate-handoff --from-phase 1` (see
+# harness/harness_cli.py:4706-4734). These lists are derived 1:1 from the
+# canonical `test_inventory.by_fr.tests` entries above; no new tests are
+# invented here. This view exists ONLY for handoff validator consumption;
+# the authoritative enumeration remains `test_inventory.by_fr` above.
+# ----------------------------------------------------------------------------
+fr_tests:
+  FR-01:
+    - test_fr01_001_empty_command_rejected
+    - test_fr01_002_length_exceeds_1000_rejected
+    - test_fr01_003_injection_chars_rejected
+    - test_fr01_004_pending_fields_initialized
+    - test_fr01_005_atomic_write_survives_interrupt
+    - test_fr01_006_corrupt_store_exit1
+  FR-02:
+    - test_fr02_001_subprocess_form_no_shell
+    - test_fr02_002_state_transitions
+    - test_fr02_003_result_fields_populated
+    - test_fr02_004_retry_until_limit
+    - test_fr02_004b_no_retry_on_done
+    - test_fr02_005_timeout_exit_code_4
+    - test_fr02_006_unexpected_exception_exit1
+  FR-03:
+    - test_fr03_001_subcommands_dispatch
+    - test_fr03_001b_status_unknown_id_exit2
+    - test_fr03_002_json_flag_single_line
+    - test_fr03_003_exit_code_matrix
+  NFR-01:
+    - perf_fr03_nfr01_p95_under_50ms
+  NFR-03:
+    - test_nfr03_002_secret_line_redacted
+cross_cutting:
+  - test_nfr03_001_atomic_write_sigkill_chaos
