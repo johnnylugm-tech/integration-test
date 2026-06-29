@@ -125,6 +125,10 @@ function buildBPrompt(role, deliverable, docs, checklist) {
     + 'into your own reasoning — read disk, then judge.\n\n'
   for (let i = 0; i < docs.length; i++) p += '=== [' + docs[i][0] + '] ===\n' + docs[i][1] + '\n\n'
   p += 'Review checklist:\n' + checklist + '\n\n'
+    + 'SCHEMA REQUIREMENTS (advance-phase `harness_cli.py _verify_agent_b_approvals_core` REJECTS the approval if any of these fail — observed 2026-06-29 wf_3a9377cb):\n'
+    + '  - `reason`: ≥ 100 characters of substantive justification. NOT "APPROVE", "OK", or other one-word response.\n'
+    + '  - `citations`: array of "file:line" strings. Must contain ≥ 1 entry that cites a SPECIFIC line you verified via Read/Bash.\n'
+    + '  - `docs_embedded`: array of file paths/identifiers you actually read during this review. CRITICAL — the harness basename-matcher (advance-phase `_norm()`) looks for PURE basenames like "SAD.md", "ADR.md", "TEST_SPEC.md", NOT descriptive strings. Use bare basenames only.\n\n'
     + 'Return JSON only (no markdown fences, no commentary). Schema:\n'
     + '{"review_status":"APPROVE"|"REJECT","reason":"<concise>","citations":["file:line"],"docs_embedded":["..."],"gaps":[{"severity":"low|medium|high","message":"...","fr_id":"<FR-XX or null>"}]}\n\n'
     + 'IMPORTANT: Return ONLY the JSON object as your final message. No prose before or after.'
@@ -276,15 +280,12 @@ async function abLoop(cfg) {
   return { error: cfg.deliverable + ' loop exhausted unexpectedly' }
 }
 
-// ---- persistApproval: write .methodology/agent_b_approvals/<id>.json via LLM agent
-// Mirror of phase1-requirements.js persistApproval. Kept local (not shared) because
-// workflow JS sandbox forbids require/import (playbook §3-§4). Both workflows carry
-// the same helper so behavior is identical across phases.
-// Called after every B-2 APPROVE so harness_cli.py advance-phase's
-// _verify_agent_b_approvals_core check finds the artifact.
+// ---- persistApproval: write .methodology/agent_b_approvals/<id>.json — v30 strategy ----
 //
-// v28: see phase1-requirements.js for the full v17/v22/v27/v28 history. mirror, keep
-// behavior identical to phase1 — retry at orchestrator level + mcp__filesystem__ tool.
+// Mirror of phase1-requirements.js v30 persistApproval. v22 single-line Bash +
+// harness_cli.py write-approval (proven 6/6 advance-phase PASS) + workflow JS
+// outer-level try/catch retry. See phase1-requirements.js for full v17/v22/v27/
+// v28/v30 history.
 async function persistApproval(deliverableId, b2) {
   const approvalPayload = JSON.stringify({
     fr: deliverableId,
@@ -294,65 +295,42 @@ async function persistApproval(deliverableId, b2) {
     docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
   }, null, 2)
-  const approvalFile = REPO + '/.methodology/agent_b_approvals/' + deliverableId + '.json'
-  const prompt = [
-    'Persist a JSON approval file using ONLY the mcp__filesystem__* tools (NO Bash, NO Write, NO Edit, NO python).',
-    '',
-    'STEP 1 — mcp__filesystem__write_file with EXACTLY these parameters:',
-    '  file = ' + approvalFile,
-    '  content =',
-    approvalPayload,
-    '',
-    'STEP 2 — mcp__filesystem__read_file with file = ' + approvalFile,
-    '',
-    'STEP 3 — Compare the read result byte-for-byte against the content shown above.',
-    '  If MATCH (size + every byte identical): reply with ONLY the single token VERIFIED on its own line.',
-    '  If MISMATCH or any tool error: reply with FAIL:<one-line reason>.',
-    '',
-    'Constraints: use ONLY mcp__filesystem__write_file and mcp__filesystem__read_file. Do not run shell commands. Do not edit other files.',
-  ].join('\n')
+  const cliPath = REPO + '/harness/harness_cli.py'
+  const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
+    JSON.stringify(deliverableId) + ' --json ' + JSON.stringify(approvalPayload)
 
   let lastErr = null
   for (let attempt = 1; attempt <= MAX_OUTER_ATTEMPTS; attempt++) {
     let res
     try {
-      res = await agent(prompt, {
-        label: 'persist-' + deliverableId + '-try' + attempt,
-        phase: 'Persist Approval',
-        agentType: 'general-purpose',
-      })
+      res = await agent(
+        'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout + exit code verbatim:\n\n' + cmd + '\n\nNo commentary, no preamble, no other tool calls.',
+        { label: 'persist-' + deliverableId + '-try' + attempt, phase: 'Persist Approval', agentType: 'general-purpose' },
+      )
     } catch (e) {
       lastErr = 'agent() threw: ' + (e && e.message ? e.message : String(e))
       log('  persistApproval ' + deliverableId + ' attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ': ' + lastErr.slice(0, 200))
       continue
     }
-    if (typeof res === 'string' && /\bVERIFIED\b/.test(res)) {
-      log('  persisted approval: ' + deliverableId + ' (verified on disk, attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ')')
+    if (typeof res === 'string' && /\[write-approval\]\s*OK/.test(res)) {
+      log('  persisted approval: ' + deliverableId + ' (attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ')')
       return
     }
-    lastErr = 'agent did not VERIFY; got: ' + String(res).slice(0, 200)
+    lastErr = 'CLI did not return OK; got: ' + String(res).slice(0, 400)
     log('  persistApproval ' + deliverableId + ' attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ': ' + lastErr)
   }
   throw new Error('persistApproval FAILED for ' + deliverableId + ' after ' + MAX_OUTER_ATTEMPTS + ' attempts. Last error: ' + lastErr)
 }
 
-// ---- loadFileViaPython: deterministic mcp__filesystem__read_file loader (v29) ----
+// ---- loadFileViaPython: mcp__filesystem__read_file + v16 fallback (v30) ----
 //
-// Mirror of phase1-requirements.js v29. Routes the read through mcp__filesystem__
-// read_file (native API) instead of Bash + python harness_cli.py + cat /tmp.
-// Eliminates the LLM-as-shell-wrapper failure mode that caused
-// wf_a23be9d3-263's docs_embedded ERROR_LOAD_FAILED contamination. See phase1
-// for full v17/v22/v29 history.
-//
-// Returns:
-//   - content text (on status=OK) — same shape as v17/v22 callers
-//   - 'ERROR: ' + relPath + ' load failed' sentinel (on tool error)
-//   - 'ERROR: LOADER_FAILED_AFTER_<N>_ATTEMPTS: ...' (on persistent failure)
+// Mirror of phase1-requirements.js v30 loadFileViaPython. v29 mcp primary +
+// v16 single-line Bash + harness_cli.py read-file fallback. See phase1 for full
+// v17/v22/v29/v30 history.
 async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
   opts = opts || {}
   const maxAttempts = opts.maxAttempts || 3
   const filePath = REPO + '/' + relPath
-  // Mirror phase1 v29 prompt — step-by-step native tool call instruction.
   const prompt = [
     'Read a file using ONLY the mcp__filesystem__* tools (NO Bash, NO Read, NO cat, NO python).',
     '',
@@ -366,6 +344,7 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
     '   - If the file is missing or any tool error occurs: reply EXACTLY: ERROR_LOAD_FAILED: ' + filePath,
   ].join('\n')
 
+  let lastReason = ''
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await agent(prompt, {
       label: 'loadpy-' + relPath.replace(/[\/.]/g, '-') + '-a' + attempt,
@@ -373,25 +352,49 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
       agentType: 'general-purpose',
     })
     const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
-    if (text.startsWith('ERROR_LOAD_FAILED')) return 'ERROR: ' + relPath + ' load failed (mcp read_file error)'
+    if (text.startsWith('ERROR_LOAD_FAILED')) { lastReason = 'mcp-error'; break }
     if (text.length < 50) {
-      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + text.length + ')')
+      lastReason = 'too-short(len=' + text.length + ')'
+      log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' ' + lastReason)
       continue
     }
-    // v16: defense-in-depth prefix check (same as phase1).
     if (expectPrefix) {
       const head = text.slice(0, 500)
       const stripped = expectPrefix.replace(/^#\s*/, '')
       const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
       if (!anchorRe.test(head)) {
-        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' content-prefix-mismatch (expected "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
+        lastReason = 'prefix-mismatch'
+        log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' ' + lastReason + ' (expected "' + expectPrefix + '", got: ' + text.slice(0, 80) + ')')
         continue
       }
     }
     return text
   }
-  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS: ' + relPath
+
+  // v30 fallback: harness_cli.py read-file (v16 pattern; deterministic Python).
+  log('  [' + relPath + '] mcp attempts exhausted (reason=' + lastReason + '); falling back to harness_cli.py read-file (v16)')
+  const cliPath = REPO + '/harness/harness_cli.py'
+  const cmd = PY + ' ' + cliPath + ' read-file --file ' + JSON.stringify(filePath) + ' --content-out'
+  const fbRes = await agent(
+    'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout + exit code verbatim:\n\n' + cmd + '\n\nNo commentary, no preamble, no other tool calls.',
+    { label: 'loadpy-fallback-' + relPath.replace(/[\/.]/g, '-'), phase: phaseName, agentType: 'general-purpose' },
+  )
+  const fbText = (typeof fbRes === 'string' ? fbRes : String(fbRes ?? ''))
+  const m = fbText.match(/\[read-file\]\s*OK[\s\S]*?\n([\s\S]*)$/)
+  const content = (m ? m[1] : fbText).trim()
+  if (content.length >= 50) {
+    if (expectPrefix) {
+      const head = content.slice(0, 500)
+      const stripped = expectPrefix.replace(/^#\s*/, '')
+      const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
+      if (anchorRe.test(head)) return content
+    } else {
+      return content
+    }
+  }
+  return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS + FALLBACK: ' + relPath
 }
 
 // ════════════════════════════════════════════════════════════════════════
