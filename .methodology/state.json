@@ -1,18 +1,9 @@
 {
   "state": "RUNNING",
-  "current_phase": 1,
+  "current_phase": 2,
   "last_gate": null,
   "last_fr": null,
-  "last_update": "2026-06-29T04:00:00+00:00",
-  "phase_truth_passed": false,
-  "last_milestone_command": "manual-reset-to-P1-for-architectural-fix-validation",
-  "last_push_checkpoint": "2026-06-29T08:17:49.188497+00:00",
-  "last_push_checkpoint_phase": 1,
-  "phase_completed": {
-    "1": {
-      "sha": "4ea65f4a7b68a80d3f4cd16a6380867a15bfb177",
-      "timestamp": "2026-06-29T08:17:49.225738+00:00"
-    }
-  },
-  "test_inventory_checksum": "380838b87209df3fa6dce5926f9eda5bf0542d080c530b1d83c77e138f6877c2"
+  "last_update": "2026-06-29T11:13:12.531964+00:00",
+  "phase_truth_passed": true,
+  "last_milestone_command": "advance-phase --completed-phase 1"
 }
