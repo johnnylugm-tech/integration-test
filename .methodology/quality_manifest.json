@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "generated_at_phase": 2,
+  "fr_ids": [
+    "FR-01",
+    "FR-02",
+    "FR-03",
+    "FR-01",
+    "FR-01",
+    "FR-01",
+    "FR-01",
+    "FR-01",
+    "FR-01",
+    "FR-02",
+    "FR-02",
+    "FR-02",
+    "FR-02",
+    "FR-02",
+    "FR-02",
+    "FR-03",
+    "FR-03",
+    "FR-03"
+  ],
+  "nfr_dimension_mapping": {
+    "NFR-01": "performance",
+    "NFR-02": "security",
+    "NFR-03": "error_handling"
+  },
+  "nfr_fr_mapping": {},
+  "nfr_traceability": {
+    "NFR-01": {
+      "type": "performance",
+      "target": ">= p95 < 50ms",
+      "module": "taskq.cli.cli"
+    },
+    "NFR-02": {
+      "type": "security",
+      "target": ">= 0 shell=True call sites; blacklist all 7 chars",
+      "module": "taskq.runner.runner"
+    },
+    "NFR-03": {
+      "type": "reliability",
+      "target": ">= atomic write + 100% redaction pre-persist",
+      "module": "taskq.io.store"
+    }
+  },
+  "quality_targets": {
+    "max_complexity": 10,
+    "min_coverage": 90,
+    "max_coupling": 0.3
+  },
+  "fr_module_traceability": {
+    "FR-01": "src/taskq/core/validation.py",
+    "FR-02": "src/taskq/runner/runner.py",
+    "FR-03": "src/taskq/cli/cli.py"
+  },
+  "architecture_constraints": [
+    "no_circular_dependencies",
+    "no_shell_true_anywhere",
+    "stdlib_only",
+    "single_io_site"
+  ],
+  "high_risk_modules": [
+    "taskq.runner.runner",
+    "taskq.io.store"
+  ],
+  "gate_score_overrides": {
+    "performance": 75.0,
+    "security": 80.0,
+    "error_handling": 80.0,
+    "test_coverage": 90.0
+  },
+  "gate_results": {
+    "gate1": {},
+    "gate2": null,
+    "gate3": null,
+    "gate4": null
+  }
+}
