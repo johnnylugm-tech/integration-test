@@ -1,1 +1,24 @@
-"{\"fr\":\"SPEC_TRACKING.md\",\"review_status\":\"APPROVE\",\"reason\":\"SPEC_TRACKING.md accurately reconciles FR-01/FR-02/FR-03 and NFR-01/02/03 against SRS.md §3/§4 with per-AC owner, status (RED/NOT-STARTED), and verification hook. AC count math (15 FR + 5 NFR = 20) verified against SRS headings. Each FR has 6/6/3 ACs as defined, no orphan FRs. Module decomposition in §5 (cli/validate/store/runner/redact/config) is consistent with §2 owner columns. Cross-cutting deps in §4 (NFR-02-02↔FR-01-03, NFR-02-01↔FR-02-01, NFR-03-01↔FR-01-05, NFR-03-02↔FR-02-03) are correctly cross-referenced. Upstream SRS B-2 low-severity gap (v28/v29 workflow-loader artifacts) is non-blocking per prior approval and re-stamped in deliverable header.\",\"citations\":[\"01-requirements/SPEC_TRACKING.md:23\",\"01-requirements/SPEC_TRACKING.md:31\",\"01-requirements/SPEC_TRACKING.md:43\",\"01-requirements/SPEC_TRACKING.md:55\",\"01-requirements/SRS.md:55\",\"01-requirements/SRS.md:73\",\"01-requirements/SRS.md:91\"],\"docs_embedded\":[\"SPEC_TRACKING.md\",\"SRS.md\"],\"confidence\":0.9}"
+{
+  "fr": "SPEC_TRACKING.md",
+  "review_status": "APPROVE",
+  "reason": "SPEC_TRACKING.md is a faithful, well-structured per-FR/per-AC tracking matrix derived from APPROVED SRS.md v2.0.0. §1 Registry reconciles 3 FRs + 3 NFRs = 20 ACs (15 FR + 5 NFR) matching SRS §5. §2 assigns owner + status + verification hook + source citation for every AC across FR-01..FR-03 and NFR-01..NFR-03 with no orphan FRs. §3 status-code legend (RED/GREEN/NOT-STARTED/BLOCKED) is consistent with P3 TDD semantics. §4 cross-cutting deps correctly bind AC-FR-01-03↔AC-NFR-02-02, AC-FR-02-01↔AC-NFR-02-01, AC-FR-01-05↔AC-NFR-03-01, AC-FR-02-03↔AC-NFR-03-02, AC-NFR-01-01↔FR-01/FR-03. §5 module decomposition (cli.py/validate.py/store.py/runner.py/redact.py/config.py) reconciles 17 module-owned pytest ACs + 3 P5/P6 verification hooks = 20. §6/§7 are minimal forward refs and cleanly defer to no",
+  "citations": [
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:48",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:17",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:24",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:36",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:46",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:52",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:60",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:66",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:76",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:89",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:99",
+    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:113"
+  ],
+  "docs_embedded": [
+    "SRS.md",
+    "SPEC_TRACKING.md"
+  ],
+  "confidence": 0.9
+}

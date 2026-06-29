@@ -2,7 +2,7 @@
 
 **Checkpoint**: `P1-exit-20260629`  
 **Phase**: P1 — Spec & Discovery  
-**Generated**: 2026-06-29T10:58:24Z
+**Generated**: 2026-06-29T11:13:01Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -69,13 +69,13 @@ P1 phase completed — pushed for record.
   - `.methodology/agent_b_approvals/SRS.md.json`
   - `.methodology/agent_b_approvals/TEST_INVENTORY.yaml.json`
   - `.methodology/agent_b_approvals/TRACEABILITY_MATRIX.md.json`
-  - `.methodology/state.json`
-  - `01-requirements/SRS.md`
-  - `HANDOVER.md`
-  - `srs_vs_spec_diff.json`
   - `01-requirements/SPEC_TRACKING.md`
+  - `01-requirements/SRS.md`
   - `01-requirements/TRACEABILITY_MATRIX.md`
+  - `HANDOVER.md`
   - `TEST_INVENTORY.yaml`
+  - `.methodology/state.json`
+  - `srs_vs_spec_diff.json`
   - `.methodology/phase1_plan.md`
   - `harness`
   - `.methodology/fr_progress.json`
