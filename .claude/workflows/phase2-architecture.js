@@ -448,7 +448,7 @@ log('  harness/templates/ADR.md loaded: ' + adrTemplateContent.length + ' chars'
 phase('Sub-Task 1/3 — SAD.md')
 log('abLoop: SAD authoring (ARCHITECT A + TECH_LEAD B; max 5 rounds; HR-12 escalate)')
 const sad = await abLoop({
-  phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/SAD.md', diskPrefix: '# SAD',
+  phaseName: 'Sub-Task 1/3 — SAD.md', key: 'sad', deliverable: 'SAD.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/SAD.md', diskPrefix: '#',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 1/3 SAD.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/SAD.md\n\n'
@@ -484,7 +484,7 @@ let sadContent = sad.content, sadB2 = sad.b2
 phase('Sub-Task 2/3 — ADR.md')
 log('abLoop: ADR authoring (extract decisions from APPROVED SAD.md; downstream ADR-Constitution gate)')
 const adr = await abLoop({
-  phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/adr/ADR.md', diskPrefix: '# Architecture Decision Records',
+  phaseName: 'Sub-Task 2/3 — ADR.md', key: 'adr', deliverable: 'ADR.md', bRole: 'TECH_LEAD', diskPath: '02-architecture/adr/ADR.md', diskPrefix: '#',
   buildAPrompt: (round, prevB2) =>
     'YOU ARE ARCHITECT (Agent A for Sub-Task 2/3 ADR.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nYour SINGLE deliverable: ' + REPO + '/02-architecture/adr/ADR.md\n\n'
@@ -690,8 +690,8 @@ for (let round = 1; round <= MAX_PEER_ROUNDS; round++) {
   } catch (e) {
     log('  Peer fixer agent failed: ' + String(e.message ?? e).slice(0, 80) + ' — continuing without fix')
   }
-  sadContent = await loadFileViaPython('02-architecture/SAD.md', '# SAD', 'Peer Review')
-  adrContent = await loadFileViaPython('02-architecture/adr/ADR.md', '# Architecture Decision Records', 'Peer Review')
+  sadContent = await loadFileViaPython('02-architecture/SAD.md', '#', 'Peer Review')
+  adrContent = await loadFileViaPython('02-architecture/adr/ADR.md', '#', 'Peer Review')
   testSpecContent = await loadFileViaPython('02-architecture/TEST_SPEC.md', '#', 'Peer Review')
   log('  Reloaded after fixer: SAD=' + sadContent.length + ' ADR=' + adrContent.length + ' TEST_SPEC=' + testSpecContent.length)
 }
