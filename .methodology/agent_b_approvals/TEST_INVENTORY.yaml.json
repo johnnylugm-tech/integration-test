@@ -1,25 +1,28 @@
 {
   "fr": "TEST_INVENTORY.yaml",
   "review_status": "APPROVE",
-  "reason": "Arithmetic reconciles: total=19, by_fr sums (FR-01=6+FR-02=7+FR-03=4+NFR-01=1+NFR-03=1=19) match by_layer sums (unit=11+integration=7+benchmark=1=19) match matrix §2/§3. All 19 matrix §2 forward tc_ids present in YAML with no collapse (test_fr01_005, test_fr02_004b, test_fr03_001b all distinct). 9 cross-cuts preserved via metadata (cross_ref_ac_ids / cross_ref_nfrs), not deletion. Naming convention mostly consistent (test_<frNN>_<desc>); perf_fr03_nfr01_p95_under_50ms uses perf_ prefix — minor, but matches matrix §2.4 verbatim.",
+  "reason": "1:1 mapping verified: 19 tc_ids in YAML = sum of by_fr (FR-01=6, FR-02=7, FR-03=4, NFR-01=1, NFR-03=1) = sum of by_layer (unit=11, integration=7, benchmark=1). Every tc_id in TRACEABILITY_MATRIX.md §2 forward trace appears as independent entry in YAML tests block (no range syntax to collapse). AC-NFR-03-01 chaos test (test_nfr03_001_atomic_write_sigkill_chaos) correctly placed in cross_cutting_static_hooks, NOT counted toward total_test_cases — matches matrix §3 reverse-map naming and matrix §2.6 description ('chaos test ... asserts post-state parses'). Cross-cuts (AC-NFR-02-01 via test_fr02_001, AC-NFR-02-02 via test_fr01_003, AC-NFR-03-01 via test_fr01_005, AC-NFR-03-02 via test_fr02_003, AC-FR-03-03 via test_fr02_005/test_fr02_006/test_fr03_001b/test_fr03_003, AC-NFR-01-01 via perf_fr03",
   "citations": [
-    "TEST_INVENTORY.yaml:11",
-    "TEST_INVENTORY.yaml:26",
-    "TEST_INVENTORY.yaml:114",
-    "TEST_INVENTORY.yaml:213",
-    "TEST_INVENTORY.yaml:276",
-    "TEST_INVENTORY.yaml:294",
-    "TEST_INVENTORY.yaml:315",
-    "TEST_INVENTORY.yaml:331",
-    "TEST_INVENTORY.yaml:343",
-    "TEST_INVENTORY.yaml:367",
-    "TRACEABILITY_MATRIX.md:46-66",
-    "TRACEABILITY_MATRIX.md:76-78",
-    "TRACEABILITY_MATRIX.md:87",
-    "TRACEABILITY_MATRIX.md:101"
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:9-15",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:33-114",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:121-213",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:220-276",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:283-294",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:301-314",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:316-349",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:351-364",
+    "/Users/johnny/projects/integration-test/TEST_INVENTORY.yaml:371-397",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:42-101",
+    "/Users/johnny/projects/integration-test/01-requirements/TRACEABILITY_MATRIX.md:106-150",
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:74-105",
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:115-141",
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:152-169",
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:196-217"
   ],
   "docs_embedded": [
-    "TEST_INVENTORY.yaml v1.5.0 — 19 tc_ids: FR-01(6): test_fr01_001..006; FR-02(7): test_fr02_001..006 + 004b; FR-03(4): test_fr03_001..003 + 001b; NFR-01(1): perf_fr03_nfr01_p95_under_50ms; NFR-03(1): test_nfr03_002_secret_line_redacted. Layers: unit=11, integration=7, benchmark=1."
+    "TEST_INVENTORY.yaml",
+    "TRACEABILITY_MATRIX.md",
+    "SRS.md"
   ],
   "confidence": 0.9
 }

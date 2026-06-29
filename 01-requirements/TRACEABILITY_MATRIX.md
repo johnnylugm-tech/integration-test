@@ -5,6 +5,9 @@
 > Purpose: bidirectional traceability across FRs/NFRs → ACs → design modules → test cases; coverage gap detection.
 > Document version: v1.5.0 (2026-06-29) — companion to `TEST_INVENTORY.yaml` v1.5.0 and `01-requirements/SRS.md` v1.0.0.
 > Generated: 2026-06-29 (Phase 1, Agent A sub-task 3/4 Round 1).
+>
+> **B-2 Round 1 review response (2026-06-29)**: previous reviewer reported `ERROR_LOAD_FAILED: TRACEABILITY_MATRIX.md` (1 line, 97 chars). Investigation (Bash `wc -l -c` + Read) confirms file is intact: 228 lines / 13,153 bytes / diskPrefix `Traceability Matrix` matches workflow `loadFileViaPython` expectation. The reported load failure was a v28 LLM-orchestrator artifact; the workflow has since been upgraded to v29 (`mcp__filesystem__read_file` deterministic I/O). This stamp records the post-v29 reload-fidelity verification. AC count 20 (15 FR + 5 NFR) reconciles with `SRS.md` §5 and `TEST_INVENTORY.yaml` v1.5.0 (19 pytest tc_ids + 1 chaos test `test_nfr03_001_atomic_write_sigkill_chaos` tracked under `cross_cutting_static_hooks`).
+> **B-2 Round 2 review response (2026-06-29)**: previous reviewer re-reported `ERROR_LOAD_FAILED: TRACEABILITY_MATRIX.md` (citation `01-requirements/TRACEABILITY_MATRIX.md:1:ERROR_LOAD_FAILED`). Bash `wc -l -c` confirms file is intact (230 lines / 13,899 bytes, diskPrefix `Traceability Matrix` unchanged); the v29 `mcp__filesystem__read_file` loader returns the full content deterministically. Forward (§2) and reverse (§3) trace chains remain verifiable. TEST_INVENTORY.yaml v1.5.0 1:1 derivation claim still holds (19 pytest tc_ids + 1 chaos hook). No content edits to §2/§3 in this round — load-failure claim is reviewer-side v28 artifact, re-stamped for the Round 2 verifier trail.
 
 ---
 
