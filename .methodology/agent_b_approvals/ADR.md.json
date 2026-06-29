@@ -24,6 +24,8 @@
     "harness/templates/ADR.md:1"
   ],
   "docs_embedded": [
+    "SRS.md",
+    "01-requirements/SRS.md",
     "02-architecture/SAD.md",
     "02-architecture/adr/ADR.md",
     "harness/templates/ADR.md"

@@ -95,9 +95,9 @@
     "error_handling": 80.0
   },
   "fr_module_traceability": {
-    "FR-01": "taskq.core.validation",
-    "FR-02": "taskq.runner.runner",
-    "FR-03": "taskq.cli.cli"
+    "FR-01": "src/taskq/core/validation.py",
+    "FR-02": "src/taskq/runner/runner.py",
+    "FR-03": "src/taskq/cli/cli.py"
   },
   "architecture_constraints": [
     "no_circular_dependencies",
