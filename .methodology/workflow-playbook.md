@@ -1083,4 +1083,60 @@ const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
 4. **v33/v33b fix 的共通性盤點要分兩層** — 一層是「同函數」(phase3-8 沒這些函數,盤點結果 0);一層是「同型 bug class」(大 context / multi-line bash / sub-agent write JSON)。本輪發現的 4 個 class 都是後者。
 5. **修一個 bug,可能暴露另一個契約** — 寫 Class C 時,symptom 測出 `_REQUIRED_EMBEDDED_DOCS[6]` 要求每個 verdict 列所有 required docs,不是只列自己 review 的那個。這個契約原本被 sub-agent 自由發揮的 Write tool 隱藏,workflow 接手後契約立即浮現。
 
+---
+
+## 附錄 E: Phase 3 workflow JS 審計 (完整性 / 正確性 / 一致性) — 2026-06-29
+
+**範圍**: 對 `.claude/workflows/phase3-implementation.js` 做三維審計,基準 = `phase3_plan.md v2.12.0` (completeness) + 鐵律 C.0 / 附錄 D bug class (correctness/一致性) + phase1/phase2 已驗證正解。與附錄 D 不同 lens: D 查 v33/v33b 同型 bug;E 查 plan-fidelity 與檔案內部一致性。7 個 finding 全在單檔修復,1 commit。
+
+### E.0 盤點方法 (與附錄 D 互補)
+
+1. 三組基準逐項對位: plan 的 ORCH-step / PUSH / Gate dim 清單 → workflow agent prompt;鐵律 C.0 → agent 呼叫模式;phase1/2 → 防禦守衛。
+2. **先 ground harness 事實再下結論**: sentinel 檔名 (`g1_p3_fr01.flag`, harness_cli.py:1911)、`load-context` 的 `fr_details` 是 **dict 含 title** (cmd_load_context:5293-5319) — 兩個事實直接推翻/確認了候選 finding。
+3. 排除已驗證的 false positive (見 E.3),不浪費 fix 預算。
+
+### E.1 Finding 一覽
+
+| # | 維度 | 根源層 | 問題 | 修法 |
+|---|------|--------|------|------|
+| **J1** | 正確性 | **workflow JS bug** (資料契約漂移) | `frTitle` 恒空: Bug #135 收窄 ctx-parse 輸出只吐 `fr_details_keys`(無 title),但消費端用 `Array.isArray(ctx.fr_details)` 取 title;且 harness `fr_details` 是 **dict** 非 array → 兩路皆 false → title 靜默全失 | ctx-parse 改吐 `fr_titles` {id:title} map (load-context 已算好 title,順手轉發 + `isinstance(v,dict)` 守衛);消費端 `frTitle = ctx.fr_titles`;清掉 dead 的 `ctx.fr_details` array fallback |
+| **M1** | 完整性 | **plan-fidelity gap** | plan [ORCH-POST] 要求每個 FR `GATE1 PASS` 後跑 `spec-coverage-check --threshold 40.0 --fr-id` + `generate_sab.py`,workflow per-FR agent 只跑 step 1-5 漏掉 (D4 只在 Gate 2 做 project-wide 60%) | per-FR agent prompt 加 step 6 ORCH-POST (a: spec-coverage 40%; b: generate_sab --overwrite);SCOPE 5→6 steps |
+| **M2** | 完整性 | plan-fidelity gap | [P3-MIRROR] 的關鍵指示「FAIL 改 TEST 不改 TEST_SPEC (correctness locked in P2)」沒進 prompt | MIRROR step 補該指示 |
+| **M3** | 完整性 | spec-vs-impl 偏離 | p3-mid 觸發點: plan「≥1/3 FRs PASS」vs JS `ceil(n/2)`=≥50% | `ceil(n/3)` 對齊 plan (plan = source of truth, CLAUDE.md 規定 100% 遵守) |
+| **L1** | 一致性 | **workflow JS bug** (誤報) | session-limit/null-agent 偵測只在 Gate 2 (L375);per-FR TDD 若 agent 回 null → 當成 Gate 1 FAIL,把 rate-limit 誤報成程式碼品質失敗 | per-FR loop 加 null/empty → `session_limit_blocked` return,鏡像 Gate 2 |
+| **A1** | 一致性 | 鐵律 1/2 (tier-3 bash) | Env Check 兩行 bash in one prompt,agent 拆兩個 Bash call 時 `$?` 抓錯 | 收斂單行 `cmd; echo "ENV_CHECK_RC=$?"` (`;` 綁 $? 到 run-env-check) |
+| **A2** | 一致性 | 微 | sentinel-precheck 漏 `agentType: 'general-purpose'` (全檔唯一) | 補上 |
+
+### E.2 驗證
+
+- `node --check` SYNTAX_OK
+- **J1 實跑** (治本驗證,非僅靜態): `python -c` 跑改後 ctx-parse 命令 → `fr_titles={"FR-01":"FR-01: 任務模型與持久化",...}` dict→map 正確,中文不亂碼
+- M2/M3/A1/A2 為 prompt/threshold/防禦改動,code-visible grep 確認
+- 未 live re-run (P3 已 advance, 重跑要 reset FSM) — L1/M1/M2 靠 code trace + plan 對位
+
+### E.3 排除的 false positive (查證後不成立,不修)
+
+| 候選 | 為何排除 |
+|------|----------|
+| sentinel regex `^g1_p3_fr(\d+)\.flag$` 不匹配 harness | harness 實寫 `g1_p3_fr01.flag` (harness_cli.py:1911) → regex 正確匹配 |
+| advance GUARD `jq -r .current_phase` 踩 Bug #136 | 無 `// 0` default → 無 JS `//` comment 衝突 (已學乖) |
+| `loadFileViaPython/persistApproval/diskPrefix` 同 bug | phase3 不用這些函數 (附錄 D.0 已確認 0 match),v33/v33b 三 fix 不適用 |
+| Class B (try/catch around agent()) 缺漏 | 附錄 D.3 已決議跳過 (缺 transcript);phase3 現狀: 只 Load FRs 有 wrap,其餘裸呼叫 = 已知不一致,非新 finding |
+
+### E.4 共通性邊界 (守住)
+
+| 改動 | 影響 | 不動 |
+|------|------|------|
+| J1 fr_titles 轉發 | phase3 only | harness load-context (本就吐 title);phase4-8 若有同型 frTitle 消費**未順手改** (避免 Runaway refactor, 待另查) |
+| M1 ORCH-POST step 6 | phase3 only | harness CLI (spec-coverage-check/generate_sab 契約不動) |
+| M3 threshold | phase3 only | plan spec (對齊而非改 plan) |
+| L1 null 偵測 | phase3 only | Gate 2 既有偵測 (鏡像它) |
+
+### E.5 教訓
+
+1. **資料契約漂移是隱形 bug** — J1 的 frTitle 在 Bug #135 收窄 ctx-parse 輸出時悄悄斷掉,因為它退化成空 `{}` 不報錯,只是 prompt 少了 title。**收窄一個 producer 的輸出,必須回頭檢查所有 consumer**。
+2. **plan 是 source of truth,偏離要嘛對齊要嘛標記** — M3 的 ≥1/3 vs ≥50%,JS 註解長年寫 ≥50% 但 plan 寫 ≥1/3。CLAUDE.md 規定 100% 遵守 plan → 對齊 plan,不自行裁定。
+3. **同一根因 (agent 回 null) 不該兩種處理** — L1: Gate 2 把 null 當 session-limit,per-FR 當 Gate 1 FAIL。一致性要求同類 input 同類 output,否則 transient error 被誤診成品質問題。
+4. **下結論前 ground harness 事實** — sentinel 檔名與 fr_details shape 兩個查證,一個排除了 false positive (regex),一個確認了真 bug (J1 dict-not-array)。猜 harness 行為 = 高風險。
+
 

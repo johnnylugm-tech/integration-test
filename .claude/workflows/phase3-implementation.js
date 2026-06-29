@@ -120,9 +120,8 @@ log('run-env-check (root-cause fix: CLI exit code reflects ready flag)')
 // This makes the harness CLI self-sufficient — workflows check `$?`
 // directly with no LLM orchestrator agent in the loop.
 const envReport = await agent(
-  'You MUST use the Bash tool. Run exactly:\n'
-  + PY + ' ' + REPO + '/harness_cli.py run-env-check --phase 3 --project ' + REPO + '\n'
-  + 'echo "ENV_CHECK_RC=$?"\n'
+  'You MUST use the Bash tool. Run exactly this ONE command (single line, the `;` keeps $? bound to run-env-check):\n'
+  + PY + ' ' + REPO + '/harness_cli.py run-env-check --phase 3 --project ' + REPO + '; echo "ENV_CHECK_RC=$?"\n'
   + 'Return the raw stdout verbatim. Do not paraphrase.',
   { label: 'env-check', phase: 'Env Check', agentType: 'general-purpose' },
 )
@@ -202,7 +201,12 @@ for (let attempt = 1; attempt <= 3; attempt++) {
   let ctxResult = ''
   let frCountMarker = ''
   try {
-    const ctxParseCmd = `${PY} -c "import json; d=json.load(open('${ctxFile}')); print(json.dumps({'fr_ids':d.get('fr_ids',[]),'fr_count':len(d.get('fr_ids',[])),'fr_details_keys':list((d.get('fr_details') or {}).keys())}))"`
+    // J1 fix (2026-06-29): forward fr_titles too. load-context emits fr_details as a
+    // DICT keyed by FR id ({"FR-01":{"title":...}}). The previous parse only forwarded
+    // fr_details_keys (no titles), and the consumer (frTitle below) read it as an Array
+    // — so titles silently never populated. Emit an {id:title} map the consumer uses
+    // directly.
+    const ctxParseCmd = `${PY} -c "import json; d=json.load(open('${ctxFile}')); fd=d.get('fr_details') or {}; print(json.dumps({'fr_ids':d.get('fr_ids',[]),'fr_count':len(d.get('fr_ids',[])),'fr_titles':{k:(v.get('title','') if isinstance(v,dict) else '') for k,v in fd.items()}}))"`
     ctxResult = await agent(
       `You MUST use the Bash tool. Run exactly:\n${ctxParseCmd}\nReturn the raw stdout as your final message. Do not paraphrase. Do not add commentary.`,
       { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
@@ -226,11 +230,10 @@ for (let attempt = 1; attempt <= 3; attempt++) {
   } catch (e) { log('  load-ctx parse failed (attempt ' + attempt + '): ' + e.message.slice(0, 120)); ctx = null }
 }
 if (!ctx) return { error: 'Load FRs: ctx failed after 3 attempts', ctxFile }
-let frIds = Array.isArray(ctx.fr_ids) ? ctx.fr_ids
-  : (Array.isArray(ctx.fr_details) ? ctx.fr_details.map(f => f.id || f.fr_id || f.fr).filter(Boolean) : [])
+let frIds = Array.isArray(ctx.fr_ids) ? ctx.fr_ids : []
 if (!frIds.length) return { error: 'Load FRs: no fr_ids found in ctx', ctxKeys: Object.keys(ctx) }
-const frTitle = {}
-if (Array.isArray(ctx.fr_details)) for (const f of ctx.fr_details) frTitle[f.id || f.fr_id] = f.title || f.name || ''
+// J1: fr_titles is the {id:title} map emitted by ctxParseCmd above.
+const frTitle = (ctx.fr_titles && typeof ctx.fr_titles === 'object') ? ctx.fr_titles : {}
 log('  fr_ids = ' + JSON.stringify(frIds))
 
 // Sentinel pre-check: identify Gate 1 already-done FRs to skip TDD agent invocations on resume/re-run
@@ -240,7 +243,7 @@ log('  fr_ids = ' + JSON.stringify(frIds))
 // real TDD on stale Phase 1 sentinels (Bug #121).
 const sentinelRaw = await agent(
   'Use ONLY the Bash tool: `ls ' + REPO + '/.sessi-work/sentinels/ 2>/dev/null | grep "^g1_p3_" | grep "\\.flag$" || true`. Return raw output, no commentary.',
-  { label: 'sentinel-precheck', phase: 'Load FRs' }
+  { label: 'sentinel-precheck', phase: 'Load FRs', agentType: 'general-purpose' }
 )
 const alreadyDone = new Set()
 if (typeof sentinelRaw === 'string') {
@@ -258,7 +261,7 @@ phase('Per-FR TDD')
 const gate1Pass = []
 const gate1Fail = []
 let p3MidPushed = false
-const p3MidThreshold = Math.ceil(frIds.length / 2)  // PUSH ③ trigger: ≥50% FRs Gate 1 PASS
+const p3MidThreshold = Math.ceil(frIds.length / 3)  // PUSH ③ trigger: ≥1/3 FRs Gate 1 PASS (phase3_plan.md)
 for (const frId of frIds) {
   if (alreadyDone.has(frId)) {
     log('  ' + frId + ' — sentinel exists, Gate 1 PASS (skip TDD)')
@@ -271,6 +274,7 @@ for (const frId of frIds) {
       + 'Run these harness steps IN ORDER (each is a bash command; read its output before the next):\n'
       + '1. TDD-RED:    `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-RED --project ' + REPO + ' --srs 01-requirements/SRS.md`\n'
       + '2. MIRROR:     `' + PY + ' ' + REPO + '/harness_cli.py check-test-mirrors-spec --phase 3 --fr-id ' + frId + ' --test-file tests/test_*.py --project ' + REPO + '`\n'
+      + '   On MIRROR FAIL: fix the TEST to match TEST_SPEC.md — do NOT edit TEST_SPEC.md (correctness was locked in Phase 2; P3 only implements). Re-run.\n'
       + '3. TDD-GREEN:  `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-GREEN --project ' + REPO + ' --srs 01-requirements/SRS.md`\n'
       + '4. TDD-IMPROVE:`' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step TDD-IMPROVE --project ' + REPO + '`\n'
       + '5. GATE1:      `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 3 --fr-id ' + frId + ' --step GATE1 --project ' + REPO + '`\n'
@@ -278,21 +282,32 @@ for (const frId of frIds) {
       + '   - PASS → done.\n'
       + '   - FAIL → fix failing dims (ruff check . --fix; add tests for coverage; fix pyright errors), re-run GATE1. Max 3 rounds.\n'
       + '   - Still failing after 3 → report FAIL.\n'
-      + '   Each run-fr-step auto-pushes on completion (idempotent). Crash recovery: `resume-fr-step --phase 3 --project ' + REPO + '`.\n\n'
+      + '   Each run-fr-step auto-pushes on completion (idempotent). Crash recovery: `resume-fr-step --phase 3 --project ' + REPO + '`.\n'
+      + '6. ORCH-POST (after GATE1 PASS, per phase3_plan.md [ORCH-POST]):\n'
+      + '   a. `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 40.0 --fr-id ' + frId + '` (per-FR D4 ≥40%). FAIL → add the missing test implementations for ' + frId + ', re-run.\n'
+      + '   b. `' + PY + ' ' + REPO + '/harness/scripts/generate_sab.py --project ' + REPO + ' --overwrite` (regenerate SAB.json).\n\n'
       + 'Implement the module per SPEC.md (read ' + REPO + '/SPEC.md for ' + frId + ') + SAD.md module mapping. Write source under the project\'s `src/` tree as specified in SAD §2 (do not assume a fixed project layout — read SAD §2 for the module path; e.g. for the canonical `03-development/src/<module>/` layout, use that; otherwise follow whatever SAD §2 specifies). Tests under `tests/` per project layout. Docstrings must include [' + frId + '] reference (NFR-05).\n\n'
       + 'Report final line: "' + frId + ' GATE1: PASS" or "' + frId + ' GATE1: FAIL — <reason>".\n\n'
-      + 'SCOPE RULES:\n- DO NOT implement any FR OTHER than ' + frId + '.\n- DO NOT run run-gate (Gate 2), advance-phase, or push-milestone.\n- DO NOT modify harness/ (HR-17).\n- ONLY the 5 steps above for ' + frId + '.',
+      + 'SCOPE RULES:\n- DO NOT implement any FR OTHER than ' + frId + '.\n- DO NOT run run-gate (Gate 2), advance-phase, or push-milestone.\n- DO NOT modify harness/ (HR-17).\n- ONLY the 6 steps above for ' + frId + ' (spec-coverage-check + generate_sab.py in step 6 are allowed).',
       { label: 'tdd-' + frId, phase: 'Per-FR TDD', agentType: 'general-purpose' },
     )
+    // L1: distinguish a session/rate-limit block (null/empty agent return) from a real
+    // Gate 1 FAIL — mirror the Gate 2 detection (below). Without this, a rate-limit mid-
+    // TDD is misreported as a code-quality Gate 1 failure. Sentinel GUARD skips completed
+    // FRs on resume, so aborting here is safe.
+    if (frReport === null || frReport === undefined || (typeof frReport === 'string' && frReport.length < 10)) {
+      log('  ' + frId + ' agent blocked (session limit / rate limit) — aborting, resume after quota reset')
+      return { session_limit_blocked: true, phase: 3, fr_id: frId, gate1Pass, message: 'Agent hit session/rate limit during ' + frId + ' TDD. Resume after quota reset — sentinel GUARD will skip completed FRs.' }
+    }
     const passed = typeof frReport === 'string' && new RegExp(frId + '\\s*GATE1:\\s*PASS').test(frReport)
     if (passed) { gate1Pass.push(frId); log('  ' + frId + ' Gate 1 PASS (' + gate1Pass.length + '/' + frIds.length + ')') }
     else { gate1Fail.push(frId); log('  ' + frId + ' Gate 1 FAIL') }
   }
 
-  // PUSH ③ p3-mid — fire once when ≥50% FRs have Gate 1 PASS (but not yet all done).
+  // PUSH ③ p3-mid — fire once when ≥1/3 FRs have Gate 1 PASS (but not yet all done).
   if (!p3MidPushed && gate1Pass.length >= p3MidThreshold && gate1Pass.length < frIds.length) {
     p3MidPushed = true
-    log('  ≥50% FRs Gate 1 PASS (' + gate1Pass.length + '/' + frIds.length + ') — pushing p3-mid milestone')
+    log('  ≥1/3 FRs Gate 1 PASS (' + gate1Pass.length + '/' + frIds.length + ') — pushing p3-mid milestone')
     await agent(
       'YOU ARE THE P3 MID-MILESTONE PUSHER (≥50% FRs Gate 1 PASS).\n'
       + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
