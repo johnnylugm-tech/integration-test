@@ -9,17 +9,20 @@
 test_inventory:
   metadata:
     total_test_cases: 19
+    total_ac_count: 20
+    ac_count_reconciliation: "20 ACs (15 FR + 5 NFR) per TRACEABILITY_MATRIX.md §1; 19 pytest tc_ids enumerated below; the 1 non-tc_id AC is AC-NFR-03-01 (chaos test) which is a P4 verification hook distinct from the FR-01 unit test (test_fr01_005_atomic_write_survives_interrupt). Chaos test is named test_nfr03_001_atomic_write_sigkill_chaos and is a separate pytest fixture that simulates SIGKILL mid-write; it is tracked under cross_cutting_static_hooks (chaos subcategory) below."
     source: TRACEABILITY_MATRIX.md §2 forward trace + §3 reverse trace (approved 2026-06-29)
     source_approved: 2026-06-29
     naming_convention: "Python pytest — test_<frNN>_<descriptive> or test_nfr<NN>_<descriptive> (matches SRS §3 owner=taskq, Python 3.11 stdlib only)"
-    test_file_convention: "tests/test_fr<NN>_<scope>.py for FR tests; tests/test_nfr<NN>_<scope>.py for NFR tests; tests/bench/test_nfr01_p95.py for NFR-01 benchmark; static scan = grep -rn \"shell=True\" src/ (not a tc_id)"
+    test_file_convention: "tests/test_fr<NN>_<scope>.py for FR tests; tests/test_nfr<NN>_<scope>.py for NFR tests; tests/bench/test_nfr01_p95.py for NFR-01 benchmark; static scan = grep -rn \"shell=True\" src/ (not a tc_id); chaos test = tests/test_nfr03_reliability.py::test_nfr03_001_atomic_write_sigkill_chaos (P4)"
     all_status_draft_round_5: true
     notes:
       - "Every tc_id listed in matrix §2 appears as one independent entry below — no collapsing, no omissions."
-      - "Tests cross-listed in §3 reverse map (e.g., test_fr01_005_atomic_write_survives_interrupt <-> AC-NFR-03-01) keep distinct entries; cross-cutting is signalled via cross_ref_ac_ids / cross_ref_nfrs metadata, NOT deletion."
+      - "Tests cross-listed in §3 reverse map (e.g., test_fr01_005_atomic_write_survives_interrupt <-> AC-NFR-03-01 unit coverage) keep distinct entries; AC-NFR-03-01 has TWO distinct verification hooks: (1) unit-level coverage via test_fr01_005 (FR-01 AC-FR-01-05 owner), AND (2) P4 chaos test test_nfr03_001_atomic_write_sigkill_chaos (NFR-03 AC-NFR-03-01 owner). Both hooks are required for full AC-NFR-03-01 coverage."
       - "All tests are TBD-by-phase-3 (or P5 for perf/static hooks) per matrix §2/§4; this inventory enumerates the NAMES Phase 3/P5 must author (not implement them)."
       - "AC IDs with parametric coverage (e.g. AC-FR-01-03 'one negative per char'; AC-FR-02-02 'parametrized over 3 exit classes'; AC-FR-03-03 'parametrized over all 4 codes') are enumerated as ONE parametrized test entry each — the parametrization is the test contract; per-case data lives in pytest.mark.parametrize ids, not separate tc_ids."
       - "Static scan `grep -rn \"shell=True\" src/` for AC-NFR-02-01 is a P5 verification hook, NOT a tc_id — it is documented under NFR-02 cross_cutting section, not in by_fr.NFR-02.tests."
+      - "Chaos test for AC-NFR-03-01 is a P4 verification hook that simulates SIGKILL mid-write. It is enumerated under cross_cutting_static_hooks (chaos subcategory), not under by_fr.NFR-03.tests (which contains only test_nfr03_002_secret_line_redacted). Rationale: AC-NFR-03-01 is covered jointly by the FR-01 atomic-write unit test (test_fr01_005) AND the P4 chaos fixture (test_nfr03_001_atomic_write_sigkill_chaos); neither alone satisfies AC-NFR-03-01."
 
   by_fr:
     FR-01:
@@ -346,12 +349,19 @@ test_inventory:
         - perf_fr03_nfr01_p95_under_50ms
 
   cross_cutting_static_hooks:
-    description: "Static / external verification hooks that are NOT pytest tc_ids. Listed here for traceability; do not count toward total_test_cases."
+    description: "Static / external / chaos verification hooks that are NOT pytest tc_ids enumerated in by_fr.*. Listed here for traceability; do not count toward total_test_cases."
     hooks:
       - ac_ids: [AC-NFR-02-01]
         hook: 'grep -rn "shell=True" src/'
         phase: P5 static scan + P6 Gate 4 re-scan
         owner: @phase5-static + @phase6-quality
+      - ac_ids: [AC-NFR-03-01]
+        hook: "test_nfr03_001_atomic_write_sigkill_chaos (P4 chaos fixture: SIGKILL mid-write, asserts post-state parses as legal JSON)"
+        tc_id_name: test_nfr03_001_atomic_write_sigkill_chaos
+        phase: P4 chaos test
+        owner: @phase4-test
+        file_path: tests/test_nfr03_reliability.py
+        distinct_from: test_fr01_005_atomic_write_survives_interrupt (FR-01 unit test; AC-FR-01-05 owner)
 
   coverage_validation:
     all_matrix_section_2_entries_enumerated: true
@@ -373,7 +383,7 @@ test_inventory:
     total_test_cases_matches_per_fr_sum: true
     matrix_section_3_reverse_map_symmetric: true
     matrix_section_3_internal_arithmetic:
-      matrix_claims_per_fr_section_2_table: "FR-01=6, FR-02=7, FR-03=4, NFR-01=1, NFR-03=1 (sum 19)"
+      matrix_claims_per_fr_section_2_table: "FR-01=6, FR-02=7, FR-03=4, NFR-01=1, NFR-03=1 (sum 19 pytest tc_ids; AC-NFR-03-01 chaos test test_nfr03_001_atomic_write_sigkill_chaos is a P4 verification hook tracked under cross_cutting_static_hooks, not in by_fr.NFR-03.tests)"
       this_inventory_matches: true
     cross_cutting_bindings_preserved:
       - "AC-FR-01-03 <-> AC-NFR-02-02: test_fr01_003_injection_chars_rejected cross_refs AC-NFR-02-02"

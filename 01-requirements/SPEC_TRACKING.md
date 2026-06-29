@@ -123,7 +123,17 @@
 | `redact.py` (stdout_tail / stderr_tail redaction) | NFR-03-02 | 1 | `test_nfr03_002_*` (pytest) |
 | `config.py` (TASKQ_* env) | all env-driven ACs | (no own AC) | n/a (cross-cut) |
 
-**Total ACs by module = 17** (3 FR-03 + 3 FR-01-valid + 4 FR-01-store + 6 FR-02 + 1 NFR-03). Remaining 4 ACs (AC-NFR-01-01 perf, AC-NFR-02-01 static, AC-NFR-02-02 coverage, AC-FR-01-05 also ties to NFR-03-01 — already counted under store.py) live in P5 / P6 verification artifacts; not test-named at P3.
+**Total ACs by module = 17** (3 FR-03 + 3 FR-01-valid + 4 FR-01-store + 6 FR-02 + 1 NFR-03). Module-owned test-named ACs = 17.
+
+**Reconciliation against full 20-AC count**:
+- Module-owned test-named (P3 TDD, pytest): 17 ACs.
+- Verification hooks NOT test-named (P5 / P6):
+  - AC-NFR-01-01 (perf p95) — `perf_fr03_nfr01_p95_under_50ms` benchmark (P5).
+  - AC-NFR-02-01 (static `shell=True` scan) — `grep` hook (P5 + P6).
+  - AC-NFR-02-02 (coverage evidence on FR-01 blacklist) — covered via `test_fr01_003_*` (counted under `validate.py` above via FR-01 AC-FR-01-03 cross-link).
+- Cross-cutting note: AC-FR-01-05 is owned by `store.py` AND ties to AC-NFR-03-01; the chaos test for AC-NFR-03-01 (`test_nfr03_001_atomic_write_sigkill_chaos`) is a distinct P4 fixture owned by `store.py` (not a duplicate of `test_fr01_005`).
+
+Sum: 17 module-owned (P3 pytest) + 3 verification hooks (P5/P6: AC-NFR-01-01, AC-NFR-02-01, AC-NFR-02-02 cross-evidence) = 20 ACs total. AC-NFR-02-02 is satisfied by FR-01 AC-FR-01-03 test coverage evidence, hence not enumerated as a standalone module-owned test.
 
 ---
 

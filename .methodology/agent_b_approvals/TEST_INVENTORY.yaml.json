@@ -1,0 +1,25 @@
+{
+  "fr": "TEST_INVENTORY.yaml",
+  "review_status": "APPROVE",
+  "reason": "Arithmetic reconciles: total=19, by_fr sums (FR-01=6+FR-02=7+FR-03=4+NFR-01=1+NFR-03=1=19) match by_layer sums (unit=11+integration=7+benchmark=1=19) match matrix §2/§3. All 19 matrix §2 forward tc_ids present in YAML with no collapse (test_fr01_005, test_fr02_004b, test_fr03_001b all distinct). 9 cross-cuts preserved via metadata (cross_ref_ac_ids / cross_ref_nfrs), not deletion. Naming convention mostly consistent (test_<frNN>_<desc>); perf_fr03_nfr01_p95_under_50ms uses perf_ prefix — minor, but matches matrix §2.4 verbatim.",
+  "citations": [
+    "TEST_INVENTORY.yaml:11",
+    "TEST_INVENTORY.yaml:26",
+    "TEST_INVENTORY.yaml:114",
+    "TEST_INVENTORY.yaml:213",
+    "TEST_INVENTORY.yaml:276",
+    "TEST_INVENTORY.yaml:294",
+    "TEST_INVENTORY.yaml:315",
+    "TEST_INVENTORY.yaml:331",
+    "TEST_INVENTORY.yaml:343",
+    "TEST_INVENTORY.yaml:367",
+    "TRACEABILITY_MATRIX.md:46-66",
+    "TRACEABILITY_MATRIX.md:76-78",
+    "TRACEABILITY_MATRIX.md:87",
+    "TRACEABILITY_MATRIX.md:101"
+  ],
+  "docs_embedded": [
+    "TEST_INVENTORY.yaml v1.5.0 — 19 tc_ids: FR-01(6): test_fr01_001..006; FR-02(7): test_fr02_001..006 + 004b; FR-03(4): test_fr03_001..003 + 001b; NFR-01(1): perf_fr03_nfr01_p95_under_50ms; NFR-03(1): test_nfr03_002_secret_line_redacted. Layers: unit=11, integration=7, benchmark=1."
+  ],
+  "confidence": 0.9
+}

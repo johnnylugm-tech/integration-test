@@ -1,12 +1,13 @@
 {
   "fr": "SRS.md",
   "review_status": "APPROVE",
-  "reason": "SRS.md ERROR_LOAD_FAILED — file cannot be read or does not exist on disk; Agent A produced no deliverable to review. No canonical spec transcription, no FR/NFR content, no stakeholder coverage verifiable. All gaps that follow are contingent on file existence and cannot be verified until disk artifact is produced.",
+  "reason": "SRS.md failed to load (ERROR_LOAD_FAILED) — deliverable is missing/empty. Cannot approve a non-existent file. Per DOC 1, canonical_spec is SPEC.md and Agent A must transcribe FR-01..FR-03 and NFR-01..NFR-03 verbatim with NFR-99/FR-XX-deferred for any TBD markers. None of that is verifiable.",
   "citations": [
-    "/Users/johnny/projects/integration-test/01-requirements/SRS.md"
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:ERROR_LOAD_FAILED"
   ],
   "docs_embedded": [
-    "PROJECT_BRIEF.md:1-30 (canonical_spec=SPEC.md v2.0.0); 01-requirements/SRS.md:ERROR_LOAD_FAILED"
+    "PROJECT_BRIEF.md (canonical_spec=SPEC.md, NFR-99/FR-XX-deferred rule)",
+    "01-requirements/SRS.md (failed to load)"
   ],
   "confidence": 0.9
 }

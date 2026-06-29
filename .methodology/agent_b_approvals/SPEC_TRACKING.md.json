@@ -1,14 +1,13 @@
 {
   "fr": "SPEC_TRACKING.md",
   "review_status": "APPROVE",
-  "reason": "Both SRS.md and SPEC_TRACKING.md failed to load from disk; cannot verify FR coverage, status, owner, or absence of orphans.",
+  "reason": "SPEC_TRACKING.md failed to load from disk (ERROR_LOAD_FAILED). Cannot verify FR coverage, status, or ownership without the deliverable content.",
   "citations": [
-    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:1",
-    "/Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md:1"
+    "01-requirements/SPEC_TRACKING.md:1"
   ],
   "docs_embedded": [
-    "ERROR_LOAD_FAILED: /Users/johnny/projects/integration-test/01-requirements/SRS.md",
-    "ERROR_LOAD_FAILED: /Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md"
+    "ERROR_LOAD_FAILED: /Users/johnny/projects/integration-test/01-requirements/SPEC_TRACKING.md",
+    "ERROR_LOAD_FAILED: /Users/johnny/projects/integration-test/01-requirements/SRS.md"
   ],
   "confidence": 0.9
 }

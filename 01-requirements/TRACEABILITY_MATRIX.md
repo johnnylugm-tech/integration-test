@@ -47,7 +47,7 @@
 | AC-FR-01-02 | `validate.py::validate_command()` | `test_fr01_002_length_exceeds_1000_rejected` | P3 | RED |
 | AC-FR-01-03 | `validate.py::validate_command()` (blacklist `; \| & $ > < `` ` `) | `test_fr01_003_injection_chars_rejected` (parametrized: one negative per char) | P3 | RED |
 | AC-FR-01-04 | `store.py::append_task()` | `test_fr01_004_pending_fields_initialized` | P3 | RED |
-| AC-FR-01-05 | `store.py::atomic_write()` (tmp + `os.replace`) | `test_fr01_005_atomic_write_survives_interrupt` | P4 | RED |
+| AC-FR-01-05 | `store.py::atomic_write()` (tmp + `os.replace`) | `test_fr01_005_atomic_write_survives_interrupt` | P3 + P4 | RED |
 | AC-FR-01-06 | `store.py::load_store()` (corruption detection) | `test_fr01_006_corrupt_store_exit1` | P3 | RED |
 
 **Module ownership**:
@@ -145,7 +145,7 @@
 | `perf_fr03_nfr01_p95_under_50ms` | AC-NFR-01-01 | NFR-01 |
 | `grep -rn "shell=True" src/` (P5 static) | AC-NFR-02-01 | NFR-02 |
 | `test_fr01_003_injection_chars_rejected` (coverage evidence) | AC-NFR-02-02 | NFR-02 |
-| `test_fr01_005_atomic_write_survives_interrupt` (+ P4 SIGKILL chaos) | AC-NFR-03-01 | NFR-03 |
+| `test_fr01_005_atomic_write_survives_interrupt` (unit test, FR-01) + `test_nfr03_001_atomic_write_sigkill_chaos` (P4 chaos test, simulates SIGKILL mid-write, asserts post-state parses) | AC-NFR-03-01 | NFR-03 |
 | `test_nfr03_002_secret_line_redacted` | AC-NFR-03-02 | NFR-03 |
 
 ---
@@ -193,7 +193,7 @@ AC-FR-02-01 (subprocess form) and AC-NFR-02-01 (global `shell=True` ban) are tes
 
 | ID | Gap | Severity | Owner Phase | Mitigation |
 |----|-----|----------|-------------|------------|
-| GAP-TM-01 | AC-FR-01-05 (atomic write) has unit test but no chaos test yet (P4 will add SIGKILL mid-write test) | LOW | P4 | Listed in SPEC_TRACKING §2 AC-NFR-03-01 verification hook (chaos test) |
+| GAP-TM-01 | AC-FR-01-05 (atomic write) unit test exists in P3 (RED); P4 SIGKILL chaos test (`test_nfr03_001_atomic_write_sigkill_chaos`) is the additional verification hook for AC-NFR-03-01 — chaos test deferred to P4 | LOW | P4 | Listed in SPEC_TRACKING §2 AC-NFR-03-01 verification hook (chaos test) |
 | GAP-TM-02 | AC-NFR-01-01 (perf p95) verification not yet executed | LOW | P5 | Listed in SPEC_TRACKING §2 AC-NFR-01-01 verification hook (P5 perf benchmark) |
 | GAP-TM-03 | AC-NFR-02-01 (static `shell=True` scan) not yet executed | LOW | P5 + P6 | Listed in SPEC_TRACKING §2 AC-NFR-02-01 verification hook (P5 grep + P6 Gate 4 re-scan) |
 

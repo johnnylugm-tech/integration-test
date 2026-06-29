@@ -59,6 +59,8 @@
 | `TASKQ_TASK_TIMEOUT` | `10.0` | 單任務 subprocess timeout(秒) |
 | `TASKQ_RETRY_LIMIT` | `2` | 失敗自動重試上限 |
 
+**Boundary for TASKQ_RETRY_LIMIT** (DERIVED, clarifies SPEC.md §3 FR-02 retry semantics): `TASKQ_RETRY_LIMIT=0` means **no retry** — first failed/timeout attempt is final. `TASKQ_RETRY_LIMIT=N` (N>=1) means up to N additional retries after the initial attempt (i.e. N+1 total attempts). Test coverage (`test_fr02_004_retry_until_limit`) parametrizes over `TASKQ_RETRY_LIMIT` values `0/1/2/3` to lock the boundary.
+
 ---
 
 ## 3. Functional Requirements
