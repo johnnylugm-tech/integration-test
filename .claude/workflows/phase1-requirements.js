@@ -487,6 +487,13 @@ async function runSubTask(cfg) {
 //   tool call). Belt-and-suspenders: deterministic CLI + outer-level
 //   fallback for the rare LLM-shell-wrapper emit miss.
 async function persistApproval(deliverableId, b2) {
+  // v31: SINGLE-LINE JSON (no indent). Critical — multi-line indented JSON
+  // (JSON.stringify with indent=2) gets word-split by shell when LLM agent
+  // emits the command without single-quoting the JSON payload. argparse
+  // then receives `--json {` as a single token and JSON parse fails with
+  // "line 1 column 2 (char 1)" — observed 2026-06-29 wf_06119920-31c (v30).
+  // Single-line JSON is one shell token (no internal whitespace), so the
+  // command works whether or not the LLM quotes it.
   const approvalPayload = JSON.stringify({
     fr: deliverableId,
     review_status: b2.review_status ?? 'APPROVE',
@@ -494,12 +501,21 @@ async function persistApproval(deliverableId, b2) {
     citations: Array.isArray(b2.citations) ? b2.citations.slice(0, 20) : [],
     docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
-  }, null, 2)
+  })
   const cliPath = REPO + '/harness/harness_cli.py'
-  // v22 pattern: single-line Bash invocation. LLM emit reliability proven at
-  // 100% across 6 advance-phase PASS commits (70544a9 era). No compound bash.
+  // v31: explicit single-quote wrap around the JSON payload in the bash command.
+  // Critical — zsh (Claude Code's default shell) interprets `[...]` in unquoted
+  // strings as glob patterns. JSON contains `[...]` (arrays) and the file:line
+  // citation format `path:N` — unquoted, zsh emits "no matches found" before the
+  // shell ever reaches python3 (observed 2026-06-29 wf_06119920-31c v30 failure
+  // mode: `[write-approval] ERROR: invalid JSON payload: line 1 column 2 (char 1)`
+  // because shell word-split + glob destruction shredded the payload). The wrap
+  // is built into the cmd string itself so it works regardless of whether the
+  // LLM agent emits the command verbatim or paraphrases it. Single quotes in
+  // the payload are escaped via the close-escape-reopen pattern ('\'').
+  const escapedPayload = JSON.stringify(approvalPayload).replace(/'/g, "'\\''")
   const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
-    JSON.stringify(deliverableId) + ' --json ' + JSON.stringify(approvalPayload)
+    JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
 
   let lastErr = null
   for (let attempt = 1; attempt <= MAX_OUTER_ATTEMPTS; attempt++) {

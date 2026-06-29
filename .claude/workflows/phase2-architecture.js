@@ -287,6 +287,9 @@ async function abLoop(cfg) {
 // outer-level try/catch retry. See phase1-requirements.js for full v17/v22/v27/
 // v28/v30 history.
 async function persistApproval(deliverableId, b2) {
+  // v31: SINGLE-LINE JSON (no indent). See phase1-requirements.js for full
+  // rationale (shell word-split of multi-line indented JSON breaks `--json`
+  // argparse — observed wf_06119920-31c v30 failure).
   const approvalPayload = JSON.stringify({
     fr: deliverableId,
     review_status: b2.review_status ?? 'APPROVE',
@@ -294,10 +297,13 @@ async function persistApproval(deliverableId, b2) {
     citations: Array.isArray(b2.citations) ? b2.citations.slice(0, 20) : [],
     docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
-  }, null, 2)
+  })
+  // v31: explicit single-quote wrap around the JSON payload (zsh glob safety).
+  // See phase1-requirements.js persistApproval for full rationale.
   const cliPath = REPO + '/harness/harness_cli.py'
+  const escapedPayload = JSON.stringify(approvalPayload).replace(/'/g, "'\\''")
   const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
-    JSON.stringify(deliverableId) + ' --json ' + JSON.stringify(approvalPayload)
+    JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
 
   let lastErr = null
   for (let attempt = 1; attempt <= MAX_OUTER_ATTEMPTS; attempt++) {
