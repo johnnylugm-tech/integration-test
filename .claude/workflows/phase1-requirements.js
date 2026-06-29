@@ -55,7 +55,7 @@ log('WRITE SCOPE: debug artifacts → ' + WRITE_SCOPE_TMP)
 const PY = REPO + '/.venv/bin/python'
 const MAX_B_ROUNDS = 5  // HR-12 (sub-tasks: functional gate, must converge)
 const MAX_PEER_ROUNDS = 3  // P-01: advisory threshold (peer review = quality check, not functional gate)
-const MAX_PERSIST_ATTEMPTS = 3  // v27: retry write-approval+verify-file inside ONE bash command (LLM shell wrapper is single failure point; bash for-loop retries are deterministic). See persistApproval comment.
+const MAX_OUTER_ATTEMPTS = 3  // v28: retry at orchestrator level, not inside one outer agent call. Single-prompt write+verify via mcp__filesystem__. See persistApproval comment.
 
 // ---- JSON parsing helpers (balanced-brace matcher; matches run-e2e.mjs pattern) ----
 
@@ -454,22 +454,26 @@ async function runSubTask(cfg) {
   return { error: cfg.name + ': loop exited unexpectedly' }
 }
 
-// ---- persistApproval: write .methodology/agent_b_approvals/<id>.json via harness CLI
-// Architectural fix (Bug v22 root-cause, 2026-06-29): replaced two LLM-as-shell-wrapper
-// agent calls (write + verify) with a single deterministic harness_cli.py write-approval
-// invocation. The harness CLI does atomic tmp+os.replace + size verify in one Python
-// call, returns exit code the workflow JS can match on stdout — no LLM in the I/O path.
-// Workflow JS sandbox has no fs/child_process API (playbook §3-§4), so we route through
-// the Bash tool which already runs synchronously and reports real exit codes.
+// ---- persistApproval: write .methodology/agent_b_approvals/<id>.json — v28 strategy ----
 //
-// Bug v27 retry strategy (2026-06-29): the outer `await agent()` is the only LLM-as-shell-
-// wrapper call in this path — it has ~5% random-failure rate. Inside that one Bash
-// invocation we run a deterministic `for` loop up to MAX_PERSIST_ATTEMPTS times, each
-// attempt = write-approval CLI + verify-file CLI (both deterministic). The LLM is NOT
-// in the retry decision — bash owns it. Reduces overall write-failure rate from ~25%
-// (4 sub-tasks × ~5% LLM failure compounded with one-shot) to ~5% × 0.125%^3 ≈ 0%.
-// After MAX_PERSIST_ATTEMPTS attempts all fail → throw (option A — caller returns error
-// and workflow fails loudly rather than silently losing the approval).
+// v17 (one-shot Bash write-approval): ~25% failure compounded across 4 sub-tasks
+//   (each Bash shell-wrapper call has ~5% random LLM fail; (0.95)^4 ≈ 81%, so ~19% miss ≥1).
+// v22 (added verify-file ground-truth): same one-shot, but now we catch the miss.
+// v27 (compound bash for-loop inside one outer agent call): the outer LLM agent had to
+//   EMIT a 12-line nested bash script (for/if/then/sleep/break). Empirically this is LESS
+//   reliable than a single-line python call — see wf_9ba9626f-4b6 run: 4/4 → 2/4 regression.
+//   Root cause: outer-LLM emit error rate on multi-line indented compound bash > simple
+//   inline commands (the LLM was more reliable inlining the python CLI verbatim).
+//
+// v28 (this version): community/SDK-canonical retry pattern — retry at the ORCHESTRATOR,
+//   never inside a single tool call (cf. AWS SDK, Stripe SDK, github-actions/retry-step).
+//   Also: route the I/O through mcp__filesystem__write_file + read_file (native API; no
+//   shell escape; no python subprocess). Two failure-source reductions stacked:
+//     (a) outer agent prompt is a simple 3-step instruction (no compound bash to emit); and
+//     (b) the I/O itself is native — no python-harness-cli quoting on a multi-KB JSON.
+//   Workflow JS still has no fs API (platform limit), so we keep ONE outer agent() call.
+//   After MAX_OUTER_ATTEMPTS all fail → throw (option A — caller returns error and
+//   workflow fails loudly rather than silently losing the approval).
 async function persistApproval(deliverableId, b2) {
   const approvalPayload = JSON.stringify({
     fr: deliverableId,
@@ -479,35 +483,50 @@ async function persistApproval(deliverableId, b2) {
     docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
   }, null, 2)
-  const cliPath = REPO + '/harness/harness_cli.py'
   const approvalFile = REPO + '/.methodology/agent_b_approvals/' + deliverableId + '.json'
-  const writeCmd = PY + ' ' + cliPath + ' write-approval --fr-id ' + JSON.stringify(deliverableId) + ' --json ' + JSON.stringify(approvalPayload)
-  const verifyCmd = PY + ' ' + cliPath + ' verify-file --file ' + JSON.stringify(approvalFile) + ' --expect json --min-bytes 10'
-  // Compound bash: for-loop retries inside one Bash invocation. The outer agent() is the
-  // ONLY LLM-as-shell-wrapper call; bash logic is deterministic. After N attempts, the
-  // final exit code reflects whether the artifact exists with valid JSON content.
-  const compoundCmd =
-    'ok=0\n' +
-    'for attempt in 1 2 3; do\n' +
-    '  echo "=== attempt $attempt ==="\n' +
-    '  if ' + writeCmd + ' && ' + verifyCmd + '; then\n' +
-    '    echo "[persist-with-retry] OK after $attempt attempt(s) for ' + deliverableId + '"\n' +
-    '    ok=1\n' +
-    '    break\n' +
-    '  fi\n' +
-    '  sleep 1\n' +
-    'done\n' +
-    '[ $ok -eq 1 ]'
-  const res = await agent(
-    'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash script and emit stdout + exit code verbatim:\n\n' + compoundCmd + '\n\nNo commentary, no preamble, no other tool calls.',
-    { label: 'persist-' + deliverableId, phase: 'Persist Approval', agentType: 'general-purpose' },
-  )
-  // Trust verify-file OK on disk as ground truth (more robust than regex-matching
-  // write-approval stdout): verify-file already confirmed size≥10 + parseable JSON.
-  if (typeof res !== 'string' || !/\[verify-file\]\s*OK/.test(res)) {
-    throw new Error('persistApproval FAILED for ' + deliverableId + ' after ' + MAX_PERSIST_ATTEMPTS + ' attempts. Agent output: ' + String(res).slice(0, 600))
+  // Step-by-step prompt so the outer LLM emits clean native tool calls (no compound bash).
+  // The single-step verify pattern (mcp__filesystem__write_file then read_file then compare)
+  // mirrors GitHub's @actions/cache pattern of write-then-check-hash, and the AWS S3 SDK
+  // pattern of put-object then head-object to confirm ETag.
+  const prompt = [
+    'Persist a JSON approval file using ONLY the mcp__filesystem__* tools (NO Bash, NO Write, NO Edit, NO python).',
+    '',
+    'STEP 1 — mcp__filesystem__write_file with EXACTLY these parameters:',
+    '  file = ' + approvalFile,
+    '  content =',
+    approvalPayload,
+    '',
+    'STEP 2 — mcp__filesystem__read_file with file = ' + approvalFile,
+    '',
+    'STEP 3 — Compare the read result byte-for-byte against the content shown above.',
+    '  If MATCH (size + every byte identical): reply with ONLY the single token VERIFIED on its own line.',
+    '  If MISMATCH or any tool error: reply with FAIL:<one-line reason>.',
+    '',
+    'Constraints: use ONLY mcp__filesystem__write_file and mcp__filesystem__read_file. Do not run shell commands. Do not edit other files.',
+  ].join('\n')
+
+  let lastErr = null
+  for (let attempt = 1; attempt <= MAX_OUTER_ATTEMPTS; attempt++) {
+    let res
+    try {
+      res = await agent(prompt, {
+        label: 'persist-' + deliverableId + '-try' + attempt,
+        phase: 'Persist Approval',
+        agentType: 'general-purpose',
+      })
+    } catch (e) {
+      lastErr = 'agent() threw: ' + (e && e.message ? e.message : String(e))
+      log('  persistApproval ' + deliverableId + ' attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ': ' + lastErr.slice(0, 200))
+      continue
+    }
+    if (typeof res === 'string' && /\bVERIFIED\b/.test(res)) {
+      log('  persisted approval: ' + deliverableId + ' (verified on disk, attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ')')
+      return
+    }
+    lastErr = 'agent did not VERIFY; got: ' + String(res).slice(0, 200)
+    log('  persistApproval ' + deliverableId + ' attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ': ' + lastErr)
   }
-  log('  persisted approval: ' + deliverableId + ' (verified on disk)')
+  throw new Error('persistApproval FAILED for ' + deliverableId + ' after ' + MAX_OUTER_ATTEMPTS + ' attempts. Last error: ' + lastErr)
 }
 
 // ---- runPeerReview: holistic B review of all 4 deliverables + fixer agent ----

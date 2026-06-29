@@ -49,9 +49,9 @@ const MAX_B_ROUNDS = 5
 // P-01 mirror: peer review is a quality advisory, not a functional gate.
 // Round 3 REJECT → PEER_REVIEW_ADVISORY (non-blocking) instead of HR-12.
 const MAX_PEER_ROUNDS = 3
-// v27: retry write-approval+verify-file inside ONE bash command (LLM shell wrapper is
-// single failure point; bash for-loop retries are deterministic). See persistApproval.
-const MAX_PERSIST_ATTEMPTS = 3
+// v28: retry at orchestrator level, not inside one outer agent call. Single-prompt
+// write+verify via mcp__filesystem__. See persistApproval.
+const MAX_OUTER_ATTEMPTS = 3
 log('REPO = ' + REPO + ' | PY = ' + PY)
 
 // ---- J: WRITE SCOPE convention for LLM agent debug artifacts ----
@@ -283,9 +283,8 @@ async function abLoop(cfg) {
 // Called after every B-2 APPROVE so harness_cli.py advance-phase's
 // _verify_agent_b_approvals_core check finds the artifact.
 //
-// v27: same retry pattern as phase1 (see phase1-requirements.js comment). For-loop
-// retries MAX_PERSIST_ATTEMPTS times inside one Bash invocation. The outer agent() is
-// the only LLM-as-shell-wrapper call; bash logic is deterministic.
+// v28: see phase1-requirements.js for the full v17/v22/v27/v28 history. mirror, keep
+// behavior identical to phase1 — retry at orchestrator level + mcp__filesystem__ tool.
 async function persistApproval(deliverableId, b2) {
   const approvalPayload = JSON.stringify({
     fr: deliverableId,
@@ -295,30 +294,46 @@ async function persistApproval(deliverableId, b2) {
     docs_embedded: Array.isArray(b2.docs_embedded) ? b2.docs_embedded : [],
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
   }, null, 2)
-  const cliPath = REPO + '/harness/harness_cli.py'
   const approvalFile = REPO + '/.methodology/agent_b_approvals/' + deliverableId + '.json'
-  const writeCmd = PY + ' ' + cliPath + ' write-approval --fr-id ' + JSON.stringify(deliverableId) + ' --json ' + JSON.stringify(approvalPayload)
-  const verifyCmd = PY + ' ' + cliPath + ' verify-file --file ' + JSON.stringify(approvalFile) + ' --expect json --min-bytes 10'
-  const compoundCmd =
-    'ok=0\n' +
-    'for attempt in 1 2 3; do\n' +
-    '  echo "=== attempt $attempt ==="\n' +
-    '  if ' + writeCmd + ' && ' + verifyCmd + '; then\n' +
-    '    echo "[persist-with-retry] OK after $attempt attempt(s) for ' + deliverableId + '"\n' +
-    '    ok=1\n' +
-    '    break\n' +
-    '  fi\n' +
-    '  sleep 1\n' +
-    'done\n' +
-    '[ $ok -eq 1 ]'
-  const res = await agent(
-    'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash script and emit stdout + exit code verbatim:\n\n' + compoundCmd + '\n\nNo commentary, no preamble, no other tool calls.',
-    { label: 'persist-' + deliverableId, phase: 'Persist Approval', agentType: 'general-purpose' },
-  )
-  if (typeof res !== 'string' || !/\[verify-file\]\s*OK/.test(res)) {
-    throw new Error('persistApproval FAILED for ' + deliverableId + ' after ' + MAX_PERSIST_ATTEMPTS + ' attempts. Agent output: ' + String(res).slice(0, 600))
+  const prompt = [
+    'Persist a JSON approval file using ONLY the mcp__filesystem__* tools (NO Bash, NO Write, NO Edit, NO python).',
+    '',
+    'STEP 1 — mcp__filesystem__write_file with EXACTLY these parameters:',
+    '  file = ' + approvalFile,
+    '  content =',
+    approvalPayload,
+    '',
+    'STEP 2 — mcp__filesystem__read_file with file = ' + approvalFile,
+    '',
+    'STEP 3 — Compare the read result byte-for-byte against the content shown above.',
+    '  If MATCH (size + every byte identical): reply with ONLY the single token VERIFIED on its own line.',
+    '  If MISMATCH or any tool error: reply with FAIL:<one-line reason>.',
+    '',
+    'Constraints: use ONLY mcp__filesystem__write_file and mcp__filesystem__read_file. Do not run shell commands. Do not edit other files.',
+  ].join('\n')
+
+  let lastErr = null
+  for (let attempt = 1; attempt <= MAX_OUTER_ATTEMPTS; attempt++) {
+    let res
+    try {
+      res = await agent(prompt, {
+        label: 'persist-' + deliverableId + '-try' + attempt,
+        phase: 'Persist Approval',
+        agentType: 'general-purpose',
+      })
+    } catch (e) {
+      lastErr = 'agent() threw: ' + (e && e.message ? e.message : String(e))
+      log('  persistApproval ' + deliverableId + ' attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ': ' + lastErr.slice(0, 200))
+      continue
+    }
+    if (typeof res === 'string' && /\bVERIFIED\b/.test(res)) {
+      log('  persisted approval: ' + deliverableId + ' (verified on disk, attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ')')
+      return
+    }
+    lastErr = 'agent did not VERIFY; got: ' + String(res).slice(0, 200)
+    log('  persistApproval ' + deliverableId + ' attempt ' + attempt + '/' + MAX_OUTER_ATTEMPTS + ': ' + lastErr)
   }
-  log('  persisted approval: ' + deliverableId + ' (verified on disk)')
+  throw new Error('persistApproval FAILED for ' + deliverableId + ' after ' + MAX_OUTER_ATTEMPTS + ' attempts. Last error: ' + lastErr)
 }
 
 // ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----
