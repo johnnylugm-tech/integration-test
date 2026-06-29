@@ -49,6 +49,9 @@ const MAX_B_ROUNDS = 5
 // P-01 mirror: peer review is a quality advisory, not a functional gate.
 // Round 3 REJECT → PEER_REVIEW_ADVISORY (non-blocking) instead of HR-12.
 const MAX_PEER_ROUNDS = 3
+// v27: retry write-approval+verify-file inside ONE bash command (LLM shell wrapper is
+// single failure point; bash for-loop retries are deterministic). See persistApproval.
+const MAX_PERSIST_ATTEMPTS = 3
 log('REPO = ' + REPO + ' | PY = ' + PY)
 
 // ---- J: WRITE SCOPE convention for LLM agent debug artifacts ----
@@ -279,6 +282,10 @@ async function abLoop(cfg) {
 // the same helper so behavior is identical across phases.
 // Called after every B-2 APPROVE so harness_cli.py advance-phase's
 // _verify_agent_b_approvals_core check finds the artifact.
+//
+// v27: same retry pattern as phase1 (see phase1-requirements.js comment). For-loop
+// retries MAX_PERSIST_ATTEMPTS times inside one Bash invocation. The outer agent() is
+// the only LLM-as-shell-wrapper call; bash logic is deterministic.
 async function persistApproval(deliverableId, b2) {
   const approvalPayload = JSON.stringify({
     fr: deliverableId,
@@ -289,15 +296,29 @@ async function persistApproval(deliverableId, b2) {
     confidence: typeof b2.confidence === 'number' ? b2.confidence : 0.9,
   }, null, 2)
   const cliPath = REPO + '/harness/harness_cli.py'
-  const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' + JSON.stringify(deliverableId) + ' --json ' + JSON.stringify(approvalPayload)
+  const approvalFile = REPO + '/.methodology/agent_b_approvals/' + deliverableId + '.json'
+  const writeCmd = PY + ' ' + cliPath + ' write-approval --fr-id ' + JSON.stringify(deliverableId) + ' --json ' + JSON.stringify(approvalPayload)
+  const verifyCmd = PY + ' ' + cliPath + ' verify-file --file ' + JSON.stringify(approvalFile) + ' --expect json --min-bytes 10'
+  const compoundCmd =
+    'ok=0\n' +
+    'for attempt in 1 2 3; do\n' +
+    '  echo "=== attempt $attempt ==="\n' +
+    '  if ' + writeCmd + ' && ' + verifyCmd + '; then\n' +
+    '    echo "[persist-with-retry] OK after $attempt attempt(s) for ' + deliverableId + '"\n' +
+    '    ok=1\n' +
+    '    break\n' +
+    '  fi\n' +
+    '  sleep 1\n' +
+    'done\n' +
+    '[ $ok -eq 1 ]'
   const res = await agent(
-    'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout + exit code verbatim:\n\n' + cmd + '\n\nNo commentary, no preamble, no other tool calls.',
+    'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash script and emit stdout + exit code verbatim:\n\n' + compoundCmd + '\n\nNo commentary, no preamble, no other tool calls.',
     { label: 'persist-' + deliverableId, phase: 'Persist Approval', agentType: 'general-purpose' },
   )
-  if (typeof res !== 'string' || !/\[write-approval\]\s*OK/.test(res)) {
-    throw new Error('persistApproval FAILED for ' + deliverableId + ' (harness_cli.py write-approval did not return OK). Agent output: ' + String(res).slice(0, 400))
+  if (typeof res !== 'string' || !/\[verify-file\]\s*OK/.test(res)) {
+    throw new Error('persistApproval FAILED for ' + deliverableId + ' after ' + MAX_PERSIST_ATTEMPTS + ' attempts. Agent output: ' + String(res).slice(0, 600))
   }
-  log('  persisted approval: ' + deliverableId + ' via harness_cli.py write-approval')
+  log('  persisted approval: ' + deliverableId + ' (verified on disk)')
 }
 
 // ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----
