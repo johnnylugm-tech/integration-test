@@ -795,3 +795,181 @@ node /tmp/validate-workflow.mjs /abs/path/workflow.js
 - Subagent 文件: https://code.claude.com/docs/en/sub-agents
 - 設定文件: https://code.claude.com/docs/en/settings
 - 權限模式: https://code.claude.com/docs/en/permission-modes
+
+---
+
+## 附錄 C: Phase 1 workflow v17 → v33b 完整踩坑盤點 (2026-06-28..29)
+
+**範圍**：本輪 P1 workflow 從「sub-task approval 寫入失敗」到「advance-phase PASS」,橫跨 17 個 commit + 9 個 workflow run。僅列**已驗證事實**（commit hash / transcript log / disk state / harness test suite）。未證實的歸因標 [UNVERIFIED]。
+
+### C.0 鐵律總覽 (從本輪直接萃取)
+
+1. **agent 是不可靠黑盒** — 任何多步驟指令 (multi-step MCP / multi-line bash / step-by-step prompt) 都會在大 context 退化。**只用單步 Bash tool-call** (cat / wc -c / read-file CLI + cat)。
+2. **LLM emit 可靠性遞減序**：`single-line bash` > `MCP native tool` > `multi-line compound bash` > `multi-step instruction prompt`。workflow JS 的「殼」只挑前者。
+3. **Retry 永遠在 orchestrator,不在 tool call 內** — AWS SDK / Stripe SDK / github-actions/retry-step 同樣原則。包 try/catch 重試整個 outer agent() 呼叫,不要在 single prompt 內嵌 for/if 迴圈。
+4. **CLI 是 deterministic 邊界,workflow JS 是 orchestrator** — LLM 只做「shell wrapper」emit + cat relay,所有 prefix/length/SHA/JSON 驗證在 Python side (`harness_cli.py`)。
+5. **diskPrefix 必須符合 file_loader Bug v8 契約** = first_line **startswith** expect_prefix,而非 contain。Markdown deliverable 的 caller 必須傳 `# Title` 完整,不能只傳 Title。
+6. **每個 fix 必須有 smoke test + 1 個獨立 test suite 驗證** — fix loader → smoke test 4 個 deliverable + harness test_file_loader.py 全綠;fix approval → smoke test 寫入後 json.load() == dict。
+
+### C.1 時序 (commit + run)
+
+| commit | 症狀 | 根因 (已驗證) | 修法 |
+|--------|------|---------------|------|
+| `bc913a0` persist Agent B approval JSONs | 早期 advance-phase 缺 approval | 沒呼叫 persistApproval | 加 helper |
+| `cd70f67` Bug v18/v19 + advance-phase PASSES P1→P2 | 多個 v17/v18/v19 bug | (見下表細項) | 多項 fix |
+| `70544a9` v22 architectural fix — persistApproval routes through `harness_cli.py write-approval` | approval 寫入不可靠 | 直接 Edit node:fs 違反 sandbox | 路由 CLI;**6/6 advance-phase PASS** 黃金基線 |
+| `3ee3dd5` v27 persistApproval retry-with-verify (compound bash) | v22 偶發 1/6 失敗 | wrap retry 寫成 12 行 compound bash | — |
+| `c672591` v28 outer-level retry + mcp__filesystem__ | v27 4/4 → 2/4 regression | LLM emit reliability 在 multi-line indented compound bash 下降 | orchestrator-level try/catch 3次,單步 MCP tool |
+| `7dd5cc0` v29 loadFileViaPython mcp__filesystem__read_file | loadFileViaBash 10% LLM hallucinate | Bash `cat` 殼子 LLM 幻覺 | 改 MCP native API |
+| `7b97ab1` v30 revert persistApproval to v22 + outer retry; loadFileViaPython mcp+v16 fallback; Agent B schema 嚴格化 | v28 整體穩定但仍有小問題 | v28 persistApproval MCP path 在 sub-task stage 仍有 variance | 拆兩個問題各別修 |
+| `02d0f18` v31 single-line JSON + single-quote wrap | persistApproval CLI 報 `invalid JSON payload: line 1 column 2` | zsh 把 `[...]` 當 glob 展開 → JSON word-split | 1) `JSON.stringify({...})` 無 indent → single-line; 2) shell cmd 字串內顯式 single-quote wrap |
+| `cd45284` v32 loadFileViaPython fallback inline Python read (bypass CLI flag) | v31 smoke OK 但 run-time 仍 fail | `--content-out` flag 與 `--content` 旗標 argparse 衝突 | fallback 改 inline Python `open(argv[1]).read()` |
+| **`c9d49ad` v33** drop MCP read; align diskPrefix with file_loader startswith | v32 run: Peer Review round 1 fail "mcp attempts exhausted reason=mcp-error" | 1) MCP 多步驟指令在大 context 退化; 2) 三個 markdown diskPrefix 漏 `#` 違反 startswith 契約 (被 MCP 繞過 file_loader 遮蔽) | 1) loadFileViaPython 回到單步 Bash `read-file + cat`; 2) diskPrefix 補 `# ` (3 處) |
+| **`dd6b242` v33b** drop redundant JSON.stringify in persistApproval | v33 run: `data.get("review_status")` AttributeError on str (4/4 approval) | v31 commit 把 single-line JSON 的 `JSON.stringify(approvalPayload)` 多包一層,變 JSON string-of-string,CLI json.loads() 拿到 str 而非 dict | `escapedPayload = approvalPayload.replace(...)` 拿掉多餘的 `JSON.stringify` |
+| `a3facb9` phase1(review-complete) | — | (handover 標記) | — |
+
+### C.2 三個獨立真因 (v33 + v33b 治本)
+
+#### 真因 1: MCP read 在大 context 不可靠 (v29 引入)
+
+**症狀**：Peer Review round 1 load SRS.md fail, log:
+```
+[01-requirements/SRS.md] mcp attempts exhausted (reason=mcp-error)
+[01-requirements/SRS.md] mcp attempts exhausted (reason=mcp-error)
+[01-requirements/SRS.md] mcp attempts exhausted (reason=mcp-error)
+ERROR: LOADER_FAILED_AFTER_3_ATTEMPTS + FALLBACK: 01-requirements/SRS.md
+```
+
+**同檔案 sub-task stage 正常 load** (14673 chars)。差異 = accumulated context size。
+
+**根因** [部分 UNVERIFIED]：MCP 路徑 prompt 是多步驟指令 ("call mcp__filesystem__read_file → 轉述 bytes")。在大 context 下 sub-agent emit `ERROR_LOAD_FAILED` 不 invoke tool。具體 trigger (context size threshold / 累積效應) 未獨立驗證。
+
+**為何 v30/v32 fallback 修不好**：fallback 本身也是 LLM-as-shell-wrapper (`open(sys.argv[1]).read()`),繼承同樣脆弱性 → fallback 也 fail。
+
+**正解** (v33 `c9d49ad`)：放棄 MCP read,回到 v22 單步 Bash 模式:
+```js
+const pythonCmd = PY + ' ' + REPO + '/harness_cli.py read-file --file ' + JSON.stringify(filePath)
+  + ' --expect-prefix ' + JSON.stringify(expectPrefix)
+  + ' --content --content-out ' + contentOut + ' --json-out ' + jsonOut + ' --quiet'
+// prompt: "Bash tool to run EXACTLY this command" + "Bash tool to run `cat <contentOut>`"
+```
+**為何穩定**：單步 Bash tool-call 是 dominant LLM pattern;`read-file` 在 Python 端做 prefix/length/SHA 驗證 server-side;`cat` 是另一個單步 Bash。
+
+#### 真因 2: markdown diskPrefix 漏 `#` (違反 file_loader Bug v8 契約)
+
+**症狀**：handover 拿到的磁盤檔案第一行是 `# Software Requirements Specification (SRS) — taskq`;workflow 傳 expect_prefix = `Software Requirements Specification`(無 `#`)→ `first_line.startswith(...)` False → `PREFIX_MISMATCH` → CLI 從不 emit content → 寫入 `contentOut` 跳過 → cat 失敗。
+
+**為何 v29-v32 沒暴露**：MCP 繞過 file_loader。
+
+**正解** (v33 `c9d49ad`)：phase1 三個 markdown diskPrefix 補回 `# ` (SRS/SPEC_TRACKING/TRACEABILITY)。TEST_INVENTORY 本就帶 `#` 不動。phase2 caller 本就帶 `#` 不動。
+
+**契約文件** (harness/scripts/file_loader.py:178 + tests/test_file_loader.py:170-175 註解 + test `test_prefix_is_not_substring_search`):
+```python
+# Bug v8 regression: prefix MUST be at start of first line, not anywhere
+# 防止 LLM agent 把 "fabricated content" 注入並 startswith 假 prefix
+```
+
+**所有 caller 一覽** (after v33):
+
+| phase | deliverable | diskPrefix |
+|-------|-------------|------------|
+| 1 | SRS.md | `# Software Requirements Specification` |
+| 1 | SPEC_TRACKING.md | `# Specification Tracking Matrix` |
+| 1 | TRACEABILITY_MATRIX.md | `# Traceability Matrix` |
+| 1 | TEST_INVENTORY.yaml | `# TEST_INVENTORY.yaml` |
+| 2 | 02-architecture/SAD.md | `# SAD` |
+| 2 | 02-architecture/adr/ADR.md | `# Architecture Decision Records` |
+| 2 | 02-architecture/TEST_SPEC.md | `#` |
+| 1 | PROJECT_BRIEF.md | `# Project Brief` |
+
+**workflow JS 自身 anchorRe** (`loadFileViaPython` 內 `replace(/^#\s*/, '')`) 對帶不帶 `#` 都相容。
+
+#### 真因 3: persistApproval 雙重 JSON encode (v31 引入)
+
+**症狀**：v33 run transcript + advance-phase fail:
+```
+ADVANCE: FAIL — _verify_agent_b_approvals_core line 4224:
+  data.get("review_status", "") on a string object
+```
+
+**磁盤檔案**：
+```bash
+$ head -c 80 .methodology/agent_b_approvals/SRS.md.json
+"{\"fr\":\"SRS.md\",\"review_status\":\"APPROVE\"...   ← 開頭是 ",不是 {
+$ python -c 'import json; print(type(json.load(open("...SRS.md.json"))))'
+<class 'str'>                                          ← 應該是 dict
+```
+
+**根因** (`persistApproval` line 508, v31 commit `02d0f18` 引入):
+```js
+// line 489: approvalPayload = JSON.stringify({...})   // → JSON string (single-line, no indent)  ✓ 這是 v31 真正的 fix
+// line 508: escapedPayload = JSON.stringify(approvalPayload).replace(/'/g, "'\\''")  // ✗ 多餘的第二次 stringify
+```
+- `approvalPayload` 已是 JSON string
+- 第二次 `JSON.stringify()` 把整個 string 包成 JSON-encoded string (`"{\"fr\":...}"`)
+- CLI 收到 `--json '"{\"fr\":...}"'` → `json.loads()` 解析成 `str`(不是 dict) → `tmp_path.write_text(json.dumps(str))` 寫出雙重 encode 內容
+- CLI 自己的 verify 只看 `size >= 10 bytes`,**沒看內容形狀** → 顯示 "OK" 但內容錯 → advance-phase 才發現
+
+**正解** (v33b `dd6b242`):
+```js
+const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
+```
+- v31 的「single-line JSON」目標保留 (line 489 無 indent)
+- 拿掉多餘的第二次 stringify
+- CLI 收到 `--json '{"fr":...}'` → `json.loads()` 拿到 dict → 寫入正常
+
+**為什麼 v22 沒這問題** [UNVERIFIED]：v22 persistApproval wrapper 不同 (直接 string template,沒經過 JS-side escape)。
+
+### C.3 v17..v33b 期間曾經嘗試但失敗的修法 (不重蹈)
+
+| 嘗試 | 為何失敗 |
+|------|---------|
+| v17 Bash cat agent 殼子 | 10% LLM hallucinate 內容,導致 docs_embedded dirty |
+| v22 harness_cli.py read-file wrapper | CLI 本身 OK,但 LLM shell wrapper 仍有 10% 失敗 |
+| v27 12 行 compound bash retry inside one agent() | 4/4 → 2/4 regression: multi-line bash LLM emit 不可靠 |
+| v28 mcp__filesystem__write_file 取代 Bash | 解決 persistApproval 但**新引入** loadFileViaPython 不可靠 + Agent B 偶發 LLM emit variance |
+| v29 全面 MCP read | 解決部分但 Peer Review 大 context fail |
+| v30/v32 fallback 雙層 (MCP + inline Python) | fallback 是 LLM-shell-wrapper,繼承同脆弱性 |
+| (錯誤嘗試) 把 file_loader 改成 `in first_line` (contain) | **破壞 Bug v8 契約**:`test_prefix_is_not_substring_search` 會 fail;且改 4 個 deliverable diskPrefix (補 `#`) 是更小、治本的修法 |
+
+### C.4 共通性邊界 (守住,沒擴大破壞)
+
+| 改動 | 影響 phase | 不動 |
+|------|------------|------|
+| `loadFileViaPython` Bash pattern | phase1 + phase2 鏡像 | harness `file_loader.py` (startswith 契約保留) |
+| diskPrefix 補 `#` | phase1 三個 markdown (cfg + peerDocs 共 6 處) | phase2 caller 本就帶 `#`;workflow JS anchorRe 已容錯 |
+| `persistApproval` 拿掉多餘 `JSON.stringify` | phase1 + phase2 鏡像 (line 304) | CLI 不動 (CLI 設計 `--json` 收 string,契約正確) |
+| advance-phase CLI 契約 | — | 不該改 CLI 來容錯 str-not-dict (會 mask 真 bug) |
+
+### C.5 Smoke test pattern (本輪標準化)
+
+任何對 loader / approval / advance-phase 的 fix,都必須有:
+
+1. **loader fix**：
+   ```bash
+   for f in <4 deliverable>; do
+     harness_cli.py read-file --file $f --expect-prefix $p --content --content-out /tmp/out --json-out /tmp/json --quiet
+     assert exit=0 + contentOut 寫入 + bytes 等於磁盤檔
+   done
+   harness tests/test_file_loader.py: 35 passed
+   ```
+
+2. **approval fix**：
+   ```bash
+   # 重現 v33b bug
+   python -c "import json; open('.../SRS.md.json').read()[:1]" == '"'  # 會被驗成 string
+   # post-fix
+   python -c "import json; print(type(json.load(open('.../SRS.md.json'))))" == "<class 'dict'>"
+   ```
+
+3. **workflow fix**：完整 re-run → 預期 transcript 4/4 approval + advance-phase PASS + state.json current_phase +1
+
+### C.6 教訓 (寫給未來開發者)
+
+1. **不要為了修「次要問題」而改「已驗證主要路徑」** — v28 為修 persistApproval 偶發失敗而引入 MCP,結果破壞了 v22 已驗證的 loader 6/6 reliability。**先記住黃金基線 (v22: 6/6 PASS),再考慮任何偏離**。
+2. **CLI 寫入成功 ≠ 寫入正確** — `write-approval` 只 verify `size >= 10 bytes`。任何對 persistApproval 的改動都必須**回讀 + `json.load()` 確認是 dict** 才算過。
+3. **Bash 之後才 MCP** — 單步 Bash tool-call 是 dominant pattern,可靠度遠高於多步驟 MCP 指令。在 headless workflow run (MCP 不一定在) 下更明顯。
+4. **diskPrefix 是契約,不是 hint** — file_loader 用 startswith 錨定 H1 防幻覺;workflow JS 改 caller 必須保留 `# ` 開頭,不能圖簡潔。
+5. **commit message 必須誠實** — 不要寫「6/6 PASS 由於此 fix」之類無 transcript 佐證的因果;若 fix 真治本,smoke test + test suite + workflow re-run 全綠已足夠。
+6. **每次 fix 改完先看 diff** — runtime artifact (state.json / approval JSON / deliverable) 不該跟 workflow JS 一起 commit;分開 commit 避免污染 review。
+
