@@ -6,8 +6,8 @@
   "summary": {
     "total_ac": 26,
     "verbatim_count": 0,
-    "interpreted_count": 5,
-    "invention_count": 21,
+    "interpreted_count": 17,
+    "invention_count": 9,
     "over_spec_threshold": 0.7,
     "high_score_count": 12
   },
@@ -48,8 +48,8 @@
       "score": {
         "over_spec_score": 0.826,
         "best_match_ratio": 0.174,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -138,8 +138,8 @@
       "score": {
         "over_spec_score": 0.895,
         "best_match_ratio": 0.105,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -148,8 +148,8 @@
       "score": {
         "over_spec_score": 0.857,
         "best_match_ratio": 0.143,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -158,8 +158,8 @@
       "score": {
         "over_spec_score": 0.947,
         "best_match_ratio": 0.053,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -178,8 +178,8 @@
       "score": {
         "over_spec_score": 0.895,
         "best_match_ratio": 0.105,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -198,18 +198,18 @@
       "score": {
         "over_spec_score": 1.0,
         "best_match_ratio": 0.0,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
       "label": "AC-NFR-01-01",
       "fr_id": "NFR-01",
       "score": {
-        "over_spec_score": 1.0,
+        "over_spec_score": 0.884,
         "best_match_ratio": 0.116,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -218,8 +218,8 @@
       "score": {
         "over_spec_score": 1.0,
         "best_match_ratio": 0.0,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -228,8 +228,8 @@
       "score": {
         "over_spec_score": 0.87,
         "best_match_ratio": 0.13,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -238,8 +238,8 @@
       "score": {
         "over_spec_score": 0.857,
         "best_match_ratio": 0.143,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -248,8 +248,8 @@
       "score": {
         "over_spec_score": 1.0,
         "best_match_ratio": 0.0,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     },
     {
@@ -268,8 +268,8 @@
       "score": {
         "over_spec_score": 0.731,
         "best_match_ratio": 0.269,
-        "derived_present": false,
-        "verdict": "invention"
+        "derived_present": true,
+        "verdict": "interpreted"
       }
     }
   ]

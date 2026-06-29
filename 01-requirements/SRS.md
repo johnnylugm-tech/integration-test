@@ -90,7 +90,7 @@
 **Acceptance Criterion** (verbatim, SPEC.md §3 FR-01 驗證規則 row 3):
 > 命令含 `;` `|` `&` `$` `>` `<` `` ` `` 任一 → 拒絕(NFR-02)
 
-**DERIVED**: SPEC.md §3 FR-01 驗證規則 row 3 — AC label suffix 「驗證規則 — 注入字元」 is a categorical grouping label for SRS section navigation; canonical character set is verbatim.
+DERIVED: SPEC.md §3 FR-01 驗證規則 row 3 — AC label suffix 「驗證規則 — 注入字元」 is a categorical grouping label for SRS section navigation; canonical character set is verbatim.
 
 **Boundary**: 注入字元黑名單集合的測試覆蓋由 NFR-02 管轄。
 
@@ -135,19 +135,19 @@
 **Acceptance Criterion** (verbatim, SPEC.md §3 FR-02):
 > 單一任務模式下 `timeout` 結果 → **exit 4**
 
-**DERIVED**: SPEC.md §3 FR-02 「單一任務模式下 timeout 結果 → exit 4」 — AC label suffix 「timeout exit code」 is a categorical grouping label for SRS section navigation; canonical phrasing 「單一任務模式下 timeout 結果 → exit 4」 is verbatim.
+DERIVED: SPEC.md §3 FR-02 「單一任務模式下 timeout 結果 → exit 4」 — AC label suffix 「timeout exit code」 is a categorical grouping label for SRS section navigation; canonical phrasing 「單一任務模式下 timeout 結果 → exit 4」 is verbatim.
 
 #### AC-FR-02-06 未預期例外處理
 **Acceptance Criterion** (verbatim, SPEC.md §3 FR-02):
 > 其他未預期例外 → exit 1(不得裸 `except:` 吞噬)
 
-**DERIVED**: SPEC.md §3 FR-02 「其他未預期例外 → exit 1(不得裸 except: 吞噬)」 — AC label suffix 「未預期例外處理」 is a categorical grouping label for SRS section navigation; canonical phrasing is verbatim.
+DERIVED: SPEC.md §3 FR-02 「其他未預期例外 → exit 1(不得裸 except: 吞噬)」 — AC label suffix 「未預期例外處理」 is a categorical grouping label for SRS section navigation; canonical phrasing is verbatim.
 
 ---
 
 ### FR-03: CLI 整合與查詢
 
-**DERIVED**: SPEC.md §3 「### FR-03: CLI 整合與查詢」 — section heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
+DERIVED: SPEC.md §3 「### FR-03: CLI 整合與查詢」 — section heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
 
 **Source citation**: SPEC.md §3 FR-03 (verbatim transcription).
 
@@ -165,7 +165,7 @@
 **Acceptance Criterion** (verbatim, SPEC.md §3 FR-03):
 > 全域 flag `--json`:機器可讀輸出(單行 JSON)
 
-**DERIVED**: SPEC.md §3 FR-03 「全域 flag --json:機器可讀輸出(單行 JSON)」 — AC label suffix 「全域 flag」 is a categorical grouping label for SRS section navigation; canonical phrasing is verbatim.
+DERIVED: SPEC.md §3 FR-03 「全域 flag --json:機器可讀輸出(單行 JSON)」 — AC label suffix 「全域 flag」 is a categorical grouping label for SRS section navigation; canonical phrasing is verbatim.
 
 #### AC-FR-03-03 Exit codes
 **Acceptance Criterion** (verbatim, SPEC.md §3 FR-03):
@@ -177,7 +177,7 @@
 
 ### NFR-01: Performance
 
-**DERIVED**: SPEC.md §4 「| NFR-01 | performance | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
+DERIVED: SPEC.md §4 「| NFR-01 | performance | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
 
 **Source citation**: SPEC.md §4 NFR-01 (verbatim transcription).
 
@@ -185,13 +185,13 @@
 **Acceptance Criterion** (verbatim, SPEC.md §4 NFR-01):
 > `submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行)
 
-**DERIVED**: SPEC.md §4 「| NFR-01 | performance | submit + status 組合操作 100 次 p95 < 50ms(不含 subprocess 執行) |」 — AC label suffix 「submit + status 組合 p95」 is a categorical grouping label for SRS section navigation; canonical threshold and parenthesized exclusion are verbatim.
+DERIVED: SPEC.md §4 「| NFR-01 | performance | submit + status 組合操作 100 次 p95 < 50ms(不含 subprocess 執行) |」 — AC label suffix 「submit + status 組合 p95」 is a categorical grouping label for SRS section navigation; canonical threshold and parenthesized exclusion are verbatim.
 
 **Boundary**: 「不含 subprocess 執行」verbatim 來自 SPEC.md;measurement / interpretation boundary for what counts as "subprocess execution" is owned by the test harness per SPEC.md §4 NFR-01. 不對「不含 subprocess 執行」做規範性詮釋(例如「必須包含 full python -m taskq wall-clock including fork/exec」)。
 
 ### NFR-02: Security
 
-**DERIVED**: SPEC.md §4 「| NFR-02 | security | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
+DERIVED: SPEC.md §4 「| NFR-02 | security | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
 
 **Source citation**: SPEC.md §4 NFR-02 (verbatim transcription).
 
@@ -199,15 +199,17 @@
 **Acceptance Criterion** (verbatim, SPEC.md §4 NFR-02):
 > 全 codebase 禁用 `shell=True`
 
-**DERIVED**: SPEC.md §4 NFR-02 「全 codebase 禁用 shell=True;FR-01 注入字元黑名單必須有測試覆蓋」 — AC sub-split into AC-NFR-02-01 / AC-NFR-02-02 is SRS structural grouping (one § per AC per SRS template); canonical phrases 「全 codebase 禁用 shell=True」 and 「FR-01 注入字元黑名單必須有測試覆蓋」 are verbatim.
+DERIVED: SPEC.md §4 NFR-02 「全 codebase 禁用 shell=True;FR-01 注入字元黑名單必須有測試覆蓋」 — AC sub-split into AC-NFR-02-01 / AC-NFR-02-02 is SRS structural grouping (one § per AC per SRS template); canonical phrases 「全 codebase 禁用 shell=True」 and 「FR-01 注入字元黑名單必須有測試覆蓋」 are verbatim.
 
 #### AC-NFR-02-02 注入黑名單測試覆蓋
 **Acceptance Criterion** (verbatim, SPEC.md §4 NFR-02):
 > FR-01 注入字元黑名單必須有測試覆蓋
 
+DERIVED: SPEC.md §4 NFR-02 「全 codebase 禁用 shell=True;FR-01 注入字元黑名單必須有測試覆蓋」 — AC label suffix 「注入黑名單測試覆蓋」 is a categorical grouping label for SRS section navigation; canonical phrase 「FR-01 注入字元黑名單必須有測試覆蓋」 is verbatim.
+
 ### NFR-03: Reliability
 
-**DERIVED**: SPEC.md §4 「| NFR-03 | reliability | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
+DERIVED: SPEC.md §4 「| NFR-03 | reliability | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
 
 **Source citation**: SPEC.md §4 NFR-03 (verbatim transcription).
 
@@ -219,7 +221,7 @@
 **Acceptance Criterion** (verbatim, SPEC.md §4 NFR-03):
 > `stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代
 
-**DERIVED**: SPEC.md §4 NFR-03 「stdout_tail/stderr_tail 落盤前過濾 (sk-[A-Za-z0-9_-]{8,}|token=\S+) 整行以 [REDACTED] 取代」 — AC label suffix 「secret 整行 redaction」 is a categorical grouping label for SRS section navigation; canonical filter regex and replacement token are verbatim.
+DERIVED: SPEC.md §4 NFR-03 「stdout_tail/stderr_tail 落盤前過濾 (sk-[A-Za-z0-9_-]{8,}|token=\S+) 整行以 [REDACTED] 取代」 — AC label suffix 「secret 整行 redaction」 is a categorical grouping label for SRS section navigation; canonical filter regex and replacement token are verbatim.
 
 **Boundary**: 整行 redaction 規則 verbatim;matching boundary(line-based filter) is owned by the test harness per SPEC.md §4 NFR-03.
 
