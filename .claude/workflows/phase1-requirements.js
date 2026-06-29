@@ -508,7 +508,7 @@ async function persistApproval(deliverableId, b2) {
   // is built into the cmd string itself so it works regardless of whether the
   // LLM agent emits the command verbatim or paraphrases it. Single quotes in
   // the payload are escaped via the close-escape-reopen pattern ('\'').
-  const escapedPayload = JSON.stringify(approvalPayload).replace(/'/g, "'\\''")
+  const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
   const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
     JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
 

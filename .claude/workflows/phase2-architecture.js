@@ -301,7 +301,7 @@ async function persistApproval(deliverableId, b2) {
   // v31: explicit single-quote wrap around the JSON payload (zsh glob safety).
   // See phase1-requirements.js persistApproval for full rationale.
   const cliPath = REPO + '/harness/harness_cli.py'
-  const escapedPayload = JSON.stringify(approvalPayload).replace(/'/g, "'\\''")
+  const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
   const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
     JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
 
