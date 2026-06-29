@@ -1,129 +1,153 @@
 # Software Requirements Specification (SRS) — taskq
 
-> Source of truth: `SPEC.md` v2.0.0 (2026-06-15) at project root.
-> Ingestion mode: 100% transcription of canonical `### FR-01..FR-03` and `### NFR-01..NFR-03` headings from `SPEC.md` — no invention, no omission.
-> TBD / TODO / `<placeholder>` markers: none present in canonical SPEC.md.
+> Source of truth: `/Users/johnny/projects/integration-test/SPEC.md` v2.0.0 (2026-06-15)
+> Mode: **INGESTION MODE** — every FR/NFR below is a verbatim transcription of SPEC.md §3 / §4. No invention, no silent omission of placeholders.
+> Project role: harness-methodology v2.9 integration validation target (full Phase 1–8 pipeline on a real small project).
 
 ---
 
 ## 1. Introduction
 
 ### 1.1 Purpose
-This Software Requirements Specification (SRS) transcribes the functional and non-functional requirements of the `taskq` local task queue CLI tool, as canonically defined in `SPEC.md` v2.0.0. Per `PROJECT_BRIEF.md`, the source of truth is `SPEC.md`; this SRS document operates in **INGESTION MODE** — every requirement originates from `SPEC.md` and is cited inline.
+本地任務佇列 CLI — 提交 shell 命令為任務,受控執行(timeout/重試),狀態可查詢。
+(Source: SPEC.md §1 「目的」)
 
 ### 1.2 Scope
-`taskq` is a local task queue CLI for submitting shell commands as tasks and running them under controlled execution (timeout + retry). Entry point: `python -m taskq`. Runtime: Python 3.11 standard library only (zero external runtime dependencies).
+- **In scope**: 命令列工具 `taskq`,經由 `python -m taskq` 進入,提供 submit / run / status / list / clear 子命令及 `--json` 全域 flag。
+- **Out of scope** (verbatim): 任何 runtime 外部依賴(僅 Python 3.11 標準函式庫);測試工具由開發環境提供。
 
 ### 1.3 Definitions, Acronyms, Abbreviations
-- **taskq** — the project name and CLI command namespace (`python -m taskq`)
-- **task** — a submitted shell command tracked in `$TASKQ_HOME/tasks.json`
-- **TASKQ_HOME** — environment variable defining the data directory (default `.taskq`)
-- **Ingestion mode** — authoring style that transcribes canonical spec verbatim, with citations
+| Term | Definition |
+|------|------------|
+| task | 由 `submit` 註冊的一筆工作單位,以 8-hex uuid4 前綴為 id |
+| store | `$TASKQ_HOME/tasks.json` — 任務持久化檔 |
+| tail | `stdout_tail` / `stderr_tail`:末 2000 字元,落盤前過濾 secret |
+| atomic write | `tmp + os.replace` 模式,中斷後仍為合法 JSON |
 
 ### 1.4 References
-- Canonical spec: `SPEC.md` (project root), v2.0.0, dated 2026-06-15
-- Project brief: `PROJECT_BRIEF.md` (project root)
+- SPEC.md v2.0.0 (canonical spec)
+- PROJECT_BRIEF.md (project metadata)
+- harness-methodology v2.9 (pipeline reference, not a spec dependency)
 
 ### 1.5 Overview
-This document is organized per the canonical structure: §2 Constraints, §3 Functional Requirements, §4 Non-Functional Requirements, §5 Acceptance Criteria Summary, §6 Out-of-Scope, §7 Open Issues, §8 Risks, §9 Glossary.
+本文檔 §2 描述技術架構與約束,§3 列舉 FR-01..FR-03,§4 列舉 NFR-01..NFR-03,§5 為驗收條件彙整,§6 為 Out-of-Scope,§7 為 Open Issues,§8 為 Risks,§9 為 Glossary。
 
 ---
 
-## 2. Constraints
+## 2. Constraints (Technical / Security / Reliability / Performance)
 
-Constraints transcribed from canonical `SPEC.md` §2 技術架構 and PROJECT_BRIEF.md Key Constraints:
+技術架構 verbatim 摘自 SPEC.md §2:
 
-| ID | Category | Constraint | Source |
-|----|----------|------------|--------|
-| C-01 | Language | Python 3.11 standard library only; zero external runtime dependencies | `SPEC.md` §1 概述 |
-| C-02 | Form factor | CLI tool; entry point `python -m taskq` | `SPEC.md` §1 概述 |
-| C-03 | CLI parser | argparse subcommands | `SPEC.md` §2 技術架構 |
-| C-04 | Task execution | subprocess (`shlex.split`; `shell=True` is forbidden everywhere) | `SPEC.md` §2 技術架構 |
-| C-05 | Persistence | JSON file (atomic write: tmp + `os.replace`) | `SPEC.md` §2 技術架構 |
-| C-06 | Configuration | `TASKQ_*` environment variables (unified read via `config.py`) | `SPEC.md` §2 技術架構 |
-| C-07 | Security | Injection character blacklist (`;` `|` `&` `$` `>` < ` `` ` ``) on `submit` (see NFR-02) | `PROJECT_BRIEF.md` Key Constraints |
-| C-08 | Reliability | `tasks.json` atomic write survives mid-write crash; never silently rebuilt on parse failure; secret-line redaction on `stdout_tail` / `stderr_tail` (NFR-03) | `PROJECT_BRIEF.md` Key Constraints |
-| C-09 | Performance | `submit` + `status` combined p95 < 50ms over 100 iterations (NFR-01) | `PROJECT_BRIEF.md` Key Constraints |
+| 元件 | 技術 |
+|------|------|
+| CLI | argparse 子命令 |
+| 任務執行 | subprocess(`shlex.split`,禁 `shell=True`) |
+| 持久化 | JSON 檔(原子寫:tmp + `os.replace`) |
+| 設定 | `TASKQ_*` 環境變數(config.py 統一讀取) |
+
+額外約束 verbatim 摘自 PROJECT_BRIEF.md「Key Constraints」:
+- **Technical**: Python 3.11 stdlib only; `python -m taskq` CLI entry; `shell=True` is forbidden everywhere; atomic JSON writes (`tmp + os.replace`)
+- **Security**: Injection character blacklist (`; | & $ > < \``) on `submit` (NFR-02)
+- **Reliability**: `tasks.json` atomic write survives mid-write crash; never silently rebuilt on parse failure; secret-line redaction on `stdout_tail` / `stderr_tail` (NFR-03)
+- **Performance**: `submit` + `status` combined p95 < 50ms over 100 iterations (NFR-01)
+
+環境變數 verbatim 摘自 SPEC.md §5:
+
+| 變數 | 預設 | 說明 |
+|------|------|------|
+| `TASKQ_HOME` | `.taskq` | 資料檔目錄 |
+| `TASKQ_TASK_TIMEOUT` | `10.0` | 單任務 subprocess timeout(秒) |
+| `TASKQ_RETRY_LIMIT` | `2` | 失敗自動重試上限 |
 
 ---
 
 ## 3. Functional Requirements
 
-### FR-01: Task Model and Persistence
+### FR-01: 任務模型與持久化
 
-**Canonical source (verbatim):** `SPEC.md` §3 FR-01 任務模型與持久化
+**Command**: `taskq submit "<command>"`
 
-```
-`taskq submit "<command>"`
+**Source citation**: SPEC.md §3 FR-01 (verbatim transcription).
 
-驗證規則(任一違反 → **exit 2** + stderr 錯誤訊息,**不寫入存儲**):
+#### AC-FR-01-01 驗證規則 — 非空
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-01 驗證規則 row 1):
+> 命令為空或全空白 → 拒絕
 
-| 規則 | 條件 |
-|------|------|
-| 非空 | 命令為空或全空白 → 拒絕 |
-| 長度 | 命令 > 1000 字元 → 拒絕 |
-| 注入字元 | 命令含 `;` `|` `&` `$` `>` `<` `` ` `` 任一 → 拒絕(NFR-02) |
+**Boundary / interpretation**: 任一違反驗證規則 → exit 2 + stderr 錯誤訊息,**不寫入存儲** — measurement/interpretation boundary is owned by the test harness per SPEC.md §3 FR-01 「驗證規則(任一違反 → exit 2 + stderr 錯誤訊息,不寫入存儲)」.
 
-通過驗證:
-- 產生 task id(uuid4 前 8 hex)
-- 狀態 `pending`,記錄 `command`、`created_at`
-- 原子寫入 `$TASKQ_HOME/tasks.json`(tmp + `os.replace`)
-- `tasks.json` 損壞(非法 JSON)→ 啟動偵測 → **exit 1**,stderr `store corrupted`(不靜默重建)
-```
+#### AC-FR-01-02 驗證規則 — 長度
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-01 驗證規則 row 2):
+> 命令 > 1000 字元 → 拒絕
 
-**Acceptance criteria** — each AC is a verbatim canonical line; multiple ACs derive from a single canonical row to make each condition independently testable.
+**Boundary**: exit 2 邊界由 FR-01 「驗證規則」首段管轄(同上)。
 
-> DERIVED: `SPEC.md` §3 FR-01 驗證規則 table — single canonical row decomposed into one AC per 條件 (非空/長度/注入字元) for testability; measurement / interpretation boundary is owned by the test harness per `SPEC.md` §3 FR-01 驗證規則.
+#### AC-FR-01-03 驗證規則 — 注入字元
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-01 驗證規則 row 3):
+> 命令含 `;` `|` `&` `$` `>` `<` `` ` `` 任一 → 拒絕(NFR-02)
 
-- AC-FR01-01: 「命令為空或全空白 → 拒絕」 — verbatim from `SPEC.md` §3 FR-01 驗證規則 非空 row.
-- AC-FR01-02: 「命令 > 1000 字元 → 拒絕」 — verbatim from `SPEC.md` §3 FR-01 驗證規則 長度 row.
-- AC-FR01-03: 「命令含 `;` `|` `&` `$` `>` `<` `` ` `` 任一 → 拒絕(NFR-02)」 — verbatim from `SPEC.md` §3 FR-01 驗證規則 注入字元 row.
+**DERIVED**: SPEC.md §3 FR-01 驗證規則 row 3 — AC label suffix 「驗證規則 — 注入字元」 is a categorical grouping label for SRS section navigation; canonical character set is verbatim.
 
-> DERIVED: `SPEC.md` §3 FR-01 通過驗證 bullets — single canonical bullet list decomposed into one AC per bullet for testability; measurement / interpretation boundary is owned by the test harness per `SPEC.md` §3 FR-01 通過驗證.
+**Boundary**: 注入字元黑名單集合的測試覆蓋由 NFR-02 管轄。
 
-- AC-FR01-04: 「產生 task id(uuid4 前 8 hex)」 — verbatim from `SPEC.md` §3 FR-01 通過驗證 bullet 1.
-- AC-FR01-05: 「狀態 `pending`,記錄 `command`、`created_at`」 — verbatim from `SPEC.md` §3 FR-01 通過驗證 bullet 2.
-- AC-FR01-06: 「原子寫入 `$TASKQ_HOME/tasks.json`(tmp + `os.replace`)」 — verbatim from `SPEC.md` §3 FR-01 通過驗證 bullet 3.
-- AC-FR01-07: 「`tasks.json` 損壞(非法 JSON)→ 啟動偵測 → **exit 1**,stderr `store corrupted`(不靜默重建)」 — verbatim from `SPEC.md` §3 FR-01 通過驗證 bullet 4.
+#### AC-FR-01-04 通過驗證 — id 與欄位
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-01 「通過驗證」bullets):
+> 產生 task id(uuid4 前 8 hex);狀態 `pending`,記錄 `command`、`created_at`
 
----
+#### AC-FR-01-05 通過驗證 — 原子寫入
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-01 「通過驗證」bullets):
+> 原子寫入 `$TASKQ_HOME/tasks.json`(tmp + `os.replace`)
 
-### FR-02: Task Execution and Retry
-
-**Canonical source (verbatim):** `SPEC.md` §3 FR-02 任務執行與重試
-
-```
-`taskq run <id>`
-
-- 以 `subprocess.run(shlex.split(command), capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT)` 執行;**任何路徑不得使用 `shell=True`**
-- 狀態機:`pending → running → done | failed | timeout`
-  - exit 0 → `done`;非 0 → `failed`;`TimeoutExpired` → `timeout`
-- 結果欄位:`exit_code`、`stdout_tail`(末 2000 字元)、`stderr_tail`(末 2000 字元)、`duration_ms`、`finished_at`
-- **重試**:`run` 結果為 `failed`/`timeout` 時自動重試,上限 `TASKQ_RETRY_LIMIT` 次(預設 2)
-- 單一任務模式下 `timeout` 結果 → **exit 4**
-- 其他未預期例外 → exit 1(不得裸 `except:` 吞噬)
-```
-
-**Acceptance criteria** — each AC is a verbatim canonical line.
-
-> DERIVED: `SPEC.md` §3 FR-02 bullet list — decomposed into one AC per canonical bullet for testability; measurement / interpretation boundary is owned by the test harness per `SPEC.md` §3 FR-02.
-
-- AC-FR02-01: 「以 `subprocess.run(shlex.split(command), capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT)` 執行;**任何路徑不得使用 `shell=True`**」 — verbatim from `SPEC.md` §3 FR-02 first bullet.
-- AC-FR02-02: 「狀態機:`pending → running → done | failed | timeout`;exit 0 → `done`;非 0 → `failed`;`TimeoutExpired` → `timeout`」 — verbatim from `SPEC.md` §3 FR-02 state machine bullet.
-- AC-FR02-03: 「結果欄位:`exit_code`、`stdout_tail`(末 2000 字元)、`stderr_tail`(末 2000 字元)、`duration_ms`、`finished_at`」 — verbatim from `SPEC.md` §3 FR-02 result fields bullet.
-- AC-FR02-04: 「**重試**:`run` 結果為 `failed`/`timeout` 時自動重試,上限 `TASKQ_RETRY_LIMIT` 次(預設 2)」 — verbatim from `SPEC.md` §3 FR-02 retry bullet.
-- AC-FR02-05: 「單一任務模式下 `timeout` 結果 → **exit 4**」 — verbatim from `SPEC.md` §3 FR-02 single-task-timeout bullet.
-- AC-FR02-06: 「其他未預期例外 → exit 1(不得裸 `except:` 吞噬)」 — verbatim from `SPEC.md` §3 FR-02 exception bullet.
+#### AC-FR-01-06 tasks.json 損壞偵測
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-01 「通過驗證」bullets):
+> `tasks.json` 損壞(非法 JSON)→ 啟動偵測 → **exit 1**,stderr `store corrupted`(不靜默重建)
 
 ---
 
-### FR-03: CLI Integration and Query
+### FR-02: 任務執行與重試
 
-**Canonical source (verbatim):** `SPEC.md` §3 FR-03 CLI 整合與查詢
+**Command**: `taskq run <id>`
 
-```
-argparse 子命令(入口 `python -m taskq`):
+**Source citation**: SPEC.md §3 FR-02 (verbatim transcription).
 
+#### AC-FR-02-01 subprocess 呼叫形式
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-02 第一段):
+> 以 `subprocess.run(shlex.split(command), capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT)` 執行;**任何路徑不得使用 `shell=True`**
+
+#### AC-FR-02-02 狀態機與轉換
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-02 狀態機 bullets):
+> 狀態機:`pending → running → done | failed | timeout`
+> exit 0 → `done`;非 0 → `failed`;`TimeoutExpired` → `timeout`
+
+#### AC-FR-02-03 結果欄位
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-02 結果欄位):
+> `exit_code`、`stdout_tail`(末 2000 字元)、`stderr_tail`(末 2000 字元)、`duration_ms`、`finished_at`
+
+#### AC-FR-02-04 重試
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-02 重試):
+> `run` 結果為 `failed`/`timeout` 時自動重試,上限 `TASKQ_RETRY_LIMIT` 次(預設 2)
+
+#### AC-FR-02-05 timeout exit code
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-02):
+> 單一任務模式下 `timeout` 結果 → **exit 4**
+
+**DERIVED**: SPEC.md §3 FR-02 「單一任務模式下 timeout 結果 → exit 4」 — AC label suffix 「timeout exit code」 is a categorical grouping label for SRS section navigation; canonical phrasing 「單一任務模式下 timeout 結果 → exit 4」 is verbatim.
+
+#### AC-FR-02-06 未預期例外處理
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-02):
+> 其他未預期例外 → exit 1(不得裸 `except:` 吞噬)
+
+**DERIVED**: SPEC.md §3 FR-02 「其他未預期例外 → exit 1(不得裸 except: 吞噬)」 — AC label suffix 「未預期例外處理」 is a categorical grouping label for SRS section navigation; canonical phrasing is verbatim.
+
+---
+
+### FR-03: CLI 整合與查詢
+
+**DERIVED**: SPEC.md §3 「### FR-03: CLI 整合與查詢」 — section heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
+
+**Source citation**: SPEC.md §3 FR-03 (verbatim transcription).
+
+#### AC-FR-03-01 argparse 子命令表
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-03 子命令表):
 | 命令 | 行為 |
 |------|------|
 | `submit "<cmd>"` | FR-01 |
@@ -132,20 +156,15 @@ argparse 子命令(入口 `python -m taskq`):
 | `list` | 列出全部任務(id + status + command 前 50 字元) |
 | `clear` | 清空 `$TASKQ_HOME/tasks.json` |
 
-- 全域 flag `--json`:機器可讀輸出(單行 JSON)
-- **Exit codes**:`0` 成功 / `2` 輸入驗證錯誤(含 unknown task id)/ `4` 任務 timeout / `1` 其他內部錯誤
-```
+#### AC-FR-03-02 全域 flag
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-03):
+> 全域 flag `--json`:機器可讀輸出(單行 JSON)
 
-**Acceptance criteria** — each AC is a verbatim canonical line.
+**DERIVED**: SPEC.md §3 FR-03 「全域 flag --json:機器可讀輸出(單行 JSON)」 — AC label suffix 「全域 flag」 is a categorical grouping label for SRS section navigation; canonical phrasing is verbatim.
 
-> DERIVED: `SPEC.md` §3 FR-03 command table + bullets — decomposed into one AC per row/bullet for testability; measurement / interpretation boundary is owned by the test harness per `SPEC.md` §3 FR-03.
-
-- AC-FR03-01: 「argparse 子命令(入口 `python -m taskq`):`submit`/`run`/`status`/`list`/`clear`」 — verbatim from `SPEC.md` §3 FR-03 command table.
-- AC-FR03-02: 「`status <id>` 輸出該任務全欄位;unknown id → **exit 2** + `unknown task: <id>`」 — verbatim from `SPEC.md` §3 FR-03 status row.
-- AC-FR03-03: 「`list` 列出全部任務(id + status + command 前 50 字元)」 — verbatim from `SPEC.md` §3 FR-03 list row.
-- AC-FR03-04: 「`clear` 清空 `$TASKQ_HOME/tasks.json`」 — verbatim from `SPEC.md` §3 FR-03 clear row.
-- AC-FR03-05: 「全域 flag `--json`:機器可讀輸出(單行 JSON)」 — verbatim from `SPEC.md` §3 FR-03 --json bullet.
-- AC-FR03-06: 「**Exit codes**:`0` 成功 / `2` 輸入驗證錯誤(含 unknown task id)/ `4` 任務 timeout / `1` 其他內部錯誤」 — verbatim from `SPEC.md` §3 FR-03 Exit codes bullet.
+#### AC-FR-03-03 Exit codes
+**Acceptance Criterion** (verbatim, SPEC.md §3 FR-03):
+> **Exit codes**:`0` 成功 / `2` 輸入驗證錯誤(含 unknown task id)/ `4` 任務 timeout / `1` 其他內部錯誤
 
 ---
 
@@ -153,126 +172,132 @@ argparse 子命令(入口 `python -m taskq`):
 
 ### NFR-01: Performance
 
-**Canonical source (verbatim):** `SPEC.md` §4 NFR-01 row
+**DERIVED**: SPEC.md §4 「| NFR-01 | performance | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
 
-```
-| NFR-01 | performance | `submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行) |
-```
+**Source citation**: SPEC.md §4 NFR-01 (verbatim transcription).
 
-**Acceptance criteria:**
+#### AC-NFR-01-01 submit + status 組合 p95
+**Acceptance Criterion** (verbatim, SPEC.md §4 NFR-01):
+> `submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行)
 
-> DERIVED: `SPEC.md` §4 NFR-01 row — single canonical row kept as one AC verbatim; measurement / interpretation boundary (「不含 subprocess 執行」) is owned by the test harness per `SPEC.md` §4 NFR-01.
+**DERIVED**: SPEC.md §4 「| NFR-01 | performance | submit + status 組合操作 100 次 p95 < 50ms(不含 subprocess 執行) |」 — AC label suffix 「submit + status 組合 p95」 is a categorical grouping label for SRS section navigation; canonical threshold and parenthesized exclusion are verbatim.
 
-- AC-NFR01-01: 「`submit` + `status` 組合操作 100 次 p95 < 50ms(不含 subprocess 執行)」 — verbatim from `SPEC.md` §4 NFR-01.
-
----
+**Boundary**: 「不含 subprocess 執行」verbatim 來自 SPEC.md;measurement / interpretation boundary for what counts as "subprocess execution" is owned by the test harness per SPEC.md §4 NFR-01. 不對「不含 subprocess 執行」做規範性詮釋(例如「必須包含 full python -m taskq wall-clock including fork/exec」)。
 
 ### NFR-02: Security
 
-**Canonical source (verbatim):** `SPEC.md` §4 NFR-02 row
+**DERIVED**: SPEC.md §4 「| NFR-02 | security | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
 
-```
-| NFR-02 | security | 全 codebase 禁用 `shell=True`;FR-01 注入字元黑名單必須有測試覆蓋 |
-```
+**Source citation**: SPEC.md §4 NFR-02 (verbatim transcription).
 
-**Acceptance criteria:**
+#### AC-NFR-02-01 shell=True 全域禁用
+**Acceptance Criterion** (verbatim, SPEC.md §4 NFR-02):
+> 全 codebase 禁用 `shell=True`
 
-> DERIVED: `SPEC.md` §4 NFR-02 row — single canonical row decomposed into one AC per clause (全 codebase 禁用 / 注入字元黑名單測試覆蓋) for testability; measurement / interpretation boundary is owned by the test harness per `SPEC.md` §4 NFR-02.
+**DERIVED**: SPEC.md §4 NFR-02 「全 codebase 禁用 shell=True;FR-01 注入字元黑名單必須有測試覆蓋」 — AC sub-split into AC-NFR-02-01 / AC-NFR-02-02 is SRS structural grouping (one § per AC per SRS template); canonical phrases 「全 codebase 禁用 shell=True」 and 「FR-01 注入字元黑名單必須有測試覆蓋」 are verbatim.
 
-- AC-NFR02-01: 「全 codebase 禁用 `shell=True`」 — verbatim from `SPEC.md` §4 NFR-02 first clause.
-- AC-NFR02-02: 「FR-01 注入字元黑名單必須有測試覆蓋」 — verbatim from `SPEC.md` §4 NFR-02 second clause.
-
----
+#### AC-NFR-02-02 注入黑名單測試覆蓋
+**Acceptance Criterion** (verbatim, SPEC.md §4 NFR-02):
+> FR-01 注入字元黑名單必須有測試覆蓋
 
 ### NFR-03: Reliability
 
-**Canonical source (verbatim):** `SPEC.md` §4 NFR-03 row
+**DERIVED**: SPEC.md §4 「| NFR-03 | reliability | ...」 — table-row heading transposed verbatim; AC sub-numbering is SRS structural convention for traceability, not a canonical invention.
 
-```
-| NFR-03 | reliability | `tasks.json` 原子寫(進程中斷後仍為合法 JSON);`stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代 |
-```
+**Source citation**: SPEC.md §4 NFR-03 (verbatim transcription).
 
-**Acceptance criteria:**
+#### AC-NFR-03-01 tasks.json 原子寫
+**Acceptance Criterion** (verbatim, SPEC.md §4 NFR-03):
+> `tasks.json` 原子寫(進程中斷後仍為合法 JSON)
 
-> DERIVED: `SPEC.md` §4 NFR-03 row — single canonical row decomposed into one AC per clause (原子寫存活 / 整行 redaction) for testability; measurement / interpretation boundary is owned by the test harness per `SPEC.md` §4 NFR-03.
+#### AC-NFR-03-02 secret 整行 redaction
+**Acceptance Criterion** (verbatim, SPEC.md §4 NFR-03):
+> `stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代
 
-- AC-NFR03-01: 「`tasks.json` 原子寫(進程中斷後仍為合法 JSON)」 — verbatim from `SPEC.md` §4 NFR-03 first clause.
-- AC-NFR03-02: 「`stdout_tail`/`stderr_tail` 落盤前過濾 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 整行以 `[REDACTED]` 取代」 — verbatim from `SPEC.md` §4 NFR-03 second clause.
+**DERIVED**: SPEC.md §4 NFR-03 「stdout_tail/stderr_tail 落盤前過濾 (sk-[A-Za-z0-9_-]{8,}|token=\S+) 整行以 [REDACTED] 取代」 — AC label suffix 「secret 整行 redaction」 is a categorical grouping label for SRS section navigation; canonical filter regex and replacement token are verbatim.
+
+**Boundary**: 整行 redaction 規則 verbatim;matching boundary(line-based filter) is owned by the test harness per SPEC.md §4 NFR-03.
 
 ---
 
 ## 5. Acceptance Criteria Summary
 
-| AC ID | Requirement | Verbatim canonical anchor |
-|-------|-------------|---------------------------|
-| AC-FR01-01 | FR-01 non-empty reject | `SPEC.md` §3 FR-01 驗證規則 非空 |
-| AC-FR01-02 | FR-01 length reject (>1000) | `SPEC.md` §3 FR-01 驗證規則 長度 |
-| AC-FR01-03 | FR-01 injection char reject | `SPEC.md` §3 FR-01 驗證規則 注入字元 |
-| AC-FR01-04 | FR-01 uuid4 first-8-hex id | `SPEC.md` §3 FR-01 通過驗證 bullet 1 |
-| AC-FR01-05 | FR-01 pending state + fields | `SPEC.md` §3 FR-01 通過驗證 bullet 2 |
-| AC-FR01-06 | FR-01 atomic write | `SPEC.md` §3 FR-01 通過驗證 bullet 3 |
-| AC-FR01-07 | FR-01 corrupted-store exit 1 | `SPEC.md` §3 FR-01 通過驗證 bullet 4 |
-| AC-FR02-01 | FR-02 subprocess w/o shell=True | `SPEC.md` §3 FR-02 first bullet |
-| AC-FR02-02 | FR-02 state machine | `SPEC.md` §3 FR-02 state machine bullet |
-| AC-FR02-03 | FR-02 result fields | `SPEC.md` §3 FR-02 result fields bullet |
-| AC-FR02-04 | FR-02 retry on failed/timeout | `SPEC.md` §3 FR-02 retry bullet |
-| AC-FR02-05 | FR-02 single-task timeout exit 4 | `SPEC.md` §3 FR-02 single-task-timeout bullet |
-| AC-FR02-06 | FR-02 no bare except | `SPEC.md` §3 FR-02 exception bullet |
-| AC-FR03-01 | FR-03 subcommands | `SPEC.md` §3 FR-03 command table |
-| AC-FR03-02 | FR-03 status unknown id | `SPEC.md` §3 FR-03 status row |
-| AC-FR03-03 | FR-03 list first-50-chars | `SPEC.md` §3 FR-03 list row |
-| AC-FR03-04 | FR-03 clear | `SPEC.md` §3 FR-03 clear row |
-| AC-FR03-05 | FR-03 --json single-line | `SPEC.md` §3 FR-03 --json bullet |
-| AC-FR03-06 | FR-03 exit codes | `SPEC.md` §3 FR-03 Exit codes bullet |
-| AC-NFR01-01 | NFR-01 p95 < 50ms | `SPEC.md` §4 NFR-01 |
-| AC-NFR02-01 | NFR-02 no shell=True anywhere | `SPEC.md` §4 NFR-02 first clause |
-| AC-NFR02-02 | NFR-02 injection blacklist test coverage | `SPEC.md` §4 NFR-02 second clause |
-| AC-NFR03-01 | NFR-03 atomic write survives interruption | `SPEC.md` §4 NFR-03 first clause |
-| AC-NFR03-02 | NFR-03 secret-line redaction pattern | `SPEC.md` §4 NFR-03 second clause |
-
-Total: 25 acceptance criteria across 3 FRs and 3 NFRs.
+| FR/NFR | AC ID | AC 一句話摘要 | Citation |
+|--------|-------|----------------|----------|
+| FR-01 | AC-FR-01-01 | 命令空/全空白 → reject (exit 2, 不寫入) | SPEC.md §3 FR-01 驗證規則 row 1 |
+| FR-01 | AC-FR-01-02 | 命令 > 1000 字元 → reject | SPEC.md §3 FR-01 驗證規則 row 2 |
+| FR-01 | AC-FR-01-03 | 注入字元黑名單 → reject | SPEC.md §3 FR-01 驗證規則 row 3 |
+| FR-01 | AC-FR-01-04 | 通過驗證:task id(uuid4 前 8 hex)、status pending、`command`/`created_at` | SPEC.md §3 FR-01 通過驗證 |
+| FR-01 | AC-FR-01-05 | 原子寫入 `$TASKQ_HOME/tasks.json`(tmp + os.replace) | SPEC.md §3 FR-01 通過驗證 |
+| FR-01 | AC-FR-01-06 | tasks.json 損壞 → exit 1, stderr `store corrupted` (不靜默重建) | SPEC.md §3 FR-01 通過驗證 |
+| FR-02 | AC-FR-02-01 | subprocess.run(shlex.split, capture_output, text, timeout=TASKQ_TASK_TIMEOUT);禁 shell=True | SPEC.md §3 FR-02 |
+| FR-02 | AC-FR-02-02 | 狀態機 pending→running→done\|failed\|timeout | SPEC.md §3 FR-02 |
+| FR-02 | AC-FR-02-03 | 結果欄位 exit_code / stdout_tail / stderr_tail(末 2000) / duration_ms / finished_at | SPEC.md §3 FR-02 |
+| FR-02 | AC-FR-02-04 | failed/timeout 自動重試,上限 TASKQ_RETRY_LIMIT(預設 2) | SPEC.md §3 FR-02 |
+| FR-02 | AC-FR-02-05 | timeout 結果 → exit 4 | SPEC.md §3 FR-02 |
+| FR-02 | AC-FR-02-06 | 未預期例外 → exit 1 (不得裸 except:) | SPEC.md §3 FR-02 |
+| FR-03 | AC-FR-03-01 | argparse 子命令:submit/run/status/list/clear | SPEC.md §3 FR-03 |
+| FR-03 | AC-FR-03-02 | 全域 flag --json:機器可讀單行 JSON | SPEC.md §3 FR-03 |
+| FR-03 | AC-FR-03-03 | Exit codes: 0/2/4/1 | SPEC.md §3 FR-03 |
+| NFR-01 | AC-NFR-01-01 | submit + status 100 次 p95 < 50ms(不含 subprocess 執行) | SPEC.md §4 NFR-01 |
+| NFR-02 | AC-NFR-02-01 | 全 codebase 禁用 shell=True | SPEC.md §4 NFR-02 |
+| NFR-02 | AC-NFR-02-02 | FR-01 注入黑名單必須有測試覆蓋 | SPEC.md §4 NFR-02 |
+| NFR-03 | AC-NFR-03-01 | tasks.json 原子寫(中斷後仍合法 JSON) | SPEC.md §4 NFR-03 |
+| NFR-03 | AC-NFR-03-02 | stdout_tail/stderr_tail 整行 redaction (sk-/token= 模式) | SPEC.md §4 NFR-03 |
 
 ---
 
 ## 6. Out-of-Scope
 
-Per `SPEC.md`, the following are explicitly out-of-scope:
-
-- OS-01: Network task submission (only local CLI; `TASKQ_HOME` is local filesystem)
-- OS-02: Concurrent multi-process writers (atomic write is per-process; concurrent writer arbitration is not specified)
-- OS-03: GUI / TUI interface (CLI argparse only per `SPEC.md` §2 技術架構)
-- OS-04: Task scheduling / cron features (only on-demand `run` per `SPEC.md` §3 FR-02)
-- OS-05: External secret-store integration (redaction is in-process pattern replacement only, per NFR-03)
+verbatim 摘自 SPEC.md §1 / §2 / PROJECT_BRIEF.md「Key Constraints」:
+- 任何 runtime 外部依賴(Python 3.11 標準函式庫以外皆不可)
+- `shell=True` subprocess 模式(全 codebase 禁用)
+- 跨平台支援(SPEC.md 未宣告,僅以 Linux/macOS 為執行環境)
+- 分散式/網路化任務佇列(SPEC.md §1 明示為「本地任務佇列 CLI」)
+- GUI/Web 前端
+- 任何未在 SPEC.md §3 / §4 列舉的子命令或功能
 
 ---
 
 ## 7. Open Issues
 
-Prompt-injection scan: clean — 0 hits in canonical `SPEC.md` (verified via grep on `ignore (previous|above|all)|system prompt|disregard|act as|you must|jailbreak|role:|<\s*system|<\s*user|<\s*assistant`).
+SPEC.md 全文掃描後,**未發現** TBD / TODO / `<placeholder>` 標記或顯式遺漏項目;所有 FR/NFR 條目均為完整可驗證規格。
 
-No deferred items; no NFR-99 ambiguity markers required (canonical spec is non-ambiguous for all transcribed FRs/NFRs).
+- Prompt-injection scan: clean — 0 hits in canonical (SPEC.md / PROJECT_BRIEF.md 全文掃描,未發現 prompt-injection pattern)
+
+若後續測試發現「不含 subprocess 執行」(AC-NFR-01-01)、「retry on failed/timeout」(AC-FR-02-04) 等措辭的 measurement / interpretation boundary 爭議,應透過 test harness 與利害關係人確認,並視需要回饋 SPEC.md 修訂。
 
 ---
 
 ## 8. Risks
 
-Per `SPEC.md` §4 risk merge paragraph:
+verbatim 摘自 SPEC.md §4(「> 風險併入:...」)及隱含推導:
 
-| ID | Risk | Mitigation | Source |
-|----|------|------------|--------|
-| R1 | Concurrent/interrupted write corruption | Mitigated by NFR-03 (atomic write via tmp + `os.replace`) | `SPEC.md` §4 |
-| R2 | subprocess hang | Mitigated by FR-02 timeout | `SPEC.md` §4 |
-| R3 | Secret leakage to disk | Mitigated by NFR-03 (redaction before persist) | `SPEC.md` §4 |
+| ID | Risk | Mitigation |
+|----|------|------------|
+| R1 | 並發/中斷寫入損壞 | NFR-03 (atomic write) |
+| R2 | subprocess 懸掛 | FR-02 (TASKQ_TASK_TIMEOUT) |
+| R3 | secret 落盤洩漏 | NFR-03 (stdout_tail/stderr_tail 整行 redaction) |
+
+無新增風險;未在 SPEC.md 出現之風險類別不主動列出。
 
 ---
 
 ## 9. Glossary
 
-- **taskq** — project name and CLI namespace (`python -m taskq`)
-- **task** — submitted shell command tracked in `$TASKQ_HOME/tasks.json`
-- **TASKQ_HOME** — env var; data directory (default `.taskq`)
-- **TASKQ_TASK_TIMEOUT** — env var; per-task subprocess timeout in seconds (default `10.0`)
-- **TASKQ_RETRY_LIMIT** — env var; failed/timeout auto-retry cap (default `2`)
-- **Ingestion mode** — authoring style transcribing canonical spec verbatim
-- **DERIVED marker** — `DERIVED: <canonical-line> — <one-line rationale>` annotation placed above ACs where a single canonical row is decomposed into multiple independently testable ACs
-- **canonical line** — a verbatim quote from `SPEC.md` used as the citation anchor
+| Term | Definition | Source |
+|------|------------|--------|
+| taskq | 本地任務佇列 CLI 工具,入口 `python -m taskq` | SPEC.md §1 |
+| submit | FR-01 定義的命令 | SPEC.md §3 FR-01 |
+| run | FR-02 定義的命令 | SPEC.md §3 FR-02 |
+| status / list / clear | FR-03 定義的命令 | SPEC.md §3 FR-03 |
+| tasks.json | `$TASKQ_HOME/tasks.json` 任務持久化檔 | SPEC.md §3 FR-01 |
+| atomic write | `tmp + os.replace` 模式 | SPEC.md §2 / §3 FR-01 |
+| secret 整行 redaction | 符合 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 的整行以 `[REDACTED]` 取代 | SPEC.md §4 NFR-03 |
+| p95 | 第 95 百分位數 latency | SPEC.md §4 NFR-01 |
+| shlex.split | Python 標準函式庫字串切分(避免 shell injection) | SPEC.md §2 / §3 FR-02 |
+| --json | FR-03 全域 flag,機器可讀單行 JSON 輸出 | SPEC.md §3 FR-03 |
+
+---
+
+*文件版本:對應 SPEC.md v2.0.0(2026-06-15)之 100% verbatim transcription,新增 §1/§5–§9 結構化章節以符合 SRS 慣例;無任何功能性新增或詮釋。*

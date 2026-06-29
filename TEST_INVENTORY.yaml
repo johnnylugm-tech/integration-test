@@ -1,590 +1,387 @@
-# TEST_INVENTORY.yaml — Per-FR test function enumeration derived 1:1 from TRACEABILITY_MATRIX.md §3 + §4
-# Document version: 5.0.0 | 2026-06-29 (Round 5: HIGH-severity B-2 fixes applied — removed invented TC-CFG-01..03, restored matrix-canonical TC-FR01-01..05 (split TC-FR01-04 + TC-FR01-05), restored matrix-canonical TC-FR02-01..05 (removed invented TC-FR02-06), split TC-NFR03-02 into ≥2 sub-cases per matrix C7, fixed module-owner naming drift to match matrix §2.2 verbatim. ROUND 5 ADDITIONAL FIX: FR-03 matrix_id field drift — pytest tc_id suffixes were sequential (fr03_01..fr03_06) but the matrix_id field inside each entry was mis-shifted by one (entry 02 carried TC-FR03-03, entry 06 carried invented TC-FR03-07, TC-FR03-02 silently omitted). Restored canonical alignment so each FR-03 entry's matrix_id equals its matrix §3.3 row verbatim. by_layer unit/integration counts (21/7) reconciled to per_layer_totals_reconcile (18/9).)
-# Companion to: 01-requirements/SRS.md v1.0.0 (APPROVED) and 01-requirements/TRACEABILITY_MATRIX.md v1.0.0 (APPROVED)
-# Mode: INGESTION (100% derived from approved TRACEABILITY_MATRIX.md §3 forward trace; no new tests invented; tc_id naming follows matrix canonical TC-FRNN-NN / TC-NFRNN-NN pattern, file-scoped pytest names use matrix-derived IDs)
-# Purpose: Single-source enumeration of every test case that must exist in Phase 3 per-FR TDD, mapped to its matrix tc_id, verifying AC ID(s), owner module (per matrix §2.2), design element, and verification locus. This file is consumed by Phase 3 (implementation) and Phase 4 (testing) to drive RED -> GREEN -> IMPROVE -> GATE1 and to validate coverage before Gate 3 exit.
-# Naming convention enforced (per phase1_plan.md Sub-Task 4/4): one YAML entry per matrix §3 row, including every a..g sub-case. Range syntax TC-NNFR02-02a..g in matrix is documentation shorthand; here each sub-case is a SEPARATE tc_id entry (NO collapsing). Test files live under tests/ with prefix test_fr<NN>_<scope>.py or test_nfr<NN>_<scope>.py.
+# TEST_INVENTORY.yaml — Per-FR test function enumeration derived 1:1 from TRACEABILITY_MATRIX.md §2 / §3 (Round 5)
+# Document version: 1.5.0 | 2026-06-29
+# Companion to: 01-requirements/SRS.md v1.0.0 (APPROVED) and 01-requirements/TRACEABILITY_MATRIX.md v1.5.0 (APPROVED)
+# Mode: INGESTION (100% derived from approved TRACEABILITY_MATRIX.md §2 forward + §3 reverse; no new tests invented)
+# Purpose: Single-source enumeration of every test case that must exist in Phase 3 per-FR TDD (or Phase 5 for verification hooks), mapped to its verifying AC ID(s), owner module, file path, and verification locus. This file is consumed by Phase 3 (implementation) and Phase 4 (testing) to drive RED -> GREEN -> IMPROVE -> GATE1 and to validate coverage before Gate 3 exit.
+# Naming convention enforced: test_<frNN>_<descriptive> for Python pytest (matches harness convention per SRS §3 owner = taskq (Python); see CLAUDE.md "Language" note). Test files live under tests/ with prefix test_fr<NN>_<scope>.py or test_nfr<NN>_<scope>.py; perf hooks live under tests/bench/.
+# 1:1 rule (matrix §2 forward trace): every tc_id enumerated in matrix §2 (e.g. test_fr01_001_*..test_fr03_003_*) appears as one independent entry below. No collapsing. No omission. Cross-cutting coverage (matrix §3 reverse map) is signalled via cross_ref_ac_ids / cross_ref_nfrs metadata, NEVER by deletion.
 
 test_inventory:
   metadata:
-    total_test_cases: 28
-    source: TRACEABILITY_MATRIX.md §3 (forward trace) + §4 (backward trace) + §5 (cross-cutting)
+    total_test_cases: 19
+    source: TRACEABILITY_MATRIX.md §2 forward trace + §3 reverse trace (approved 2026-06-29)
     source_approved: 2026-06-29
-    enumeration_rule: "Every tc_id enumerated in matrix §3.1 (TC-FR01-01..05), §3.2 (TC-FR02-01..05), §3.3 (TC-FR03-01..06), §3.4 (TC-NFR01-01), §3.5 (TC-NFR02-01 + TC-NFR02-02a..g), §3.6 (TC-NFR03-01 + TC-NFR03-02a + TC-NFR03-02b) appears as one independent YAML entry. NO invented entries. NO matrix omissions. Cross-cutting relationships signalled via cross_ref_ac_ids / cross_ref_nfrs metadata. Module-owner names match matrix §2.2 verbatim (taskq.validate; taskq.cli.{submit_cmd, run_cmd, status_cmd, list_cmd, clear_cmd}; taskq.store.{atomic_write_json, new_task_id, save_tasks, load_tasks}; taskq.executor.{run_task, run_with_retry}; taskq.redact.redact_line; taskq.config.{get_home, get_task_timeout, get_retry_limit})."
-    naming_convention: "Python pytest — pytest node id = tests/test_fr<NN>_<scope>.py::test_tc_<matrix_id_lowercase_with_sub_case> (matrix-canonical TC ID lowercased; matches SRS §1.4 owner=taskq, Python 3.11 stdlib only)"
-    test_file_convention: "tests/test_fr01_submit.py (FR-01 AC-1..AC-5), tests/test_fr02_run.py (FR-02 AC-1..AC-5), tests/test_fr03_cli.py (FR-03 AC-1..AC-6), tests/test_nfr01_perf.py (NFR-01), tests/test_nfr02_security.py (NFR-02 shell=True grep + per-char blacklist), tests/test_nfr03_reliability.py (NFR-03 atomic write + redaction sub-cases)"
-    all_status_draft_round_4: true
+    naming_convention: "Python pytest — test_<frNN>_<descriptive> or test_nfr<NN>_<descriptive> (matches SRS §3 owner=taskq, Python 3.11 stdlib only)"
+    test_file_convention: "tests/test_fr<NN>_<scope>.py for FR tests; tests/test_nfr<NN>_<scope>.py for NFR tests; tests/bench/test_nfr01_p95.py for NFR-01 benchmark; static scan = grep -rn \"shell=True\" src/ (not a tc_id)"
+    all_status_draft_round_5: true
     notes:
-      - "Every tc_id listed in matrix §3.1..§3.6 appears as one independent entry below — no collapsing, no omissions, no inflation, no reuse-as-shorthand, no invented TC IDs."
-      - "Round 5 HIGH-severity B-2 fixes applied (Round 4 fixes preserved): (1) removed invented TC-CFG-01..03 (matrix has zero CFG sections); (2) split Round 3's test_tc_fr01_01g (collapsed TC-FR01-04+05) into two matrix-canonical entries test_tc_fr01_04 + test_tc_fr01_05; (3) removed invented TC-FR02-06_retry_policy; (4) split test_tc_nfr03_02 (collapsed sk-/token= branches) into 02a + 02b per matrix §3.6 L121; (5) corrected module-owner naming drift to match matrix §2.2 verbatim; (6) NEW Round 5 B-2 REJECT fixes — (a) FR-03 matrix_id drift: pytest tc_id suffixes were sequential (fr03_01..fr03_06) but the matrix_id FIELD inside each entry was mis-shifted by one, causing entry fr03_02 to carry TC-FR03-03 (inventing TC-FR03-07 at entry fr03_06 and omitting TC-FR03-02 entirely). Restored canonical alignment: fr03_01 -> TC-FR03-01 (AC-1), fr03_02 -> TC-FR03-02 (AC-2), fr03_03 -> TC-FR03-03 (AC-3), fr03_04 -> TC-FR03-04 (AC-4), fr03_05 -> TC-FR03-05 (AC-5), fr03_06 -> TC-FR03-06 (AC-6). Now every FR-03 YAML matrix_id matches the matrix §3.3 row verbatim. (b) by_layer count drift: unit was 21 but actual enumerated unit entries are 18 (FR-01:3 + FR-02:3 + FR-03:3 + NFR-02:7 + NFR-03:2); integration was 7 but actual enumerated integration entries are 9 (FR-01:2 + FR-02:2 + FR-03:3 + NFR-02:1 + NFR-03:1). Reconciled by_layer counts to 18/9/1 — both blocks now sum to 28."
-      - "Resulting enumeration: 5 FR-01 + 5 FR-02 + 6 FR-03 + 1 NFR-01 + 1 NFR-02 grep + 7 NFR-02 per-char + 1 NFR-03 atomic + 2 NFR-03 redaction = 28 distinct tc_ids, all directly traceable to matrix §3 row entries."
-      - "Cross-cutting relationships (e.g. FR-01.AC-3 ↔ NFR-02.AC-2 per-char) signalled via cross_ref_ac_ids / cross_ref_nfrs metadata; each matrix tc_id still owns its own YAML entry with its own asserts."
-      - "All tests are TBD-by-phase-3 per matrix; this inventory enumerates the NAMES Phase 3 must author (not implement them)."
+      - "Every tc_id listed in matrix §2 appears as one independent entry below — no collapsing, no omissions."
+      - "Tests cross-listed in §3 reverse map (e.g., test_fr01_005_atomic_write_survives_interrupt <-> AC-NFR-03-01) keep distinct entries; cross-cutting is signalled via cross_ref_ac_ids / cross_ref_nfrs metadata, NOT deletion."
+      - "All tests are TBD-by-phase-3 (or P5 for perf/static hooks) per matrix §2/§4; this inventory enumerates the NAMES Phase 3/P5 must author (not implement them)."
+      - "AC IDs with parametric coverage (e.g. AC-FR-01-03 'one negative per char'; AC-FR-02-02 'parametrized over 3 exit classes'; AC-FR-03-03 'parametrized over all 4 codes') are enumerated as ONE parametrized test entry each — the parametrization is the test contract; per-case data lives in pytest.mark.parametrize ids, not separate tc_ids."
+      - "Static scan `grep -rn \"shell=True\" src/` for AC-NFR-02-01 is a P5 verification hook, NOT a tc_id — it is documented under NFR-02 cross_cutting section, not in by_fr.NFR-02.tests."
 
   by_fr:
     FR-01:
-      tc_count: 5
-      owner_module: taskq.validate / taskq.cli.submit_cmd / taskq.store
-      test_file: tests/test_fr01_submit.py
+      tc_count: 6
+      owner_module: taskq.validate (AC-FR-01-01/02/03) + taskq.store (AC-FR-01-04/05/06)
+      test_file: tests/test_fr01_validate.py + tests/test_fr01_store.py
       tests:
-        - tc_id: test_tc_fr01_01_reject_empty_or_whitespace
-          matrix_id: TC-FR01-01
-          ac_ids: [FR-01.AC-1]
+        - tc_id: test_fr01_001_empty_command_rejected
+          ac_ids: [AC-FR-01-01]
           fr: FR-01
           layer: unit
-          file_path: tests/test_fr01_submit.py
+          file_path: tests/test_fr01_validate.py
           asserts:
-            - "submit '' -> exit code 2"
-            - "stderr contains rejection message"
-            - "tasks.json unchanged (no write)"
-            - "submit '   ' (whitespace-only) -> exit code 2"
-            - "tasks.json unchanged on whitespace-only reject"
-          design_element: taskq.validate.is_empty + taskq.cli.submit_cmd (error branch)
+            - "empty string command -> exit 2 + stderr validation error + tasks.json unchanged"
+            - "whitespace-only command ('   ') -> exit 2 + same invariant"
+          design_element: taskq.validate:validate_command
           verification_locus: TDD-RED -> TDD-GREEN -> GATE1
-          cross_ref_ac_ids: [FR-03.AC-6]
+          cross_ref_ac_ids: []
           cross_ref_nfrs: []
-          matrix_sub_case: "Empty / whitespace-only reject (AC-1)"
 
-        - tc_id: test_tc_fr01_02_reject_overlong
-          matrix_id: TC-FR01-02
-          ac_ids: [FR-01.AC-2]
+        - tc_id: test_fr01_002_length_exceeds_1000_rejected
+          ac_ids: [AC-FR-01-02]
           fr: FR-01
           layer: unit
-          file_path: tests/test_fr01_submit.py
+          file_path: tests/test_fr01_validate.py
           asserts:
-            - "submit with command length 1001 -> exit code 2"
-            - "stderr contains length rejection message"
+            - "command length 1001 -> exit 2"
+            - "command length exactly 1000 -> accepted (boundary, exit 0)"
             - "tasks.json unchanged on reject"
-            - "submit with command length exactly 1000 -> accepted (boundary, no reject)"
-            - "tasks.json written successfully on accept"
-          design_element: taskq.validate.check_length + taskq.cli.submit_cmd (error branch)
+          design_element: taskq.validate:validate_command
           verification_locus: TDD-RED -> TDD-GREEN -> GATE1
-          cross_ref_ac_ids: [FR-03.AC-6]
+          cross_ref_ac_ids: []
           cross_ref_nfrs: []
-          matrix_sub_case: "Length > 1000 reject (AC-2) — including 1000-char boundary accept"
 
-        - tc_id: test_tc_fr01_03_reject_injection_chars
-          matrix_id: TC-FR01-03
-          ac_ids: [FR-01.AC-3]
+        - tc_id: test_fr01_003_injection_chars_rejected
+          ac_ids: [AC-FR-01-03]
           fr: FR-01
           layer: unit
-          file_path: tests/test_fr01_submit.py
+          file_path: tests/test_fr01_validate.py
           asserts:
-            - "submit with command containing ';' -> exit code 2"
-            - "submit with command containing '|' -> exit code 2"
-            - "submit with command containing '&' -> exit code 2"
-            - "submit with command containing '$' -> exit code 2"
-            - "submit with command containing '>' -> exit code 2"
-            - "submit with command containing '<' -> exit code 2"
-            - "submit with command containing '`' -> exit code 2"
-            - "tasks.json unchanged on every reject"
-          design_element: taskq.validate.check_injection_chars + taskq.cli.submit_cmd (error branch)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: [FR-03.AC-6]
-          cross_ref_nfrs: [NFR-02-AC-2]
-          matrix_sub_case: "Injection-char reject (AC-3) — any of ; | & $ > < ` triggers exit 2"
+            - "all 7 injection chars ( ; | & $ > < backtick ) cause exit 2 (parametrized, one negative per char)"
+            - "tasks.json unchanged on reject"
+          design_element: taskq.validate:validate_command (blacklist `; | & $ > < backtick`)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: [AC-NFR-02-02]
+          cross_ref_nfrs: [NFR-02]
 
-        - tc_id: test_tc_fr01_04_valid_submit_writes_pending
-          matrix_id: TC-FR01-04
-          ac_ids: [FR-01.AC-4]
+        - tc_id: test_fr01_004_pending_fields_initialized
+          ac_ids: [AC-FR-01-04]
           fr: FR-01
-          layer: integration
-          file_path: tests/test_fr01_submit.py
+          layer: unit
+          file_path: tests/test_fr01_store.py
           asserts:
-            - "1000 generated ids all match ^[0-9a-f]{8}$"
-            - "record has fields: id, command, status, created_at"
-            - "status == 'pending'"
+            - "generated id matches ^[0-9a-f]{8}$ (uuid4 hex prefix)"
+            - "record.status == 'pending'"
+            - "record has fields: id, status, command, created_at"
             - "created_at is ISO-8601 format"
-            - "submit persists via atomic_write_json (tmp + os.replace)"
-            - "tasks.json valid JSON after submit"
-          design_element: taskq.store.new_task_id + taskq.store.atomic_write_json + taskq.store.save_tasks + taskq.cli.submit_cmd (success branch)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2
-          cross_ref_ac_ids: [FR-03.AC-6]
-          cross_ref_nfrs: [NFR-01, NFR-03-AC-1]
-          matrix_sub_case: "Valid submit writes uuid4-8hex id + pending + atomic write (AC-4)"
+          design_element: taskq.store:append_task + taskq.validate:generate_task_id
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: []
+          cross_ref_nfrs: []
 
-        - tc_id: test_tc_fr01_05_corrupt_store_exits_one
-          matrix_id: TC-FR01-05
-          ac_ids: [FR-01.AC-5]
+        - tc_id: test_fr01_005_atomic_write_survives_interrupt
+          ac_ids: [AC-FR-01-05]
           fr: FR-01
           layer: integration
-          file_path: tests/test_fr01_submit.py
+          file_path: tests/test_fr01_store.py
           asserts:
-            - "pre-seeded invalid JSON in $TASKQ_HOME/tasks.json -> exit code 1"
-            - "stderr contains 'store corrupted' message"
-            - "file content unchanged on disk (no silent rebuild)"
-            - "no task is created in the (uncorrupted) in-memory state"
-          design_element: taskq.store.load_tasks (parse-fail branch) + taskq.cli.submit_cmd (startup hook)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2
-          cross_ref_ac_ids: [FR-03.AC-6]
-          cross_ref_nfrs: [NFR-03-AC-1]
-          matrix_sub_case: "Corrupt store detected at startup -> exit 1 + 'store corrupted' (AC-5)"
+            - "write path uses tmp file + os.replace (atomic rename)"
+            - "concurrent reader thread polling file during write never observes partial JSON"
+            - "final file parses as valid JSON"
+          design_element: taskq.store:atomic_write (tmp + os.replace)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: [AC-NFR-03-01]
+          cross_ref_nfrs: [NFR-03]
+
+        - tc_id: test_fr01_006_corrupt_store_exit1
+          ac_ids: [AC-FR-01-06]
+          fr: FR-01
+          layer: integration
+          file_path: tests/test_fr01_store.py
+          asserts:
+            - "pre-seeded invalid JSON in tasks.json -> exit 1"
+            - "stderr contains literal 'store corrupted'"
+            - "file content unchanged (no silent rebuild)"
+          design_element: taskq.store:load_store (corruption detection)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: []
+          cross_ref_nfrs: []
 
     FR-02:
-      tc_count: 5
-      owner_module: taskq.executor / taskq.cli.run_cmd / taskq.config
-      test_file: tests/test_fr02_run.py
+      tc_count: 7
+      owner_module: taskq.runner (AC-FR-02-01/02/03/04/06) + taskq.cli (AC-FR-02-05)
+      test_file: tests/test_fr02_runner.py + tests/test_fr02_cli.py
       tests:
-        - tc_id: test_tc_fr02_01_subprocess_no_shell
-          matrix_id: TC-FR02-01
-          ac_ids: [FR-02.AC-1]
+        - tc_id: test_fr02_001_subprocess_form_no_shell
+          ac_ids: [AC-FR-02-01]
           fr: FR-02
           layer: unit
-          file_path: tests/test_fr02_run.py
+          file_path: tests/test_fr02_runner.py
           asserts:
-            - "subprocess.run called with shlex.split(command) as argv list"
-            - "capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT kwargs present"
-            - "shell=False kwarg present (shell=True never used)"
-          design_element: taskq.executor.run_task + subprocess.run call site
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: []
-          cross_ref_nfrs: [NFR-02-AC-1]
-          matrix_sub_case: "Execution via subprocess.run(shlex.split(...)); shell=True forbidden (AC-1)"
+            - "subprocess.run called with kwargs: shlex.split(command), capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT"
+            - "no shell=True kwarg"
+          design_element: taskq.runner:run_task
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: [AC-NFR-02-01]
+          cross_ref_nfrs: [NFR-02]
 
-        - tc_id: test_tc_fr02_02_result_fields_persisted
-          matrix_id: TC-FR02-02
-          ac_ids: [FR-02.AC-2]
+        - tc_id: test_fr02_002_state_transitions
+          ac_ids: [AC-FR-02-02]
           fr: FR-02
           layer: unit
-          file_path: tests/test_fr02_run.py
+          file_path: tests/test_fr02_runner.py
           asserts:
-            - "result record has exit_code field"
-            - "result record has stdout_tail (last 2000 chars)"
-            - "result record has stderr_tail (last 2000 chars)"
-            - "result record has duration_ms field"
-            - "result record has finished_at field"
-            - "stdout_tail == captured stdout[-2000:] when stdout exceeds 2000 chars"
-            - "stderr_tail == captured stderr[-2000:] when stderr exceeds 2000 chars"
-          design_element: taskq.executor.run_task (post-exec field capture) + taskq.store.save_tasks
+            - "exit 0 -> status == 'done' (parametrized over 3 exit classes: done / failed / timeout)"
+            - "exit non-zero -> status == 'failed'"
+            - "TimeoutExpired exception -> status == 'timeout'"
+            - "state transition order: pending -> running -> {done|failed|timeout}"
+          design_element: taskq.runner:run_task (state machine)
           verification_locus: TDD-RED -> TDD-GREEN -> GATE1
           cross_ref_ac_ids: []
-          cross_ref_nfrs: [NFR-03-AC-2]
-          matrix_sub_case: "Result fields persisted: exit_code, stdout_tail, stderr_tail, duration_ms, finished_at (AC-2)"
-
-        - tc_id: test_tc_fr02_03_retry_on_failed_or_timeout
-          matrix_id: TC-FR02-03
-          ac_ids: [FR-02.AC-3]
-          fr: FR-02
-          layer: integration
-          file_path: tests/test_fr02_run.py
-          asserts:
-            - "run returning non-zero exit -> retried up to TASKQ_RETRY_LIMIT times (default 2)"
-            - "run returning TimeoutExpired -> retried up to TASKQ_RETRY_LIMIT times (default 2)"
-            - "retry counter equals TASKQ_RETRY_LIMIT after exhaustion"
-            - "successful run (exit 0) -> single attempt, no retry"
-            - "final status reflects last attempt's outcome"
-          design_element: taskq.executor.run_with_retry + taskq.config.get_retry_limit
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2
-          cross_ref_ac_ids: []
           cross_ref_nfrs: []
-          matrix_sub_case: "Retry failed/timeout up to TASKQ_RETRY_LIMIT (default 2) (AC-3)"
 
-        - tc_id: test_tc_fr02_04_timeout_exit_4
-          matrix_id: TC-FR02-04
-          ac_ids: [FR-02.AC-4]
-          fr: FR-02
-          layer: integration
-          file_path: tests/test_fr02_run.py
-          asserts:
-            - "TimeoutExpired raised by executor in single-task run -> process exit code 4"
-            - "final task status == 'timeout'"
-            - "stderr contains the timeout-class error mapping"
-          design_element: taskq.executor.run_task (TimeoutExpired path) + taskq.cli.run_cmd (exit-code mapping)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2
-          cross_ref_ac_ids: [FR-03.AC-6]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Single-task mode timeout -> exit 4 (AC-4)"
-
-        - tc_id: test_tc_fr02_05_unexpected_exception_exit_1
-          matrix_id: TC-FR02-05
-          ac_ids: [FR-02.AC-5]
+        - tc_id: test_fr02_003_result_fields_populated
+          ac_ids: [AC-FR-02-03]
           fr: FR-02
           layer: unit
-          file_path: tests/test_fr02_run.py
+          file_path: tests/test_fr02_runner.py
           asserts:
-            - "unexpected exception raised in run path propagates to exit code 1"
-            - "no bare 'except:' clause exists in taskq.executor.run_with_retry"
-            - "no bare 'except:' clause exists in taskq.cli.run_cmd"
-            - "stderr contains the exception class name and message"
-          design_element: taskq.executor.run_with_retry (no bare except) + taskq.cli.run_cmd (top-level catch)
+            - "result has fields: exit_code, stdout_tail, stderr_tail, duration_ms, finished_at"
+            - "stdout_tail and stderr_tail truncated to last 2000 chars"
+          design_element: taskq.runner:build_result
           verification_locus: TDD-RED -> TDD-GREEN -> GATE1
-          cross_ref_ac_ids: [FR-03.AC-6]
+          cross_ref_ac_ids: [AC-NFR-03-02]
+          cross_ref_nfrs: [NFR-03]
+
+        - tc_id: test_fr02_004_retry_until_limit
+          ac_ids: [AC-FR-02-04]
+          fr: FR-02
+          layer: integration
+          file_path: tests/test_fr02_runner.py
+          asserts:
+            - "TASKQ_RETRY_LIMIT=2: failed command retried up to 2 additional times (3 total attempts)"
+            - "after limit exhausted, final status reflects last attempt"
+            - "parametrized over TASKQ_RETRY_LIMIT values 0/1/2/3"
+          design_element: taskq.runner:run_task (retry loop up to TASKQ_RETRY_LIMIT)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: []
           cross_ref_nfrs: []
-          matrix_sub_case: "Unexpected exception -> exit 1, no bare except: (AC-5)"
+
+        - tc_id: test_fr02_004b_no_retry_on_done
+          ac_ids: [AC-FR-02-04]
+          fr: FR-02
+          layer: unit
+          file_path: tests/test_fr02_runner.py
+          asserts:
+            - "exit 0 command (status 'done') is NOT retried (single attempt)"
+            - "subprocess.run invocation count == 1"
+          design_element: taskq.runner:run_task (retry loop, negative path)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: []
+          cross_ref_nfrs: []
+
+        - tc_id: test_fr02_005_timeout_exit_code_4
+          ac_ids: [AC-FR-02-05]
+          fr: FR-02
+          layer: integration
+          file_path: tests/test_fr02_cli.py
+          asserts:
+            - "single-task mode `taskq run <id>` with timeout result -> process exit code == 4"
+            - "non-single-task mode does NOT change behavior (regression guard)"
+          design_element: taskq.cli:cmd_run (single-task mode exit-code policy)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: [AC-FR-03-03]
+          cross_ref_nfrs: []
+
+        - tc_id: test_fr02_006_unexpected_exception_exit1
+          ac_ids: [AC-FR-02-06]
+          fr: FR-02
+          layer: integration
+          file_path: tests/test_fr02_runner.py
+          asserts:
+            - "unexpected exception (e.g. KeyboardInterrupt, OSError) -> exit 1"
+            - "no bare `except:` swallowing (AST scan: every `except:` clause has an exception type or re-raises)"
+          design_element: taskq.runner:run_task (unexpected exception handler)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: [AC-FR-03-03]
+          cross_ref_nfrs: []
 
     FR-03:
-      tc_count: 6
-      owner_module: taskq.cli.main / taskq.cli.{submit_cmd, run_cmd, status_cmd, list_cmd, clear_cmd}
+      tc_count: 4
+      owner_module: taskq.cli (argparse dispatch + exit-code policy)
       test_file: tests/test_fr03_cli.py
       tests:
-        - tc_id: test_tc_fr03_01_argparse_subcommands
-          matrix_id: TC-FR03-01
-          ac_ids: [FR-03.AC-1]
+        - tc_id: test_fr03_001_subcommands_dispatch
+          ac_ids: [AC-FR-03-01]
           fr: FR-03
           layer: integration
           file_path: tests/test_fr03_cli.py
           asserts:
-            - "python -m taskq --help lists submit, run, status, list, clear subcommands"
-            - "submit, run, status, list, clear each parse via argparse subparsers"
-            - "global --json flag appears on every subcommand's parser"
-          design_element: taskq.cli.main + taskq.cli.build_parser (argparse subparsers)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
-          cross_ref_ac_ids: [FR-03.AC-5]
-          cross_ref_nfrs: []
-          matrix_sub_case: "python -m taskq exposes submit/run/status/list/clear via argparse (AC-1)"
-
-        - tc_id: test_tc_fr03_02_status_outputs_or_unknown
-          matrix_id: TC-FR03-02
-          ac_ids: [FR-03.AC-2]
-          fr: FR-03
-          layer: unit
-          file_path: tests/test_fr03_cli.py
-          asserts:
-            - "status <known-id> prints all task fields (id, status, command, created_at, exit_code, stdout_tail, stderr_tail, duration_ms, finished_at)"
-            - "status <unknown-id> -> exit code 2"
-            - "stderr contains 'unknown task: <id>' verbatim"
-          design_element: taskq.cli.status_cmd + taskq.store.load_tasks
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
-          cross_ref_ac_ids: [FR-03.AC-6]
-          cross_ref_nfrs: [NFR-01]
-          matrix_sub_case: "status <id> outputs all fields; unknown id -> exit 2 + 'unknown task: <id>' (AC-2)"
-
-        - tc_id: test_tc_fr03_03_list_outputs_per_task
-          matrix_id: TC-FR03-03
-          ac_ids: [FR-03.AC-3]
-          fr: FR-03
-          layer: unit
-          file_path: tests/test_fr03_cli.py
-          asserts:
-            - "list outputs exactly N lines for N tasks"
-            - "each line contains id, status, and command[:50] fields"
-            - "command column truncated to first 50 chars when command longer"
-          design_element: taskq.cli.list_cmd + taskq.store.load_tasks
+            - "all 5 subcommands registered: submit, run, status, list, clear"
+            - "`taskq submit \"cmd\"` invokes FR-01 path"
+            - "`taskq run <id>` invokes FR-02 path"
+            - "`taskq status <id>` prints full record for known id"
+            - "`taskq list` prints one line per task"
+            - "`taskq clear` empties tasks.json"
+          design_element: taskq.cli:main (argparse subcommands)
           verification_locus: TDD-RED -> TDD-GREEN -> GATE1
           cross_ref_ac_ids: []
           cross_ref_nfrs: []
-          matrix_sub_case: "list outputs id + status + first 50 chars of command per task (AC-3)"
 
-        - tc_id: test_tc_fr03_04_clear_empties_store
-          matrix_id: TC-FR03-04
-          ac_ids: [FR-03.AC-4]
-          fr: FR-03
-          layer: integration
-          file_path: tests/test_fr03_cli.py
-          asserts:
-            - "clear empties $TASKQ_HOME/tasks.json (subsequent list returns no tasks)"
-            - "tasks.json is valid empty JSON after clear"
-            - "clear uses atomic_write_json path (not direct overwrite)"
-          design_element: taskq.cli.clear_cmd + taskq.store.save_tasks (empty list)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
-          cross_ref_ac_ids: []
-          cross_ref_nfrs: [NFR-03-AC-1]
-          matrix_sub_case: "clear empties $TASKQ_HOME/tasks.json (AC-4)"
-
-        - tc_id: test_tc_fr03_05_json_flag_single_line
-          matrix_id: TC-FR03-05
-          ac_ids: [FR-03.AC-5]
+        - tc_id: test_fr03_001b_status_unknown_id_exit2
+          ac_ids: [AC-FR-03-01]
           fr: FR-03
           layer: unit
           file_path: tests/test_fr03_cli.py
           asserts:
-            - "--json flag accepted by all subcommands (submit, run, status, list, clear)"
+            - "`taskq status <unknown-id>` -> exit 2"
+            - "stderr contains literal 'unknown task: <id>'"
+          design_element: taskq.cli:cmd_status (negative path)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: [AC-FR-03-03]
+          cross_ref_nfrs: []
+
+        - tc_id: test_fr03_002_json_flag_single_line
+          ac_ids: [AC-FR-03-02]
+          fr: FR-03
+          layer: unit
+          file_path: tests/test_fr03_cli.py
+          asserts:
             - "--json output has no embedded newlines (single line of JSON)"
             - "json.loads(stdout) succeeds without exception"
-          design_element: taskq.cli.main (json-mode formatting) + taskq.cli.status_cmd + taskq.cli.list_cmd (json branch)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
+          design_element: taskq.cli:_print_json (global --json flag)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
           cross_ref_ac_ids: []
           cross_ref_nfrs: []
-          matrix_sub_case: "Global --json flag -> single-line JSON output (AC-5)"
 
-        - tc_id: test_tc_fr03_06_exit_code_matrix
-          matrix_id: TC-FR03-06
-          ac_ids: [FR-03.AC-6]
+        - tc_id: test_fr03_003_exit_code_matrix
+          ac_ids: [AC-FR-03-03]
           fr: FR-03
           layer: integration
           file_path: tests/test_fr03_cli.py
           asserts:
-            - "exit 0: success path (status of a known task)"
-            - "exit 2: input validation error (submit empty; status unknown id)"
-            - "exit 4: task timeout (run on a task whose final result is timeout)"
-            - "exit 1: other internal error (corrupt store; unexpected exception in run)"
-          design_element: taskq.cli.main (exit-code matrix dispatch) + taskq.cli.submit_cmd + taskq.cli.run_cmd + taskq.cli.status_cmd + taskq.cli.clear_cmd
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2
-          cross_ref_ac_ids: []
+            - "exit 0: successful submit + run"
+            - "exit 2: validation error (parametrized over empty command, length > 1000, injection char, unknown id)"
+            - "exit 4: single-task timeout"
+            - "exit 1: corrupted store / unexpected exception"
+          design_element: taskq.cli:main (exit-code policy)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: [AC-FR-01-01, AC-FR-01-02, AC-FR-01-03, AC-FR-01-06, AC-FR-02-05, AC-FR-02-06]
           cross_ref_nfrs: []
-          matrix_sub_case: "Exit-code matrix 0 / 2 / 4 / 1 (AC-6)"
 
     NFR-01:
       tc_count: 1
-      owner_module: test harness (cross-cutting)
-      test_file: tests/test_nfr01_perf.py
+      owner_module: test harness (cross-cutting benchmark)
+      test_file: tests/bench/test_nfr01_p95.py
       tests:
-        - tc_id: test_tc_nfr01_01_p95_under_50ms
-          matrix_id: TC-NFR01-01
-          ac_ids: [NFR-01-AC-1]
+        - tc_id: perf_fr03_nfr01_p95_under_50ms
+          ac_ids: [AC-NFR-01-01]
           fr: NFR-01
           layer: benchmark
-          file_path: tests/test_nfr01_perf.py
+          file_path: tests/bench/test_nfr01_p95.py
           asserts:
-            - "100 iterations of submit (valid command) + status (returned id) cycle"
-            - "95th-percentile wall-clock latency < 50ms"
-            - "subprocess execution time excluded from measurement (mocked)"
-          design_element: end-to-end submit+status loop (taskq.cli.submit_cmd + taskq.cli.status_cmd + taskq.store.atomic_write_json + taskq.store.load_tasks)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> BASELINE
-          cross_ref_ac_ids: [FR-01.AC-4, FR-03.AC-1]
-          cross_ref_nfrs: []
-          matrix_sub_case: "p95 of 100 combined submit+status invocations < 50ms (excludes subprocess exec)"
-
-    NFR-02:
-      tc_count: 8
-      owner_module: taskq.executor (static check) + taskq.validate.check_injection_chars + taskq.cli.submit_cmd (error branch)
-      test_file: tests/test_nfr02_security.py
-      tests:
-        - tc_id: test_tc_nfr02_01_no_shell_true_grep
-          matrix_id: TC-NFR02-01
-          ac_ids: [NFR-02-AC-1]
-          fr: NFR-02
-          layer: integration
-          file_path: tests/test_nfr02_security.py
-          asserts:
-            - "AST/grep scan of all taskq/**/*.py finds zero 'shell=True' kwarg in any subprocess.* call"
-            - "passes for both executor unit (single call site) and codebase-wide scan"
-          design_element: taskq.executor.run_task (single subprocess.run call site with shell=False)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2 -> GATE4
-          cross_ref_ac_ids: [FR-02.AC-1]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Codebase grep: zero shell=True in production code (AC-1)"
-
-        - tc_id: test_tc_nfr02_02a_reject_semicolon
-          matrix_id: TC-NFR02-02a
-          ac_ids: [NFR-02-AC-2]
-          fr: NFR-02
-          layer: unit
-          file_path: tests/test_nfr02_security.py
-          asserts:
-            - "validate_command(';') rejected (per-character blacklist unit)"
-          design_element: taskq.validate.check_injection_chars (blacklist source-of-truth)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: [FR-01.AC-3]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Per-char blacklist unit test (;)"
-
-        - tc_id: test_tc_nfr02_02b_reject_pipe
-          matrix_id: TC-NFR02-02b
-          ac_ids: [NFR-02-AC-2]
-          fr: NFR-02
-          layer: unit
-          file_path: tests/test_nfr02_security.py
-          asserts:
-            - "validate_command('|') rejected (per-character blacklist unit)"
-          design_element: taskq.validate.check_injection_chars
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: [FR-01.AC-3]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Per-char blacklist unit test (|)"
-
-        - tc_id: test_tc_nfr02_02c_reject_ampersand
-          matrix_id: TC-NFR02-02c
-          ac_ids: [NFR-02-AC-2]
-          fr: NFR-02
-          layer: unit
-          file_path: tests/test_nfr02_security.py
-          asserts:
-            - "validate_command('&') rejected (per-character blacklist unit)"
-          design_element: taskq.validate.check_injection_chars
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: [FR-01.AC-3]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Per-char blacklist unit test (&)"
-
-        - tc_id: test_tc_nfr02_02d_reject_dollar
-          matrix_id: TC-NFR02-02d
-          ac_ids: [NFR-02-AC-2]
-          fr: NFR-02
-          layer: unit
-          file_path: tests/test_nfr02_security.py
-          asserts:
-            - "validate_command('$') rejected (per-character blacklist unit)"
-          design_element: taskq.validate.check_injection_chars
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: [FR-01.AC-3]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Per-char blacklist unit test ($)"
-
-        - tc_id: test_tc_nfr02_02e_reject_gt
-          matrix_id: TC-NFR02-02e
-          ac_ids: [NFR-02-AC-2]
-          fr: NFR-02
-          layer: unit
-          file_path: tests/test_nfr02_security.py
-          asserts:
-            - "validate_command('>') rejected (per-character blacklist unit)"
-          design_element: taskq.validate.check_injection_chars
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: [FR-01.AC-3]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Per-char blacklist unit test (>)"
-
-        - tc_id: test_tc_nfr02_02f_reject_lt
-          matrix_id: TC-NFR02-02f
-          ac_ids: [NFR-02-AC-2]
-          fr: NFR-02
-          layer: unit
-          file_path: tests/test_nfr02_security.py
-          asserts:
-            - "validate_command('<') rejected (per-character blacklist unit)"
-          design_element: taskq.validate.check_injection_chars
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: [FR-01.AC-3]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Per-char blacklist unit test (<)"
-
-        - tc_id: test_tc_nfr02_02g_reject_backtick
-          matrix_id: TC-NFR02-02g
-          ac_ids: [NFR-02-AC-2]
-          fr: NFR-02
-          layer: unit
-          file_path: tests/test_nfr02_security.py
-          asserts:
-            - "validate_command('`') rejected (per-character blacklist unit)"
-          design_element: taskq.validate.check_injection_chars
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE4
-          cross_ref_ac_ids: [FR-01.AC-3]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Per-char blacklist unit test (`)"
+            - "100 iterations of submit+status cycle, p95 < 50ms (measured via time.perf_counter)"
+            - "excludes subprocess execution time (mocked or skipped)"
+          design_element: end-to-end submit+status loop (benchmark)
+          verification_locus: P5 BASELINE
+          cross_ref_ac_ids: [AC-FR-01-04, AC-FR-03-01]
+          cross_ref_nfrs: [NFR-01]
 
     NFR-03:
-      tc_count: 3
-      owner_module: taskq.store.atomic_write_json / taskq.executor.run_task (redaction hook) / taskq.redact.redact_line
+      tc_count: 1
+      owner_module: taskq.redact (or inline in taskq.store write path)
       test_file: tests/test_nfr03_reliability.py
       tests:
-        - tc_id: test_tc_nfr03_01_atomic_write_crash_recovery
-          matrix_id: TC-NFR03-01
-          ac_ids: [NFR-03-AC-1]
-          fr: NFR-03
-          layer: integration
-          file_path: tests/test_nfr03_reliability.py
-          asserts:
-            - "child process killed with SIGKILL mid-write -> parent reload reads valid JSON"
-            - "concurrent reader thread polling file during write never observes partial JSON"
-            - "final file parses as valid JSON"
-          design_element: taskq.store.atomic_write_json (tmp + os.replace) + taskq.store.load_tasks
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2 -> BASELINE
-          cross_ref_ac_ids: [FR-01.AC-4, FR-01.AC-5]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Atomic-write kill simulation: mid-write kill leaves valid JSON (AC-1)"
-
-        - tc_id: test_tc_nfr03_02a_redact_sk_line
-          matrix_id: TC-NFR03-02a
-          ac_ids: [NFR-03-AC-2]
+        - tc_id: test_nfr03_002_secret_line_redacted
+          ac_ids: [AC-NFR-03-02]
           fr: NFR-03
           layer: unit
           file_path: tests/test_nfr03_reliability.py
           asserts:
-            - "line matching regex 'sk-[A-Za-z0-9_-]{8,}' replaced wholesale with '[REDACTED]'"
-            - "match is whole-line (entire line becomes [REDACTED], not partial substring)"
-            - "applied to both stdout_tail and stderr_tail before persist"
-          design_element: taskq.redact.redact_line + taskq.executor.run_task (pre-persist hook)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2 -> BASELINE -> GATE4
-          cross_ref_ac_ids: [FR-02.AC-2]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Redaction sub-case: sk-[A-Za-z0-9_-]{8,} line -> [REDACTED] (AC-2, regex branch 1)"
-
-        - tc_id: test_tc_nfr03_02b_redact_token_line
-          matrix_id: TC-NFR03-02b
-          ac_ids: [NFR-03-AC-2]
-          fr: NFR-03
-          layer: unit
-          file_path: tests/test_nfr03_reliability.py
-          asserts:
-            - "line matching regex 'token=\\S+' replaced wholesale with '[REDACTED]'"
-            - "match is whole-line (entire line becomes [REDACTED], not partial substring)"
-            - "applied to both stdout_tail and stderr_tail before persist"
-            - "line without sk-/token= pattern passes through unchanged (negative case)"
-          design_element: taskq.redact.redact_line + taskq.executor.run_task (pre-persist hook)
-          verification_locus: TDD-RED -> TDD-GREEN -> GATE1 -> GATE2 -> BASELINE -> GATE4
-          cross_ref_ac_ids: [FR-02.AC-2]
-          cross_ref_nfrs: []
-          matrix_sub_case: "Redaction sub-case: token=\\S+ line -> [REDACTED] (AC-2, regex branch 2; also asserts non-matching line pass-through)"
+            - "line containing 'sk-XXXXXXXX...' (>= 8 chars after sk-) replaced entirely with '[REDACTED]'"
+            - "line containing 'token=...' replaced entirely with '[REDACTED]'"
+            - "line without sk-/token= pattern passes through unchanged (non-match control)"
+            - "matched line replaced with literal '[REDACTED]' (entire line, not partial substring)"
+          design_element: taskq.redact:redact_line (regex `(sk-[A-Za-z0-9_-]{8,}|token=\\S+)`)
+          verification_locus: TDD-RED -> TDD-GREEN -> GATE1
+          cross_ref_ac_ids: [AC-FR-02-03]
+          cross_ref_nfrs: [NFR-03]
 
   by_layer:
     unit:
-      count: 18
-      description: "Single-component tests with mocked dependencies (validator, executor, redaction, models, config)."
+      count: 11
+      description: "Single-component tests with mocked dependencies (validate, runner, store-atomic, redact, cli-json)."
       tc_ids:
-        - test_tc_fr01_01_reject_empty_or_whitespace
-        - test_tc_fr01_02_reject_overlong
-        - test_tc_fr01_03_reject_injection_chars
-        - test_tc_fr02_01_subprocess_no_shell
-        - test_tc_fr02_02_result_fields_persisted
-        - test_tc_fr02_05_unexpected_exception_exit_1
-        - test_tc_fr03_02_status_outputs_or_unknown
-        - test_tc_fr03_03_list_outputs_per_task
-        - test_tc_fr03_05_json_flag_single_line
-        - test_tc_nfr02_02a_reject_semicolon
-        - test_tc_nfr02_02b_reject_pipe
-        - test_tc_nfr02_02c_reject_ampersand
-        - test_tc_nfr02_02d_reject_dollar
-        - test_tc_nfr02_02e_reject_gt
-        - test_tc_nfr02_02f_reject_lt
-        - test_tc_nfr02_02g_reject_backtick
-        - test_tc_nfr03_02a_redact_sk_line
-        - test_tc_nfr03_02b_redact_token_line
+        - test_fr01_001_empty_command_rejected
+        - test_fr01_002_length_exceeds_1000_rejected
+        - test_fr01_003_injection_chars_rejected
+        - test_fr01_004_pending_fields_initialized
+        - test_fr02_001_subprocess_form_no_shell
+        - test_fr02_002_state_transitions
+        - test_fr02_003_result_fields_populated
+        - test_fr02_004b_no_retry_on_done
+        - test_fr03_001b_status_unknown_id_exit2
+        - test_fr03_002_json_flag_single_line
+        - test_nfr03_002_secret_line_redacted
 
     integration:
-      count: 9
-      description: "Cross-module or filesystem-coupled tests (cli+executor, cli+store, AST scans, crash-injection, dispatch)."
+      count: 7
+      description: "Cross-module or filesystem-coupled tests (cli+runner, cli+store, exit-code matrix)."
       tc_ids:
-        - test_tc_fr01_04_valid_submit_writes_pending
-        - test_tc_fr01_05_corrupt_store_exits_one
-        - test_tc_fr02_03_retry_on_failed_or_timeout
-        - test_tc_fr02_04_timeout_exit_4
-        - test_tc_fr03_01_argparse_subcommands
-        - test_tc_fr03_04_clear_empties_store
-        - test_tc_fr03_06_exit_code_matrix
-        - test_tc_nfr02_01_no_shell_true_grep
-        - test_tc_nfr03_01_atomic_write_crash_recovery
+        - test_fr01_005_atomic_write_survives_interrupt
+        - test_fr01_006_corrupt_store_exit1
+        - test_fr02_004_retry_until_limit
+        - test_fr02_005_timeout_exit_code_4
+        - test_fr02_006_unexpected_exception_exit1
+        - test_fr03_001_subcommands_dispatch
+        - test_fr03_003_exit_code_matrix
 
     benchmark:
       count: 1
-      description: "Performance/load benchmark tests (NFR-01 p95 latency)."
+      description: "Performance/load benchmark tests (NFR-01 p95 latency, P5 verification hook)."
       tc_ids:
-        - test_tc_nfr01_01_p95_under_50ms
+        - perf_fr03_nfr01_p95_under_50ms
+
+  cross_cutting_static_hooks:
+    description: "Static / external verification hooks that are NOT pytest tc_ids. Listed here for traceability; do not count toward total_test_cases."
+    hooks:
+      - ac_ids: [AC-NFR-02-01]
+        hook: 'grep -rn "shell=True" src/'
+        phase: P5 static scan + P6 Gate 4 re-scan
+        owner: @phase5-static + @phase6-quality
 
   coverage_validation:
-    all_matrix_section3_entries_enumerated: true
+    all_matrix_section_2_entries_enumerated: true
     no_collapsing: true
     no_omission: true
-    no_inflation: true
-    no_reuse_as_shorthand: true
-    cross_cutting_signalled_via_metadata_not_collapse: true
-    canonical_matrix_id_per_entry: true
-    canonical_test_naming: true
-    canonical_module_owners_per_matrix_section_2_2: true
-    per_fr_totals_reconcile_to_matrix:
-      FR-01: 5
-      FR-02: 5
-      FR-03: 6
+    cross_cutting_signalled_via_metadata_not_deletion: true
+    per_fr_totals_reconcile_to_matrix_section_2:
+      FR-01: 6
+      FR-02: 7
+      FR-03: 4
       NFR-01: 1
-      NFR-02: 8
-      NFR-03: 3
-      sum: 28
+      NFR-03: 1
+      sum: 19
     per_layer_totals_reconcile:
-      unit: 18
-      integration: 9
+      unit: 11
+      integration: 7
       benchmark: 1
-      sum: 28
-    matrix_section3_fr_coverage: "100% (FR-01: 5/5 via TC-FR01-01..05 per matrix §3.1 L72-76; FR-02: 5/5 via TC-FR02-01..05 per matrix §3.2 L82-86; FR-03: 6/6 via TC-FR03-01..06 per matrix §3.3 L92-97 — every YAML matrix_id matches its matrix §3 row)"
-    matrix_section3_nfr_coverage: "100% (NFR-01: 1/1 via TC-NFR01-01; NFR-02: 1 grep + 7 per-char = 8/8 via TC-NFR02-01 + TC-NFR02-02a..g; NFR-03: 1 atomic + 2 redaction = 3/3 via TC-NFR03-01 + TC-NFR03-02a + TC-NFR03-02b; total 12 NFR AC units -> 12 distinct tc_ids)"
+      sum: 19
+    total_test_cases_matches_per_fr_sum: true
+    matrix_section_3_reverse_map_symmetric: true
+    matrix_section_3_internal_arithmetic:
+      matrix_claims_per_fr_section_2_table: "FR-01=6, FR-02=7, FR-03=4, NFR-01=1, NFR-03=1 (sum 19)"
+      this_inventory_matches: true
     cross_cutting_bindings_preserved:
-      - "FR-01.AC-3 + NFR-02-AC-2 per-char: test_tc_fr01_03_reject_injection_chars covers all 7 chars in one entry; test_tc_nfr02_02a..g each cover one char as separate entries — both ACs independently covered with cross_ref metadata"
-      - "FR-02.AC-1 + NFR-02-AC-1: test_tc_fr02_01_subprocess_no_shell (unit) ↔ test_tc_nfr02_01_no_shell_true_grep (codebase-wide) — separate entries, cross-link via cross_ref_ac_ids"
-      - "FR-01.AC-4 + NFR-03-AC-1: test_tc_fr01_04_valid_submit_writes_pending ↔ test_tc_nfr03_01_atomic_write_crash_recovery — separate entries, cross-link via cross_ref_ac_ids"
-      - "FR-02.AC-2 + NFR-03-AC-2: test_tc_fr02_02_result_fields_persisted ↔ test_tc_nfr03_02a_redact_sk_line + test_tc_nfr03_02b_redact_token_line — separate entries, cross-link via cross_ref_ac_ids"
-      - "Exit-code matrix: test_tc_fr03_06_exit_code_matrix carries AC-6 explicitly; per-AC exit codes also surfaced in test_tc_fr01_01..05 + test_tc_fr02_04 + test_tc_fr02_05 via cross_ref_ac_ids"
-    round_4_high_severity_fixes_applied:
-      - "HIGH: removed all 3 invented TC-CFG-01..03 entries (and all CFG references in metadata, by_layer, per_fr_totals_reconcile, matrix_section_4_4_config_coverage, round_3_fixes_applied). Matrix has zero CFG sections and zero CFG test IDs; matrix §2.2 lists taskq.config as a module but enumerates no TC-CFG test rows in §3."
-      - "HIGH: split Round 3's test_tc_fr01_01g (which collapsed matrix TC-FR01-04 valid submit + TC-FR01-05 corrupt store) into two matrix-canonical entries test_tc_fr01_04_valid_submit_writes_pending and test_tc_fr01_05_corrupt_store_exits_one. Each carries its own matrix_id, ac_ids, design_element, asserts."
-      - "HIGH: removed invented TC-FR02-06_retry_policy (matrix §3.2 enumerates only TC-FR02-01..05; retry policy is already TC-FR02-03 per matrix L84 with FR-02.AC-3). Renumbered test_tc_fr02_05_result_fields_persisted → test_tc_fr02_02, test_tc_fr02_06_retry_policy dropped, test_tc_fr02_04_state_transition_timeout_exit_4 → test_tc_fr02_04 (unchanged), test_tc_fr02_05_unexpected_exception_exit_1 carries matrix_id TC-FR02-05."
-      - "MEDIUM: split Round 3's single test_tc_nfr03_02_secret_line_redaction (which collapsed sk- and token= branches) into test_tc_nfr03_02a_redact_sk_line + test_tc_nfr03_02b_redact_token_line per matrix §3.6 L121 '≥2 sub-entries' instruction. The 02b entry also asserts the negative case (non-matching line passes through)."
-      - "MEDIUM: corrected module-owner naming drift to match matrix §2.2 verbatim throughout: taskq.validator → taskq.validate (validator.is_empty → validate.is_empty, validator.check_length → validate.check_length, validator.check_injection_chars → validate.check_injection_chars); taskq.executor:execute_task → taskq.executor:run_task; taskq.executor:retry → taskq.executor:run_with_retry; taskq.store:create_task → taskq.store:new_task_id; taskq.store:atomic_write_json → taskq.store.atomic_write_json (unchanged); taskq.cli:cmd_submit → taskq.cli.submit_cmd (matches matrix §2.2 L37, L72-77); taskq.cli:cmd_run → taskq.cli.run_cmd; taskq.cli:cmd_status → taskq.cli.status_cmd; taskq.cli:cmd_list → taskq.cli.list_cmd; taskq.cli:cmd_clear → taskq.cli.clear_cmd; taskq.cli:argparse_dispatch → taskq.cli.build_parser + taskq.cli.main; taskq.cli:emit_json → taskq.cli.main (json-mode formatting). FR-02 AC-1 test now asserts subprocess.run kwargs including shell=False explicitly."
+      - "AC-FR-01-03 <-> AC-NFR-02-02: test_fr01_003_injection_chars_rejected cross_refs AC-NFR-02-02"
+      - "AC-FR-02-01 <-> AC-NFR-02-01: test_fr02_001_subprocess_form_no_shell cross_refs AC-NFR-02-01"
+      - "AC-FR-01-05 <-> AC-NFR-03-01: test_fr01_005_atomic_write_survives_interrupt cross_refs AC-NFR-03-01"
+      - "AC-FR-02-03 <-> AC-NFR-03-02: test_fr02_003_result_fields_populated cross_refs AC-NFR-03-02"
+      - "AC-FR-02-05 <-> AC-FR-03-03: test_fr02_005_timeout_exit_code_4 cross_refs AC-FR-03-03"
+      - "AC-FR-02-06 <-> AC-FR-03-03: test_fr02_006_unexpected_exception_exit1 cross_refs AC-FR-03-03"
+      - "AC-FR-03-01 (negative) <-> AC-FR-03-03: test_fr03_001b_status_unknown_id_exit2 cross_refs AC-FR-03-03"
+      - "AC-FR-03-03 <-> multiple FR-01/02 ACs: test_fr03_003_exit_code_matrix cross_refs AC-FR-01-01/02/03/06, AC-FR-02-05/06"
+      - "AC-NFR-01-01 <-> AC-FR-01-04 + AC-FR-03-01: perf_fr03_nfr01_p95_under_50ms cross_refs both"

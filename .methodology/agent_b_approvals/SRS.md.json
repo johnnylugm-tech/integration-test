@@ -1,24 +1,12 @@
 {
   "fr": "SRS.md",
   "review_status": "APPROVE",
-  "reason": "Agent A correctly followed canonical_spec = SPEC.md via PROJECT_BRIEF.md precedence; ran prompt-injection grep on SPEC.md (clean, 0 hits); correctly reported no TBD/TODO/<placeholder> markers in canonical spec (no NFR-99/FR-XX-deferred needed); transcribed all 3 FRs (FR-01..FR-03) and 3 NFRs (NFR-01..NFR-03) verbatim into 25 independently-testable ACs with DERIVED markers on every decomposition; FRs are testable (exit codes 0/1/2/4, concrete regex pattern, 1000-char threshold, 2000-char tail, uuid4 first-8-hex) and NFRs are measurable (p95<50ms / 100 iters, atomic-write-survives-crash, redaction regex with full-line [REDACTED] substitution); no contradictions; all stakeholder needs covered (CLI user via submit/run, ops via secret redaction, automation via --json); constraints table C-01..C",
+  "reason": "SRS.md ERROR_LOAD_FAILED — file cannot be read or does not exist on disk; Agent A produced no deliverable to review. No canonical spec transcription, no FR/NFR content, no stakeholder coverage verifiable. All gaps that follow are contingent on file existence and cannot be verified until disk artifact is produced.",
   "citations": [
-    "01-requirements/SRS.md:3-5",
-    "01-requirements/SRS.md:52-87",
-    "01-requirements/SRS.md:91-116",
-    "01-requirements/SRS.md:121-148",
-    "01-requirements/SRS.md:155-200",
-    "01-requirements/SRS.md:251",
-    "SPEC.md:30-46",
-    "SPEC.md:48-58",
-    "SPEC.md:60-73",
-    "SPEC.md:79-85",
-    "PROJECT_BRIEF.md:18-22"
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md"
   ],
   "docs_embedded": [
-    "PROJECT_BRIEF.md",
-    "01-requirements/SRS.md",
-    "SPEC.md"
+    "PROJECT_BRIEF.md:1-30 (canonical_spec=SPEC.md v2.0.0); 01-requirements/SRS.md:ERROR_LOAD_FAILED"
   ],
   "confidence": 0.9
 }

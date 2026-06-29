@@ -5,5 +5,9 @@
   "last_fr": null,
   "last_update": "2026-06-29T04:00:00+00:00",
   "phase_truth_passed": false,
-  "last_milestone_command": "manual-reset-to-P1-for-architectural-fix-validation"
+  "last_milestone_command": "manual-reset-to-P1-for-architectural-fix-validation",
+  "last_push_checkpoint": "2026-06-28T23:51:29.559272+00:00",
+  "last_push_checkpoint_phase": 1,
+  "phase_completed": {},
+  "test_inventory_checksum": "530541c5a30387557371179caac2cd9f7d1c931890a7ee77d467b4952ca4f45f"
 }
