@@ -115,72 +115,48 @@ function hasHighGap(gaps) {
   })
 }
 
-// ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----
+// ---- loadFileViaPython: deterministic mcp__filesystem__read_file loader (v29) ----
 //
-// Replaces loadFileViaBash for cases where we want deterministic I/O instead
-// of LLM-interpreted content relay. The LLM agent is reduced to a "shell
-// wrapper" — it only runs the python command and relays stdout verbatim. All
-// validation (prefix, length, SHA-256) is done by Python via the
-// harness_cli.py read-file subcommand (introduced in harness submodule
-// feat cmd_read_file), not by the LLM.
-//
-// Why not just Bash from workflow JS directly? Playbook §3-§4 forbids host
-// APIs (no fs.*, no process.*, no require()). The only I/O surface available
-// to workflow JS is agent() — but by constraining the agent role to
-// "shell wrapper" + deterministic Python backend, we eliminate the LLM
-// interpretation failure mode that drove 32 commits of churn on this file.
-//
-// KNOWN LIMITATION (not fixed by this loader): per fc99e7f commit message
-// "v5 BUG FIX", workflow tool `agent()` API returns the LLM's final TEXT
-// message only — it cannot directly access tool_result. The shell-wrapper
-// pattern STILL relies on the LLM emitting cat stdout verbatim in its final
-// text. The LLM may hallucinate (emit fake content, drop JSON fields,
-// lowercase enums). Mitigations applied here:
-//   - Use --content-out (plain text) instead of --content-only JSON so the
-//     LLM relays raw text (easier than structured JSON).
-//   - Client-side prefix check on returned content (catches hallucinated
-//     H1).
-//   - Multiple attempts with hard fail-fast (no silent retry forever).
-// True root-cause fix requires workflow tool API change (native I/O);
-// tracked in harness proposal_workflow_js_native_io.md (TODO).
+// History:
+//   v17: Bash cat agent — LLM-as-shell-wrapper, ~10% hallucinate/random-fail rate
+//        (agent emits fake content, drops fields, lowercase enums). Each failure
+//        caused Agent B to write ERROR_LOAD_FAILED into docs_embedded → advance-phase
+//        FAIL (wf_a23be9d3-263 — 4/4 approval written, 3/4 docs_embedded dirty).
+//   v22: switch to harness_cli.py read-file CLI — deterministic Python backend,
+//        but LLM-as-shell-wrapper outer agent still emits pythonCmd + cat /tmp
+//        verbatim. Same 10% LLM failure mode persisted at the wrapper layer.
+//   v29 (this): route the read through mcp__filesystem__read_file — native API,
+//        no LLM-as-shell-wrapper. Workflow JS still has no fs API (platform limit),
+//        so we keep one outer agent() call, but the agent uses a native tool call
+//        instead of Bash `cat`. Eliminates the entire class of LLM-relay failures
+//        that drove the docs_embedded ERROR_LOAD_FAILED contamination. Same
+//        per-attempt defenses (prefix check, length check, max-attempts hard cap)
+//        remain in place at the workflow JS layer for defense-in-depth.
 //
 // Returns:
-//   - content text (on status=OK) — same shape as loadFileViaBash for compat
-//   - 'FILE_MISSING: <path>' sentinel (on status=MISSING)
+//   - content text (on status=OK) — same shape as v17/v22 callers
+//   - 'ERROR_LOAD_FAILED: <path>' sentinel (on tool error)
 //   - 'ERROR: LOADER_FAILED_AFTER_<N>_ATTEMPTS: ...' (on persistent failure)
 async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
   opts = opts || {}
   const maxAttempts = opts.maxAttempts || 3
   const filePath = REPO + '/' + relPath
-  // Bug v16 fix: switch to harness_cli.py read-file CLI (introduced in
-  // harness submodule feat cmd_read_file). Same Python-side validation
-  // (prefix/length/SHA/8MiB cap) as scripts/file_loader.py, but unified
-  // under harness_cli.py so workflow JS has a single entry point. Per
-  // git history (fc99e7f), the underlying LLM-as-shell-wrapper failure
-  // mode is NOT solved here — that requires workflow tool API change to
-  // expose native I/O. This commit moves file I/O to the canonical CLI
-  // surface and keeps the v15 defenses (--content-out plain text + prefix
-  // check).
-  const expectPrefixArg = expectPrefix ? ' --expect-prefix ' + JSON.stringify(expectPrefix) : ''
-  const contentOut = '/tmp/load_' + relPath.replace(/[\/.]/g, '_') + '.txt'
-  const jsonOut = '/tmp/load_' + relPath.replace(/[\/.]/g, '_') + '.json'
-  const pythonCmd = 'python3 ' + REPO + '/harness_cli.py read-file --file ' + JSON.stringify(filePath)
-    + expectPrefixArg + ' --content --content-out ' + contentOut + ' --json-out ' + jsonOut + ' --quiet'
-
-  const prompt = 'You are a SHELL WRAPPER AGENT. Your ONLY job is to run ONE shell command and emit ONE file content verbatim.\n\n'
-    + 'STEPS (DO NOT DEVIATE):\n'
-    + '1. Use Bash tool to run EXACTLY this command (no modifications):\n'
-    + '   ' + pythonCmd + '\n\n'
-    + '2. Use Bash tool to run `cat ' + contentOut + '` — read the content file from disk.\n\n'
-    + '3. Your final assistant message = the EXACT output of `cat ' + contentOut + '` (verbatim bytes).\n\n'
-    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
-    + '- DO NOT generate or paraphrase content based on your memory/inference.\n'
-    + '- ALWAYS read the actual file from disk. NEVER hallucinate file content.\n'
-    + '- DO NOT echo the JSON file. Only echo the content file.\n'
-    + '- DO NOT write any preamble or acknowledgment.\n'
-    + '- DO NOT add commentary, summary, or explanation.\n'
-    + '- Your final message = the verbatim cat output only.\n'
-    + '- If the command fails, return EXACTLY: ERROR_LOAD_FAILED: ' + filePath
+  // Step-by-step prompt so the outer LLM emits clean native tool calls (no Bash).
+  // Single-step verify pattern (mcp__filesystem__read_file then echo verbatim)
+  // matches the v28 persistApproval design — same failure-source reduction
+  // strategy (no shell escape, no LLM bash parsing, no python subprocess).
+  const prompt = [
+    'Read a file using ONLY the mcp__filesystem__* tools (NO Bash, NO Read, NO cat, NO python).',
+    '',
+    'STEP 1 — mcp__filesystem__read_file with EXACTLY: file = ' + filePath,
+    '',
+    'STEP 2 — Reply with the EXACT verbatim text content returned by read_file.',
+    '   - NO preamble, NO acknowledgement, NO explanation.',
+    '   - DO NOT echo the tool name or any instruction text.',
+    '   - DO NOT add markdown fences, headers, or summary wrappers.',
+    '   - Your final message body = the raw text bytes of the file.',
+    '   - If the file is missing or any tool error occurs: reply EXACTLY: ERROR_LOAD_FAILED: ' + filePath,
+  ].join('\n')
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await agent(prompt, {
@@ -194,8 +170,9 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
       log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + text.length + ')')
       continue
     }
-    // v15: defense-in-depth prefix check on returned content. Catches
-    // hallucinated content whose H1 doesn't match the expected anchor.
+    // v15: defense-in-depth prefix check on returned content. Catches hallucinated
+    // content whose H1 doesn't match the expected anchor (e.g. agent emits fake
+    // SRS.md with wrong heading).
     if (expectPrefix) {
       const head = text.slice(0, 500)
       const stripped = expectPrefix.replace(/^#\s*/, '')

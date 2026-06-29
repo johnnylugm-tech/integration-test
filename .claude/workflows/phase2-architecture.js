@@ -336,49 +336,35 @@ async function persistApproval(deliverableId, b2) {
   throw new Error('persistApproval FAILED for ' + deliverableId + ' after ' + MAX_OUTER_ATTEMPTS + ' attempts. Last error: ' + lastErr)
 }
 
-// ---- loadFileViaPython: deterministic Python-helper loader (F improvement) ----
+// ---- loadFileViaPython: deterministic mcp__filesystem__read_file loader (v29) ----
 //
-// Replaces loadFileViaBash for deterministic I/O. The LLM agent is reduced to
-// a "shell wrapper" — it only runs the python command and relays stdout
-// verbatim. All validation (prefix, length, SHA-256) is done by Python via
-// the harness_cli.py read-file subcommand (introduced in harness submodule
-// feat cmd_read_file), not by the LLM. See phase1 mirror.
-//
-// KNOWN LIMITATION (not fixed here, see phase1 mirror): workflow tool
-// `agent()` returns LLM's final TEXT only; shell-wrapper relies on LLM
-// emitting cat stdout verbatim. True fix needs workflow tool API change.
+// Mirror of phase1-requirements.js v29. Routes the read through mcp__filesystem__
+// read_file (native API) instead of Bash + python harness_cli.py + cat /tmp.
+// Eliminates the LLM-as-shell-wrapper failure mode that caused
+// wf_a23be9d3-263's docs_embedded ERROR_LOAD_FAILED contamination. See phase1
+// for full v17/v22/v29 history.
 //
 // Returns:
-//   - content text (on status=OK) — same shape as loadFileViaBash for compat
-//   - 'ERROR: ' + relPath + ' not found' sentinel (on status=MISSING)
-//   - 'ERROR: LOADER_FAILED_STATUS_<X>:<path>' (on persistent failure)
+//   - content text (on status=OK) — same shape as v17/v22 callers
+//   - 'ERROR: ' + relPath + ' load failed' sentinel (on tool error)
+//   - 'ERROR: LOADER_FAILED_AFTER_<N>_ATTEMPTS: ...' (on persistent failure)
 async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
   opts = opts || {}
   const maxAttempts = opts.maxAttempts || 3
   const filePath = REPO + '/' + relPath
-  // v16: switch to harness_cli.py read-file + --content-out (plain text) for
-  // same reason as phase1: LLM-as-shell has trouble relaying JSON verbatim;
-  // plain text + prefix check is more reliable. Mirror phase1 v16 logic.
-  const expectPrefixArg = expectPrefix ? ' --expect-prefix ' + JSON.stringify(expectPrefix) : ''
-  const contentOut = '/tmp/load_p2_' + relPath.replace(/[\/.]/g, '_') + '.txt'
-  const jsonOut = '/tmp/load_p2_' + relPath.replace(/[\/.]/g, '_') + '.json'
-  const pythonCmd = 'python3 ' + REPO + '/harness_cli.py read-file --file ' + JSON.stringify(filePath)
-    + expectPrefixArg + ' --content --content-out ' + contentOut + ' --json-out ' + jsonOut + ' --quiet'
-
-  const prompt = 'You are a SHELL WRAPPER AGENT. Your ONLY job is to run ONE shell command and emit ONE file content verbatim.\n\n'
-    + 'STEPS (DO NOT DEVIATE):\n'
-    + '1. Use Bash tool to run EXACTLY this command (no modifications):\n'
-    + '   ' + pythonCmd + '\n\n'
-    + '2. Use Bash tool to run `cat ' + contentOut + '` — read the content file from disk.\n\n'
-    + '3. Your final assistant message = the EXACT output of `cat ' + contentOut + '` (verbatim bytes).\n\n'
-    + 'CRITICAL OUTPUT RULES (violations = failure):\n'
-    + '- DO NOT generate or paraphrase content based on your memory/inference.\n'
-    + '- ALWAYS read the actual file from disk. NEVER hallucinate file content.\n'
-    + '- DO NOT echo the JSON file. Only echo the content file.\n'
-    + '- DO NOT write any preamble or acknowledgment.\n'
-    + '- DO NOT add commentary, summary, or explanation.\n'
-    + '- Your final message = the verbatim cat output only.\n'
-    + '- If the command fails, return EXACTLY: ERROR_LOAD_FAILED: ' + filePath
+  // Mirror phase1 v29 prompt — step-by-step native tool call instruction.
+  const prompt = [
+    'Read a file using ONLY the mcp__filesystem__* tools (NO Bash, NO Read, NO cat, NO python).',
+    '',
+    'STEP 1 — mcp__filesystem__read_file with EXACTLY: file = ' + filePath,
+    '',
+    'STEP 2 — Reply with the EXACT verbatim text content returned by read_file.',
+    '   - NO preamble, NO acknowledgement, NO explanation.',
+    '   - DO NOT echo the tool name or any instruction text.',
+    '   - DO NOT add markdown fences, headers, or summary wrappers.',
+    '   - Your final message body = the raw text bytes of the file.',
+    '   - If the file is missing or any tool error occurs: reply EXACTLY: ERROR_LOAD_FAILED: ' + filePath,
+  ].join('\n')
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await agent(prompt, {
@@ -387,7 +373,7 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
       agentType: 'general-purpose',
     })
     const text = (typeof res === 'string' ? res : String(res ?? '')).trim()
-    if (text.startsWith('ERROR_LOAD_FAILED')) return 'ERROR: ' + relPath + ' load failed (Python exit non-zero)'
+    if (text.startsWith('ERROR_LOAD_FAILED')) return 'ERROR: ' + relPath + ' load failed (mcp read_file error)'
     if (text.length < 50) {
       log('  [' + relPath + '] attempt ' + attempt + '/' + maxAttempts + ' too short (len=' + text.length + ')')
       continue
