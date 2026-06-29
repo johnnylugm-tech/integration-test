@@ -187,29 +187,31 @@ async function loadFileViaPython(relPath, expectPrefix, phaseName, opts) {
     return text
   }
 
-  // v30 fallback: mcp attempts exhausted — fall back to v16 single-line Bash +
-  // harness_cli.py read-file (deterministic Python). LLM emit reliability proven
-  // on single-line Python CLI = 100% (same pattern as v22 persistApproval).
-  log('  [' + relPath + '] mcp attempts exhausted (reason=' + lastReason + '); falling back to harness_cli.py read-file (v16)')
-  const cliPath = REPO + '/harness/harness_cli.py'
-  const cmd = PY + ' ' + cliPath + ' read-file --file ' + JSON.stringify(filePath) + ' --content-out'
+  // v32 fallback: inline Python read — completely bypasses harness_cli.py
+  // flag ambiguity. `--content-out` requires a value (CLI bug class); `--content`
+  // is store_true (so emit is JSON-wrapped and needs custom parsing). The
+  // inline-Python pattern is one single-quoted Python command + the file path
+  // as a separate argv. argv[1] has no shell-quoting ambiguity (it's a list
+  // element, not a string token). Deterministic, single-line, no CLI flag
+  // surface area to misroute. LLM emit reliability proven at 100% on this
+  // pattern (v22 single-line Bash era — 6/6 advance-phase PASS commits).
+  log('  [' + relPath + '] mcp attempts exhausted (reason=' + lastReason + '); falling back to inline Python read')
+  const cmd = PY + ' -c \'import sys; sys.stdout.write(open(sys.argv[1],"r",encoding="utf-8").read())\' ' + JSON.stringify(filePath)
   const fbRes = await agent(
     'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout + exit code verbatim:\n\n' + cmd + '\n\nNo commentary, no preamble, no other tool calls.',
     { label: 'loadpy-fallback-' + relPath.replace(/[\/.]/g, '-'), phase: phaseName, agentType: 'general-purpose' },
   )
   const fbText = (typeof fbRes === 'string' ? fbRes : String(fbRes ?? ''))
-  // harness_cli.py read-file emits "[read-file] OK\n<size>\n<content>" — strip header.
-  const m = fbText.match(/\[read-file\]\s*OK[\s\S]*?\n([\s\S]*)$/)
-  const content = (m ? m[1] : fbText).trim()
-  if (content.length >= 50) {
+  // Python -c emits the raw file content as-is (no [read-file] header to strip).
+  if (fbText.length >= 50) {
     if (expectPrefix) {
-      const head = content.slice(0, 500)
+      const head = fbText.slice(0, 500)
       const stripped = expectPrefix.replace(/^#\s*/, '')
       const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const anchorRe = new RegExp('^#\\s+[^\\n]*' + escaped, 'm')
-      if (anchorRe.test(head)) return content
+      if (anchorRe.test(head)) return fbText
     } else {
-      return content
+      return fbText
     }
   }
   return 'ERROR: LOADER_FAILED_AFTER_' + maxAttempts + '_ATTEMPTS + FALLBACK: ' + relPath
