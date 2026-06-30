@@ -236,20 +236,21 @@ if (!frIds.length) return { error: 'Load FRs: no fr_ids found in ctx', ctxKeys: 
 const frTitle = (ctx.fr_titles && typeof ctx.fr_titles === 'object') ? ctx.fr_titles : {}
 log('  fr_ids = ' + JSON.stringify(frIds))
 
-// Sentinel pre-check: identify Gate 1 already-done FRs to skip TDD agent invocations on resume/re-run
-// v2.13: read ONLY Phase-3-scoped sentinels (g1_p3_*.flag). Phase 1's Gate 1
-// (spec coverage) is a DIFFERENT check from Phase 3's Gate 1 (code coverage);
-// reusing the same `g1_fr*.flag` path across phases caused Phase 3 to skip
-// real TDD on stale Phase 1 sentinels (Bug #121).
-const sentinelRaw = await agent(
-  'Use ONLY the Bash tool: `ls ' + REPO + '/.sessi-work/sentinels/ 2>/dev/null | grep "^g1_p3_" | grep "\\.flag$" || true`. Return raw output, no commentary.',
-  { label: 'sentinel-precheck', phase: 'Load FRs', agentType: 'general-purpose' }
+// Gate 1 pre-check: identify FRs that ALREADY passed Gate 1 (skip TDD on resume/re-run).
+// AUTHORITATIVE source = quality_manifest.gate_results.gate1[fr].quality_complete, which
+// harness_bridge writes on EVERY finalize-gate (pass OR fail). NOT the g1_p3_*.flag
+// sentinel: that flag is written by run-gate (it only proves run-gate executed), so a
+// finalize-gate that raised GateBlockedError on a failing dimension still leaves the
+// sentinel behind — using it as a PASS signal misreports blocked FRs as done.
+const precheckCmd = PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}) or {}; print(chr(10).join(fr for fr,v in g.items() if isinstance(v,dict) and v.get(\'quality_complete\') is True))"'
+const precheckRaw = await agent(
+  'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim (a newline-separated list of FR ids, possibly empty). No commentary.\n`' + precheckCmd + '`',
+  { label: 'gate1-precheck', phase: 'Load FRs', agentType: 'general-purpose' }
 )
 const alreadyDone = new Set()
-if (typeof sentinelRaw === 'string') {
-  for (const line of sentinelRaw.split('\n')) {
-    const m = line.trim().match(/^g1_p3_fr(\d+)\.flag$/)
-    if (m) alreadyDone.add('FR-' + m[1].padStart(2, '0'))
+if (typeof precheckRaw === 'string') {
+  for (const line of precheckRaw.split('\n')) {
+    if (/^FR-\d+$/.test(line.trim())) alreadyDone.add(line.trim())
   }
 }
 if (alreadyDone.size > 0) log('  sentinel pre-check: Gate 1 (Phase 3) already PASS for ' + [...alreadyDone].join(', ') + ' — skipping TDD agents')
@@ -299,9 +300,21 @@ for (const frId of frIds) {
       log('  ' + frId + ' agent blocked (session limit / rate limit) — aborting, resume after quota reset')
       return { session_limit_blocked: true, phase: 3, fr_id: frId, gate1Pass, message: 'Agent hit session/rate limit during ' + frId + ' TDD. Resume after quota reset — sentinel GUARD will skip completed FRs.' }
     }
-    const passed = typeof frReport === 'string' && new RegExp(frId + '\\s*GATE1:\\s*PASS').test(frReport)
-    if (passed) { gate1Pass.push(frId); log('  ' + frId + ' Gate 1 PASS (' + gate1Pass.length + '/' + frIds.length + ')') }
-    else { gate1Fail.push(frId); log('  ' + frId + ' Gate 1 FAIL') }
+    // AUTHORITATIVE Gate 1 verdict: read the harness quality_manifest (bridge writes
+    // gate_results.gate1[fr].quality_complete on every finalize-gate, pass OR fail) —
+    // NOT the sub-agent's self-reported "GATE1: PASS" string. A sub-agent can report
+    // PASS from its own gate1_result.json overall score even when finalize-gate raised
+    // GateBlockedError (e.g. spec-coverage short, or a dimension below threshold), which
+    // silently advances a FR that the harness actually blocked. Verify against the
+    // harness's own record so a blocked gate is never counted as passed.
+    const verifyCmd = PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'' + frId + '\',{}) or {}; print(\'GATE1_VERIFIED_PASS\' if g.get(\'quality_complete\') is True else \'GATE1_VERIFIED_FAIL score=\'+str(g.get(\'score\')))"'
+    const verdictRaw = await agent(
+      'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + verifyCmd + '`',
+      { label: 'gate1-verify-' + frId, phase: 'Per-FR TDD', agentType: 'general-purpose' },
+    )
+    const passed = typeof verdictRaw === 'string' && /GATE1_VERIFIED_PASS/.test(verdictRaw)
+    if (passed) { gate1Pass.push(frId); log('  ' + frId + ' Gate 1 PASS (' + gate1Pass.length + '/' + frIds.length + ') [harness-verified]') }
+    else { gate1Fail.push(frId); log('  ' + frId + ' Gate 1 FAIL [harness manifest qc != true; sub-agent self-report ignored]') }
   }
 
   // PUSH ③ p3-mid — fire once when ≥1/3 FRs have Gate 1 PASS (but not yet all done).
