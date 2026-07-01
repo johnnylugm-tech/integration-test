@@ -59,8 +59,8 @@ def run_task(task_id: str) -> RunResult:
 
     start = datetime.now(timezone.utc)
 
+    attempt: int = 0
     for attempt in range(limit + 1):  # 1 initial + N retries
-        attempt_start = datetime.now(timezone.utc)
         try:
             proc = subprocess.run(
                 shlex.split(command),
