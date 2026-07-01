@@ -1,0 +1,2 @@
+#!/bin/bash
+exec /Users/johnny/projects/integration-test/.venv/bin/pytest /Users/johnny/projects/integration-test/03-development/tests/test_fr01.py --cov=/Users/johnny/projects/integration-test/03-development/src --cov-report=term-missing -q 2>&1

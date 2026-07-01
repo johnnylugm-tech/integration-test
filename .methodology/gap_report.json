@@ -1,0 +1,97 @@
+{
+  "summary": {
+    "total": 14,
+    "missing": 0,
+    "incomplete": 0,
+    "orphaned": 14,
+    "critical": 0,
+    "major": 0,
+    "minor": 14
+  },
+  "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'submit' has no corresponding specification in SPEC.md",
+      "action": "Add spec for submit or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'build_parser' has no corresponding specification in SPEC.md",
+      "action": "Add spec for build_parser or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'main' has no corresponding specification in SPEC.md",
+      "action": "Add spec for main or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'taskq_home' has no corresponding specification in SPEC.md",
+      "action": "Add spec for taskq_home or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'tasks_file' has no corresponding specification in SPEC.md",
+      "action": "Add spec for tasks_file or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'SubmitResult' has no corresponding specification in SPEC.md",
+      "action": "Add spec for SubmitResult or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'Task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for Task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'new' has no corresponding specification in SPEC.md",
+      "action": "Add spec for new or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'to_dict' has no corresponding specification in SPEC.md",
+      "action": "Add spec for to_dict or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'ValidationOutcome' has no corresponding specification in SPEC.md",
+      "action": "Add spec for ValidationOutcome or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'validate' has no corresponding specification in SPEC.md",
+      "action": "Add spec for validate or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'CorruptStoreError' has no corresponding specification in SPEC.md",
+      "action": "Add spec for CorruptStoreError or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'load_tasks' has no corresponding specification in SPEC.md",
+      "action": "Add spec for load_tasks or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'save_tasks' has no corresponding specification in SPEC.md",
+      "action": "Add spec for save_tasks or remove if unnecessary"
+    }
+  ]
+}

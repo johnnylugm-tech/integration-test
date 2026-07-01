@@ -477,3 +477,274 @@ def test_fr01_reject_matrix(taskq_home):
         assert result.exit_code == 2, (
             f"submit({cmd!r}) expected exit 2, got {result.exit_code}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Coverage tests — exercise CLI `main()` branches + store edge cases that
+# the spec-driven tests above do not naturally cover. These tests are
+# required to raise the test_coverage dimension above 80%.
+# ---------------------------------------------------------------------------
+
+def test_fr01_submit_via_cli(taskq_home):
+    """Drive `python -m taskq submit <cmd>` via subprocess to exercise the
+    `args.cmd_name == "submit"` branch of `cli.cli.main()` (which is only
+    reachable through the CLI dispatcher, not through the in-process API).
+    """
+    project_root = Path(__file__).resolve().parent.parent
+    src_path = project_root / "03-development" / "src"
+    env = os.environ.copy()
+    env["TASKQ_HOME"] = str(taskq_home)
+    env["PYTHONPATH"] = str(src_path) + os.pathsep + env.get("PYTHONPATH", "")
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "taskq", "submit", "echo hi"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, (
+        f"submit subcommand expected exit 0, got {proc.returncode}: {proc.stderr!r}"
+    )
+    out = proc.stdout.strip()
+    assert len(out) == 8 and all(c in "0123456789abcdef" for c in out), (
+        f"submit subcommand should print 8-hex id, got {out!r}"
+    )
+    assert (taskq_home / "tasks.json").exists()
+
+
+def test_fr01_status_unknown_id_via_cli(taskq_home):
+    """Drive `python -m taskq status deadbeef` against an empty (but valid)
+    tasks.json to exercise the `match is None` branch of `cli.cli.main()`.
+    The corrupt-store test exits 1 before reaching this branch, so a
+    separate fresh-store case is required.
+    """
+    project_root = Path(__file__).resolve().parent.parent
+    src_path = project_root / "03-development" / "src"
+    env = os.environ.copy()
+    env["TASKQ_HOME"] = str(taskq_home)
+    env["PYTHONPATH"] = str(src_path) + os.pathsep + env.get("PYTHONPATH", "")
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "taskq", "status", "deadbeef"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 2, (
+        f"status unknown id expected exit 2, got {proc.returncode}"
+    )
+    assert "unknown task" in proc.stderr, (
+        f"expected 'unknown task' in stderr, got: {proc.stderr!r}"
+    )
+
+
+def test_fr01_status_found_via_cli(taskq_home):
+    """Drive `python -m taskq status <id>` after a successful submit to
+    exercise the success return path (`return 0`) of `cli.cli.main()` for
+    the status subcommand.
+    """
+    project_root = Path(__file__).resolve().parent.parent
+    src_path = project_root / "03-development" / "src"
+    env = os.environ.copy()
+    env["TASKQ_HOME"] = str(taskq_home)
+    env["PYTHONPATH"] = str(src_path) + os.pathsep + env.get("PYTHONPATH", "")
+
+    # First submit a task via the CLI to capture its assigned id.
+    submit_proc = subprocess.run(
+        [sys.executable, "-m", "taskq", "submit", "echo hi"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert submit_proc.returncode == 0, submit_proc.stderr
+    task_id = submit_proc.stdout.strip()
+
+    status_proc = subprocess.run(
+        [sys.executable, "-m", "taskq", "status", task_id],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert status_proc.returncode == 0, (
+        f"status found expected exit 0, got {status_proc.returncode}: {status_proc.stderr!r}"
+    )
+    assert task_id in status_proc.stdout, (
+        f"expected task id {task_id!r} in status output, got {status_proc.stdout!r}"
+    )
+
+
+def test_fr01_load_tasks_no_tasks_key(taskq_home):
+    """Write a valid JSON object that lacks the `tasks` key to exercise the
+    defensive `if not isinstance(payload, dict) or "tasks" not in payload:
+    return []` branch in `io.store.load_tasks()`.
+    """
+    from taskq.io.store import load_tasks
+
+    tasks_file = taskq_home / "tasks.json"
+    tasks_file.write_text(json.dumps({"foo": "bar"}))
+
+    result = load_tasks()
+    assert result == [], f"expected [] for payload missing 'tasks' key, got {result!r}"
+
+
+def test_fr01_load_tasks_non_list_tasks(taskq_home):
+    """Write `{"tasks": "not-a-list"}` to exercise the `else []` branch of
+    `return tasks if isinstance(tasks, list) else []` in `io.store.load_tasks()`.
+    """
+    from taskq.io.store import load_tasks
+
+    tasks_file = taskq_home / "tasks.json"
+    tasks_file.write_text(json.dumps({"tasks": "not-a-list"}))
+
+    result = load_tasks()
+    assert result == [], f"expected [] for non-list tasks value, got {result!r}"
+
+
+def test_fr01_save_tasks_cleanup_on_replace_error(taskq_home, monkeypatch):
+    """Force `os.replace` to raise so the `except Exception:` cleanup branch
+    in `io.store.save_tasks()` is exercised. The test asserts the exception
+    propagates (save_tasks must not swallow it) and the orphan tmp file is
+    removed from the taskq home directory.
+    """
+    from taskq import io  # ensure package import (covers io/__init__.py)
+    from taskq.io.store import save_tasks
+
+    real_replace = io.store.os.replace
+    def boom(src, dst):
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(io.store.os, "replace", boom)
+    try:
+        with pytest.raises(OSError, match="simulated replace failure"):
+            save_tasks([{"id": "deadbeef", "command": "echo hi",
+                         "status": "pending", "created_at": "now"}])
+    finally:
+        # Restore so the fixture teardown / other tests are not poisoned.
+        monkeypatch.setattr(io.store.os, "replace", real_replace)
+
+    # Orphan tmp files (".tasks.*.json.tmp") must have been removed by the
+    # except-branch cleanup.
+    leftovers = list(taskq_home.glob(".tasks.*.json.tmp"))
+    assert not leftovers, f"orphan tmp files left behind: {leftovers}"
+
+
+def test_fr01_load_tasks_empty_when_missing(taskq_home):
+    """Cover the `if not path.exists(): return []` early-return branch of
+    `io.store.load_tasks()` (the file does NOT exist yet). This is the
+    typical first-call path on a fresh taskq home.
+    """
+    from taskq.io.store import load_tasks
+
+    # taskq_home exists, but tasks.json does not yet.
+    assert not (taskq_home / "tasks.json").exists()
+    assert load_tasks() == []
+
+
+# ---------------------------------------------------------------------------
+# In-process CLI dispatch coverage — required so coverage tracks `main()` and
+# `build_parser()` lines (subprocess runs are NOT measured by coverage).
+# ---------------------------------------------------------------------------
+
+def test_fr01_cli_build_parser_inprocess(taskq_home):
+    """[FR-01] Call `cli.cli.build_parser()` in-process to cover the parser
+    construction branch (lines 72-84 of cli.py). The argparse parser is the
+    primary CLI surface and must be exercised for gate coverage.
+    """
+    from taskq.cli.cli import build_parser
+
+    parser = build_parser()
+    # Round-trip: status subparser parses the deadbeef id arg correctly.
+    ns = parser.parse_args(["status", "deadbeef"])
+    assert ns.cmd_name == "status"
+    assert ns.task_id == "deadbeef"
+    # submit subparser parses a single positional command arg.
+    ns2 = parser.parse_args(["submit", "echo hi"])
+    assert ns2.cmd_name == "submit"
+    assert ns2.command == "echo hi"
+
+
+def test_fr01_cli_main_submit_inprocess(taskq_home, capsys):
+    """[FR-01] Call `cli.cli.main(["submit", ...])` in-process to cover the
+    submit branch of `main()` (lines 94-103 of cli.py).
+    """
+    from taskq.cli.cli import main
+
+    rc = main(["submit", "echo hi"])
+    assert rc == 0
+    out = capsys.readouterr().out.strip()
+    assert len(out) == 8 and all(c in "0123456789abcdef" for c in out), (
+        f"submit should print 8-hex id, got {out!r}"
+    )
+    assert (taskq_home / "tasks.json").exists()
+
+
+def test_fr01_cli_main_submit_validation_reject_inprocess(taskq_home, capsys):
+    """[FR-01] Call `cli.cli.main(["submit", ";bad"])` to cover the
+    validation-reject stderr-write branch of `main()`.
+    """
+    from taskq.cli.cli import main
+
+    rc = main(["submit", "echo a;b"])
+    assert rc == 2
+    captured = capsys.readouterr()
+    assert "disallowed" in captured.err.lower(), (
+        f"expected rejection reason on stderr, got {captured.err!r}"
+    )
+
+
+def test_fr01_cli_main_status_unknown_inprocess(taskq_home, capsys):
+    """[FR-01] Call `cli.cli.main(["status", deadbeef])` on an empty store to
+    cover the `match is None` branch of `main()`.
+    """
+    from taskq.cli.cli import main
+
+    rc = main(["status", "deadbeef"])
+    assert rc == 2
+    captured = capsys.readouterr()
+    assert "unknown task" in captured.err, (
+        f"expected 'unknown task' on stderr, got {captured.err!r}"
+    )
+
+
+def test_fr01_cli_main_status_found_inprocess(taskq_home, capsys):
+    """[FR-01] Call `cli.cli.main(["status", <id>])` after a successful
+    in-process submit to cover the success-return path of `main()` for the
+    status subcommand.
+    """
+    from taskq.cli.cli import main
+
+    submit_rc = main(["submit", "echo hi"])
+    assert submit_rc == 0
+    task_id = capsys.readouterr().out.strip()
+    assert len(task_id) == 8
+
+    rc = main(["status", task_id])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert task_id in out
+
+
+def test_fr01_cli_main_status_corrupt_inprocess(taskq_home, capsys):
+    """[FR-01] Call `cli.cli.main(["status", deadbeef])` against a corrupt
+    tasks.json to cover the `CorruptStoreError` branch of `main()` (exit 1
+    + stderr 'store corrupted').
+    """
+    from taskq.cli.cli import main
+
+    (taskq_home / "tasks.json").write_text("not-valid-json")
+    rc = main(["status", "deadbeef"])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "store corrupted" in captured.err, (
+        f"expected 'store corrupted' on stderr, got {captured.err!r}"
+    )
+
+
+def test_fr01_main_module_entrypoint(taskq_home):
+    """[FR-01] Import the `taskq.__main__` module to cover its top-level
+    import branch (lines 10-17 of __main__.py). The `if __name__ == "__main__"`
+    guard means the entry-point is not exercised by main() tests.
+    """
+    import importlib
+    mod = importlib.import_module("taskq.__main__")
+    assert hasattr(mod, "main")
