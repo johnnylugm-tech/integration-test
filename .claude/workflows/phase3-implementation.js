@@ -15,6 +15,7 @@ export const meta = {
   phases: [
     { title: 'Entry & Preflight' },
     { title: 'Env Check' },
+    { title: 'Manifest Integrity' },
     { title: 'Load FRs' },
     { title: 'Per-FR TDD' },
     { title: 'Milestones' },
@@ -34,6 +35,20 @@ if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
 if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
 const PY = REPO + '/.venv/bin/python'
 log('REPO = ' + REPO + ' | PY = ' + PY)
+// FIX V: start time for budget guard (90-minute hard cap to prevent
+// infinite stalls). If a workflow runs for >90 min without completing,
+// it has likely hit a corruption/stall loop. Return cleanly with context
+// so the operator can identify the stall point.
+const START_TIME = Date.now()
+const HARD_TIMEOUT_MINUTES = 90
+function checkBudget() {
+  const elapsed = (Date.now() - START_TIME) / 60000
+  if (elapsed > HARD_TIMEOUT_MINUTES) {
+    log(`HARD_TIMEOUT: ${Math.floor(elapsed)} min elapsed > ${HARD_TIMEOUT_MINUTES} min budget — aborting`)
+    return { error: 'WORKFLOW_BUDGET_EXCEEDED', elapsed_min: Math.floor(elapsed), message: 'Workflow exceeded ' + HARD_TIMEOUT_MINUTES + ' min hard cap. Likely stalled in a corruption/retry-loop. Check manifest integrity and re-run.' }
+  }
+  return null
+}
 // v15: budget guard (Bug #3 — port from phase2-architecture)
 if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 200000) {
   log('WARNING: budget low (' + Math.round((budget.remaining() || 0) / 1000) + 'k remaining) — workflow may not complete')
@@ -128,6 +143,30 @@ const envReport = await agent(
 if (!(typeof envReport === 'string' && /ENV_CHECK_RC=0\b/.test(envReport))) {
   return { error: 'Phase 3 env-check did not PASS', raw: String(envReport ?? '').slice(-500) }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase: Manifest Integrity (Fix I — prevent silent corruption stalls)
+// ════════════════════════════════════════════════════════════════════════
+phase('Manifest Integrity')
+// Gate 1 precheck at line ~257 reads manifest quality_complete to decide
+// which FRs to skip. If the working-tree manifest was corrupted by a
+// sub-agent (e.g. fr_ids truncated, gate1 emptied), the precheck sees
+// zero completed FRs and re-dispatches TDD agents that also cannot
+// complete — causing an infinite stall. Detect the three known corruption
+// patterns before we ever read the manifest.
+{
+  const budgetResult = checkBudget(); if (budgetResult) return budgetResult
+}
+const integrityCmd = PY + ' -c "import json, sys; m = json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); ids = m.get(\'fr_ids\') or []; mt = m.get(\'fr_module_traceability\') or {}; g1 = (m.get(\'gate_results\',{}) or {}).get(\'gate1\',{}) or {}; ok_ids = len(ids) >= 2; ok_trace = len(mt) >= len(ids); ok_g1 = isinstance(g1, dict); print(\'OK\' if (ok_ids and ok_trace and ok_g1) else json.dumps({\'BROKEN\': True, \'fr_ids_count\': len(ids), \'traceability_count\': len(mt), \'gate1_keys\': len(g1), \'recovery\': \'git checkout HEAD -- .methodology/quality_manifest.json\'}))"'
+const integrityRaw = await agent(
+  'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + integrityCmd + '`',
+  { label: 'manifest-integrity', phase: 'Manifest Integrity', agentType: 'general-purpose' },
+)
+if (!(typeof integrityRaw === 'string' && /^OK$/.test(String(integrityRaw).trim()))) {
+  log('  manifest integrity FAIL: ' + String(integrityRaw ?? '').trim())
+  return { error: 'Manifest Integrity: quality_manifest.json appears corrupted', detail: String(integrityRaw ?? '').trim(), recovery: 'git checkout HEAD -- .methodology/quality_manifest.json', note: 'Working-tree manifest does not match HEAD. A sub-agent likely wrote to it directly. Restore from HEAD and re-run the workflow.' }
+}
+log('  manifest integrity OK')
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Load FRs (agent reads ctx.json — script can't read files, playbook §4)
@@ -259,6 +298,7 @@ if (alreadyDone.size > 0) log('  sentinel pre-check: Gate 1 (Phase 3) already PA
 // Phase: Per-FR TDD (script-driven loop; one narrow agent per FR)
 // ════════════════════════════════════════════════════════════════════════
 phase('Per-FR TDD')
+{ const budgetResult = checkBudget(); if (budgetResult) return budgetResult }
 const gate1Pass = []
 const gate1Fail = []
 let p3MidPushed = false
@@ -268,6 +308,7 @@ for (const frId of frIds) {
     log('  ' + frId + ' — sentinel exists, Gate 1 PASS (skip TDD)')
     gate1Pass.push(frId)
   } else {
+    { const budgetResult = checkBudget(); if (budgetResult) { budgetResult.fr_id = frId; budgetResult.gate1Pass = gate1Pass; return budgetResult } }
     log('  === ' + frId + ' (' + (frTitle[frId] || '') + ') — TDD chain ===')
     const frReport = await agent(
       'YOU ARE THE IMPLEMENTER for ' + frId + ' (' + (frTitle[frId] || '') + '). Run the full TDD chain for THIS ONE FR.\n'
@@ -343,6 +384,7 @@ if (gate1Fail.length) {
 // Phase: Milestones (p3-mid pushed in-loop at ≥50%; p3-pre-gate2 here = all done)
 // ════════════════════════════════════════════════════════════════════════
 phase('Milestones')
+{ const budgetResult = checkBudget(); if (budgetResult) return budgetResult }
 log('All ' + frIds.length + ' FRs Gate 1 PASS — push p3-pre-gate2 (last stable snapshot before Gate 2)')
 const preGate2Report = await agent(
   'YOU ARE THE P3 MILESTONE PUSHER. Push the pre-Gate-2 milestone.\n'
@@ -362,9 +404,11 @@ if (!(typeof preGate2Report === 'string' && /MILESTONE:\s*PASS/.test(preGate2Rep
 // Phase: Gate 2 (run-gate → eval dims → finalize → D4 60% → retry; HR-08)
 // ════════════════════════════════════════════════════════════════════════
 phase('Gate 2')
+{ const budgetResult = checkBudget(); if (budgetResult) return budgetResult }
 log('Gate 2 exit (composite ≥75, 9 dims: 8 self-scored + traceability framework-owned)')
 let gate2Pass = false, gate2Report = ''
 for (let round = 1; round <= 3; round++) {
+  { const budgetResult = checkBudget(); if (budgetResult) return budgetResult }
   log('  Gate 2 round ' + round + '/3')
   gate2Report = await agent(
     'YOU ARE THE GATE-2 ORCHESTRATOR (Phase 3 exit). ROUND ' + round + '.\n'
@@ -401,6 +445,7 @@ if (!gate2Pass) {
 // Phase: Advance (p3-post-gate2 push + advance-phase --completed 3)
 // ════════════════════════════════════════════════════════════════════════
 phase('Advance')
+{ const budgetResult = checkBudget(); if (budgetResult) return budgetResult }
 log('p3-post-gate2 milestone + advance-phase --completed 3 (TDD-PRECHECK enforced)')
 const advanceReport = await agent(
   'YOU ARE THE PHASE-3 EXIT ORCHESTRATOR. Push formal exit + advance to Phase 4.\n'

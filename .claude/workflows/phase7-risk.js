@@ -95,7 +95,7 @@ const preflightReport = await agent(
   'YOU ARE THE PHASE-7 PREFLIGHT ORCHESTRATOR. Run bash in order; report.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '1. ENTRY-CHECK: confirm .methodology/quality_manifest.json records Gate 4 PASS from P6 (else FAIL → return to Phase 6).\n'
+  + '1. ENTRY-CHECK: run EXACTLY this bash command to verify Gate 4 status (do NOT rely on reading the file yourself — use the command output):\n`' + PY + ' -c "import json; m=json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); g4=(m.get(\'gate_results\',{}) or {}).get(\'gate4\',{}) or {}; print(\'GATE_VERIFIED\' if isinstance(g4,dict) and g4.get(\'quality_complete\') is True else \'GATE_MISSING\')"`\nIf GATE_MISSING → FAIL (return to Phase 6).\n'
   + '2. PREFLIGHT: `' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 7 --project ' + REPO + '`. FAIL → fix, re-run (max 3). Also fix if reported: reliability lint (subprocess timeout / mkstemp / TOCTOU / sleep-in-async), config liveness (env keys absent from .env.example), attestation missing/mismatch (build-trace-attestation --write + commit; re-run until "Attestation: clean").\n'
   + '3. HANDOFF: `' + PY + ' ' + REPO + '/harness_cli.py validate-handoff --from-phase 6 --project ' + REPO + '`. Must exit 0.\n'
   + '4. PREFLIGHT-CI: harness_quality_gate.yml + prepare-commit-msg exist; state.json current_phase=7. If stale: init-project --phase 7 --overwrite.\n\n'

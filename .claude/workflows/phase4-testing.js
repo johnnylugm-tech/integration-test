@@ -100,7 +100,7 @@ const preflightReport = await agent(
   'YOU ARE THE PHASE-4 PREFLIGHT ORCHESTRATOR. Run bash in order; report.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '1. ENTRY-CHECK: confirm .methodology/quality_manifest.json records Gate 2 PASS from P3 (else FAIL → return to Phase 3).\n'
+  + '1. ENTRY-CHECK: run EXACTLY this bash command to verify Gate 2 status (do NOT rely on reading the file yourself — use the command output):\n`' + PY + ' -c "import json; m=json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); g2=(m.get(\'gate_results\',{}) or {}).get(\'gate2\',{}) or {}; print(\'GATE_VERIFIED\' if isinstance(g2,dict) and g2.get(\'quality_complete\') is True else \'GATE_MISSING\')"`\nIf GATE_MISSING → FAIL (return to Phase 3).\n'
   + '2. PREFLIGHT: `' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 4 --project ' + REPO + '`. FAIL → fix, re-run (max 3). P4+ blocking fixes:\n'
   + '   - reliability lint: subprocess.run/Popen without timeout=, tempfile.mkstemp outside try/finally, os.path.exists before open/unlink (TOCTOU), time.sleep inside async def.\n'
   + '   - config liveness: env keys read in code but absent from .env.example/docker-compose/deployment. Add the key (or fix the typo).\n'

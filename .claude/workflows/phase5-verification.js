@@ -98,7 +98,7 @@ const preflightReport = await agent(
   'YOU ARE THE PHASE-5 PREFLIGHT ORCHESTRATOR. Run bash in order; report.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '1. ENTRY-CHECK: confirm .methodology/quality_manifest.json records Gate 3 PASS from P4 (else FAIL → return to Phase 4).\n'
+  + '1. ENTRY-CHECK: run EXACTLY this bash command to verify Gate 3 status (do NOT rely on reading the file yourself — use the command output):\n`' + PY + ' -c "import json; m=json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); g3=(m.get(\'gate_results\',{}) or {}).get(\'gate3\',{}) or {}; print(\'GATE_VERIFIED\' if isinstance(g3,dict) and g3.get(\'quality_complete\') is True else \'GATE_MISSING\')"`\nIf GATE_MISSING → FAIL (return to Phase 4).\n'
   + '2. PREFLIGHT: `' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 5 --project ' + REPO + '`. FAIL → fix, re-run (max 3). Also fix if reported:\n'
   + '   - reliability lint: subprocess without timeout=, mkstemp outside try/finally, os.path.exists-before-open (TOCTOU), time.sleep in async def.\n'
   + '   - config liveness: env keys read in code but absent from .env.example.\n'
