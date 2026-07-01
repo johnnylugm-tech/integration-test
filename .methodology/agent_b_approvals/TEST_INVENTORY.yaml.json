@@ -1,0 +1,25 @@
+{
+  "fr": "TEST_INVENTORY.yaml",
+  "review_status": "APPROVE",
+  "reason": "1:1 mapping verified: 25 ACs from TRACEABILITY_MATRIX.md §2.1-§2.6 expanded to 32 tc_ids in TEST_INVENTORY.yaml (FR-01: 8 ACs → 14 tc_ids via 7-char expansion of AC-FR01-03; FR-02: 6 tc_ids; FR-03: 7 tc_ids; NFR-01/02/03: 1+2+2 tc_ids). No silent collapse: all 7 injection sub-cases TC-FR01-03a..g enumerated as separate entries with distinct injection_char values. Arithmetic consistent: by_fr_total=32 matches sum(14+6+7+1+2+2)=32; by_layer_total=32 matches sum(unit=9 + integration=19 + cross_cutting=4)=32; total_test_cases=32 matches enumerated_count. Test function names follow test_frNN_xxx / test_nfrNN_xxx convention (Python def form per CLAUDE.md D4 + matrix §4.4). Cross-cuts (TC-NFR02-02 in fr01 file, TC-NFR03-01 in fr01 file, TC-NFR03-02 in fr02 file) correctly signalled via cross_ref_",
+  "citations": [
+    "TEST_INVENTORY.yaml:36-45",
+    "TEST_INVENTORY.yaml:56-66",
+    "TEST_INVENTORY.yaml:134-146",
+    "TEST_INVENTORY.yaml:215-226",
+    "TEST_INVENTORY.yaml:282-290",
+    "TEST_INVENTORY.yaml:386-396",
+    "TEST_INVENTORY.yaml:434-466",
+    "01-requirements/SRS.md:31-38",
+    "01-requirements/SRS.md:42-49",
+    "01-requirements/TRACEABILITY_MATRIX.md:29-38",
+    "01-requirements/TRACEABILITY_MATRIX.md:65-71",
+    "01-requirements/TRACEABILITY_MATRIX.md:127-131"
+  ],
+  "docs_embedded": [
+    "TEST_INVENTORY.yaml",
+    "SRS.md",
+    "TRACEABILITY_MATRIX.md"
+  ],
+  "confidence": 0.9
+}

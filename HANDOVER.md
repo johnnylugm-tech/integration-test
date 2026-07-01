@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P2-entry-20260628`  
-**Phase**: P2 — Architecture & Design  
-**Generated**: 2026-06-28T11:02:04Z
+**Checkpoint**: `P1-exit-20260701`  
+**Phase**: P1 — Spec & Discovery  
+**Generated**: 2026-07-01T03:17:43Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -14,9 +14,9 @@
 # 1. Clone (if working directory cleared)
 git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-test && cd integration-test
 
-# 2. Read plan and continue Phase 2
+# 2. Read plan and start Phase 2
 cat .methodology/phase2_plan.md
-# Follow the active plan and continue from where you left off
+# Follow SKILL.md §0.1 Phase 2 entry check, then execute
 ```
 
 ---
@@ -31,7 +31,7 @@ git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-te
 git log --oneline -3
 
 # Confirm FSM state
-cat .methodology/state.json   # expected: phase=2 state=RUNNING last_gate=2 last_fr=FR-03
+cat .methodology/state.json   # expected: phase=1 state=RUNNING
 
 # Read active plan
 cat .methodology/phase2_plan.md
@@ -41,29 +41,64 @@ cat .methodology/phase2_plan.md
 |------|----|
 | Remote | `https://github.com/johnnylugm-tech/integration-test` |
 | Branch | `main` |
-| State | `phase=2 state=RUNNING last_gate=2 last_fr=FR-03` |
+| State | `phase=1 state=RUNNING` |
 | Plan | `.methodology/phase2_plan.md` |
 
 ---
 
 ## 任務背景
 
-Phase 1 complete (3/3 FRs Gate 1 PASS). Gate 2 (score=94.88). Advancing to Phase 2.
+P1 phase completed — pushed for record.
+
+
+## 交付物清單
+
+- `01-requirements/SRS.md` ✅ (290L)
+- `01-requirements/SPEC_TRACKING.md` ✅ (155L)
+- `01-requirements/TRACEABILITY_MATRIX.md` ✅ (228L)
 
 ## 目前執行狀況
 
-Phase 1: 3/3 FRs Gate 1 PASS. Gate 2 (score=94.88) — quality_complete. Ready to begin Phase 2.
+3 FR(s) defined in SRS [FR-01,FR-02,FR-03]. 3/4 deliverables present, Agent-B APPROVED.
+
+**Recently Committed Files:**
+  - `harness`
+  - `.methodology/state.json`
+  - `.claude/workflows/phase1-requirements.js`
+  - `.claude/workflows/phase2-architecture.js`
+  - `.claude/workflows/phase3-implementation.js`
+  - `.claude/workflows/phase5-verification.js`
+  - `.claude/workflows/phase6-quality.js`
+  - `.methodology/phase1_plan.md`
+  - `CLAUDE.md`
+  - `HANDOVER.md`
+  - `TEST_INVENTORY.yaml`
+  - `.harness/traces/agent_trajectory.jsonl`
+  - `.methodology/.gate1_scores.json`
+  - `.methodology/agent_b_approvals/ADR.md.json`
+  - `.methodology/agent_b_approvals/SAD.md.json`
+  - `.methodology/agent_b_approvals/SPEC_TRACKING.md.json`
+  - `.methodology/agent_b_approvals/SRS.md.json`
+  - `.methodology/agent_b_approvals/TEST_INVENTORY.yaml.json`
+  - `.methodology/agent_b_approvals/TEST_SPEC.md.json`
+  - `.methodology/agent_b_approvals/TRACEABILITY_MATRIX.md.json`
 
 ## 接下來的工作
 
-1. Follow SKILL.md §0.1 Phase 2 entry checklist
-2. Read the Phase 2 plan and execute
+1. Open `.methodology/phase2_plan.md` and follow from the top
+2. Follow SKILL.md §0.1 for P2 entry
+3. Review carry-forward gaps before starting P2 (SPEC_TRACKING.md gap register)
 
 ## 注意事項
 
 - 100% follow SKILL.md
 - Do NOT commit `.sessi-work/` or `.methodology/` runtime artifacts
 - Git failures are warnings — they never block the pipeline
+- Phase checkpoint push
+
+## 附加資訊
+
+- **fr_count**: 3
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*
