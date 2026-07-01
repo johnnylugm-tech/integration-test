@@ -433,6 +433,7 @@ test_inventory:
   # =========================================================================
   # Coverage summary — MUST equal the sum of enumerated tests entries above
   # =========================================================================
+
   coverage_summary:
     total_test_cases: 33
     by_fr:
@@ -466,3 +467,56 @@ test_inventory:
         count: 4
         tc_ids: [TC-NFR01-01, TC-NFR02-01, TC-NFR02-02, TC-NFR03-01]
     by_layer_total: 33
+
+# =========================================================================
+# Harness handoff root-level keys (validate-handoff P1→P2 requirement).
+# The detailed per-FR blocks live under test_inventory.{fr01,fr02,fr03}
+# above (upstream SPEC.md v2.0.0 schema); the harness's handoff validator
+# looks up fr_tests / cross_cutting at the YAML root, so we mirror the
+# canonical test names here at root level.
+# =========================================================================
+fr_tests:
+  FR-01:
+    unit:
+      - test_fr01_submit_empty
+      - test_fr01_submit_whitespace
+      - test_fr01_submit_length_boundary
+      - test_fr01_submit_injection_semicolon
+      - test_fr01_submit_injection_pipe
+      - test_fr01_submit_injection_amp
+      - test_fr01_submit_injection_dollar
+      - test_fr01_submit_injection_gt
+      - test_fr01_submit_injection_lt
+      - test_fr01_submit_injection_backtick
+    integration:
+      - test_fr01_submit_valid
+      - test_fr01_pending_state_record
+      - test_fr01_atomic_write
+      - test_fr01_corrupt_store_exit1
+      - test_fr01_no_write_on_reject
+  FR-02:
+    integration:
+      - test_fr02_subprocess_invocation
+      - test_fr02_state_machine
+      - test_fr02_result_fields
+      - test_fr02_retry_on_failure_or_timeout
+      - test_fr02_timeout_exit4
+      - test_fr02_unhandled_exception_exit1
+  FR-03:
+    integration:
+      - test_fr03_submit_routes_to_fr01
+      - test_fr03_run_routes_to_fr02
+      - test_fr03_status_unknown_id
+      - test_fr03_list_truncation_50
+      - test_fr03_clear
+      - test_fr03_json_flag
+      - test_fr03_exit_code_matrix
+cross_cutting:
+  security:
+    - test_nfr02_no_shell_true_repo_grep
+    - test_nfr02_blacklist_test_coverage
+  reliability:
+    - test_nfr03_atomic_write_crash_safety
+    - test_nfr03_redact_secret_lines
+  kpi:
+    - test_nfr01_p95_latency
