@@ -12,6 +12,7 @@
   ],
   "docs_embedded": [
     "SAD.md",
+    "SRS.md",
     "ADR.md",
     "TEST_SPEC.md",
     "SPEC.md",

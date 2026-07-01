@@ -17,6 +17,7 @@
   ],
   "docs_embedded": [
     "ADR.md",
+    "SRS.md",
     "SAD.md",
     "harness/templates/ADR.md",
     "SPEC.md"
