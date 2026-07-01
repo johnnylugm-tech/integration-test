@@ -128,7 +128,8 @@ function buildBPrompt(role, deliverable, docs, checklist) {
     + 'SCHEMA REQUIREMENTS (advance-phase `harness_cli.py _verify_agent_b_approvals_core` REJECTS the approval if any of these fail — observed 2026-06-29 wf_3a9377cb):\n'
     + '  - `reason`: ≥ 100 characters of substantive justification. NOT "APPROVE", "OK", or other one-word response.\n'
     + '  - `citations`: array of "file:line" strings. Must contain ≥ 1 entry that cites a SPECIFIC line you verified via Read/Bash.\n'
-    + '  - `docs_embedded`: array of file paths/identifiers you actually read during this review. CRITICAL — the harness basename-matcher (advance-phase `_norm()`) looks for PURE basenames like "SAD.md", "ADR.md", "TEST_SPEC.md", NOT descriptive strings. Use bare basenames only.\n\n'
+    + '  - `docs_embedded`: array of file paths/identifiers you actually read during this review. CRITICAL — the harness basename-matcher (advance-phase `_norm()`) looks for PURE basenames like "SAD.md", "ADR.md", "TEST_SPEC.md", NOT descriptive strings. Use bare basenames only.\n'
+    + '  - CRITICAL: for Phase 2, `docs_embedded` MUST include ALL of: "SRS.md", "SAD.md" — regardless of which deliverable you are reviewing. The harness verifier (_REQUIRED_EMBEDDED_DOCS[2]) rejects any P2 approval missing either.\n\n'
     + 'Return JSON only (no markdown fences, no commentary). Schema:\n'
     + '{"review_status":"APPROVE"|"REJECT","reason":"<concise>","citations":["file:line"],"docs_embedded":["..."],"gaps":[{"severity":"low|medium|high","message":"...","fr_id":"<FR-XX or null>"}]}\n\n'
     + 'IMPORTANT: Return ONLY the JSON object as your final message. No prose before or after.'
@@ -550,14 +551,15 @@ const adr = await abLoop({
     + (round > 1 && prevB2 ? '\n\n=== [DOC: Previous B-2 review JSON — ADR.md] ===\n' + JSON.stringify(prevB2, null, 2) : ''),
   buildBDocs: (content) => [
     ['DOC 1: Previous Sub-Task B-2 review JSON — SAD.md (gaps-only; reason stripped)', JSON.stringify(safePrevB2(sadB2), null, 2)],
-    ['DOC 2: 02-architecture/SAD.md (APPROVED — heading summary; USE Bash to Read full content if needed)', makeDocSummary(sadContent, { includeFirstLines: true })],
-    ['DOC 3: draft 02-architecture/adr/ADR.md (full content — this IS the deliverable under review)', content],
-    ['DOC 4: harness/templates/ADR.md (template format — heading summary)', makeDocSummary(adrTemplateContent)],
+    ['DOC 2: 01-requirements/SRS.md (APPROVED — heading summary; USE Bash to Read full content if needed)', makeDocSummary(srsContent, { includeFirstLines: true })],
+    ['DOC 3: 02-architecture/SAD.md (APPROVED — heading summary; USE Bash to Read full content if needed)', makeDocSummary(sadContent, { includeFirstLines: true })],
+    ['DOC 4: draft 02-architecture/adr/ADR.md (full content — this IS the deliverable under review)', content],
+    ['DOC 5: harness/templates/ADR.md (template format — heading summary)', makeDocSummary(adrTemplateContent)],
   ],
   checklist:
     '- Upstream SAD review caveats addressed?\n- All major decisions documented (tech stack, patterns, interfaces)?\n'
     + '- Each ADR has clear context, decision, consequences?\n- Alternatives considered documented?\n- Decision aligns with SAD.md architecture?\n'
-    + '- ADR format matches harness/templates/ADR.md (template format)? See embedded DOC 4',
+    + '- ADR format matches harness/templates/ADR.md (template format)? See embedded DOC 5',
 })
 if (!adr.ok) return adr
 let adrContent = adr.content, adrB2 = adr.b2
