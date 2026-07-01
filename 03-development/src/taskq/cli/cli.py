@@ -10,6 +10,7 @@ Citations:
 
 from __future__ import annotations
 
+import argparse
 import sys
 import uuid
 from typing import Sequence
@@ -62,14 +63,12 @@ def _new_id() -> str:
 # CLI entry (`python -m taskq`)
 # ---------------------------------------------------------------------------
 
-def build_parser() -> "object":
+def build_parser() -> "argparse.ArgumentParser":
     """Construct the argparse parser for `taskq` subcommands.
 
     Citations:
         - SPEC.md §3 FR-03 (argparse 子命令表).
     """
-    import argparse
-
     parser = argparse.ArgumentParser(
         prog="taskq",
         description="local task-queue CLI (FR-01..FR-03).",

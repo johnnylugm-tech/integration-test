@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from pathlib import Path
 from typing import List, Dict, Any
 
 from taskq.config import tasks_file
