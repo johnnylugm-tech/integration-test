@@ -2,11 +2,12 @@
   "state": "RUNNING",
   "current_phase": 3,
   "last_gate": 1,
-  "last_fr": "FR-01",
-  "last_update": "2026-07-01T11:47:50.301856+00:00",
+  "last_fr": "FR-02",
+  "last_update": "2026-07-01T17:15:47.965577+00:00",
   "phase_truth_passed": true,
-  "last_milestone_command": "advance-phase --completed-phase 2",
+  "last_milestone_command": "push-milestone --type p3-mid",
   "ci_readiness_ack": {
     "branch_protection": true
-  }
+  },
+  "last_milestone_at": "2026-07-01T17:04:54.799432+00:00"
 }

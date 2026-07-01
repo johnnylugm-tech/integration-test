@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 14,
+    "total": 18,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 14,
+    "orphaned": 18,
     "critical": 0,
     "major": 0,
-    "minor": 14
+    "minor": 18
   },
   "gaps": [
     {
@@ -42,6 +42,18 @@
     {
       "type": "ORPHANED",
       "severity": "minor",
+      "reason": "'task_timeout' has no corresponding specification in SPEC.md",
+      "action": "Add spec for task_timeout or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'retry_limit' has no corresponding specification in SPEC.md",
+      "action": "Add spec for retry_limit or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
       "reason": "'SubmitResult' has no corresponding specification in SPEC.md",
       "action": "Add spec for SubmitResult or remove if unnecessary"
     },
@@ -66,6 +78,12 @@
     {
       "type": "ORPHANED",
       "severity": "minor",
+      "reason": "'RunResult' has no corresponding specification in SPEC.md",
+      "action": "Add spec for RunResult or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
       "reason": "'ValidationOutcome' has no corresponding specification in SPEC.md",
       "action": "Add spec for ValidationOutcome or remove if unnecessary"
     },
@@ -74,6 +92,12 @@
       "severity": "minor",
       "reason": "'validate' has no corresponding specification in SPEC.md",
       "action": "Add spec for validate or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'run_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for run_task or remove if unnecessary"
     },
     {
       "type": "ORPHANED",
