@@ -283,6 +283,7 @@ for (const frId of frIds) {
       + '   - PASS → done.\n'
       + '   - FAIL → fix failing dims (ruff check . --fix; add tests for coverage; fix pyright errors), re-run GATE1. Max 3 rounds.\n'
       + '   - Still failing after 3 → report FAIL.\n'
+      + '   - Architecture Amendment Protocol [BLOCKED]: if GATE1 prints "Unregistered modules detected: {…}", DO NOT hand-edit SAB.json by hand. Run `' + PY + ' ' + REPO + '/harness_cli.py amend-sab --project ' + REPO + '` to register the new modules (idempotent, scans 03-development/src/), `git -C ' + REPO + ' add .methodology/SAB.json && git -C ' + REPO + ' commit -m "amend: register SAB modules (' + frId + ')"`, then re-run GATE1. Max 1 amend round per FR.\n'
       + '   Each run-fr-step auto-pushes on completion (idempotent). Crash recovery: `resume-fr-step --phase 3 --project ' + REPO + '`.\n'
       + '6. ORCH-POST (after GATE1 PASS, per phase3_plan.md [ORCH-POST]):\n'
       + '   a. `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 40.0 --fr-id ' + frId + '` (per-FR D4 ≥40%). FAIL → add the missing test implementations for ' + frId + ', re-run.\n'
