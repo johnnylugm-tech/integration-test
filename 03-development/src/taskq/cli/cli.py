@@ -1,11 +1,14 @@
-"""[FR-01]
+"""[FR-01] [FR-02]
 
-CLI implementation: `submit()` API + entry-point glue for `python -m taskq`.
+CLI implementation: `submit()` + `run` subcommand + entry-point glue for
+`python -m taskq`.
 
 Citations:
 - SPEC.md §3 FR-01 (validation rules, persisted shape, exit-code mapping).
+- SPEC.md §3 FR-02 (taskq run <id> — single-task mode).
 - SPEC.md §3 FR-03 (`status <id>` subcommand parity).
 - tests/test_fr01.py module docstring (SubmitResult field contract — GREEN).
+- tests/test_fr02.py module docstring (run_task contract — GREEN).
 """
 
 from __future__ import annotations
@@ -81,6 +84,9 @@ def build_parser() -> "argparse.ArgumentParser":
     p_submit = sub.add_parser("submit", help="submit a command (FR-01)")
     p_submit.add_argument("command", help="command string (FR-01 validation rules apply)")
 
+    p_run = sub.add_parser("run", help="run a task by id (FR-02)")
+    p_run.add_argument("task_id", help="8-hex task id")
+
     return parser
 
 
@@ -119,6 +125,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         sys.stdout.write(repr(match) + "\n")
         return 0
+
+    if args.cmd_name == "run":
+        from taskq.executor import run_task  # late import keeps module-top flat
+
+        try:
+            result = run_task(args.task_id)
+        except Exception:
+            # Unhandled exception in single-task mode → exit 1 (no bare except).
+            sys.stderr.write("unhandled exception during task execution\n")
+            return 1
+
+        if result.exit_code != 0:
+            sys.stderr.write(
+                f"task {args.task_id!r} finished with status={result.status!r}"
+                f" exit={result.exit_code}\n"
+            )
+        else:
+            sys.stdout.write(
+                f"task {args.task_id!r} finished: {result.status!r}\n"
+            )
+        return result.exit_code
 
     return 1
 

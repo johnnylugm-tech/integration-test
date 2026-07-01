@@ -1,9 +1,10 @@
-"""[FR-01]
+"""[FR-01] [FR-02]
 
 Centralised `TASKQ_*` environment-variable reader.
 
 Citations:
 - SPEC.md §5 — `TASKQ_HOME` (default `.taskq`); single source of truth for env vars.
+- SPEC.md §3 FR-02 — `TASKQ_TASK_TIMEOUT` (default 10.0), `TASKQ_RETRY_LIMIT` (default 2).
 """
 
 from __future__ import annotations
@@ -35,3 +36,21 @@ def tasks_file() -> Path:
         - SPEC.md §3 FR-01 (atomic write target is `$TASKQ_HOME/tasks.json`).
     """
     return taskq_home() / "tasks.json"
+
+
+def task_timeout() -> float:
+    """Return `$TASKQ_TASK_TIMEOUT` as float, default 10.0.
+
+    Citations:
+        - SPEC.md §3 FR-02 (TASKQ_TASK_TIMEOUT default 10.0).
+    """
+    return float(os.environ.get("TASKQ_TASK_TIMEOUT", "10.0"))
+
+
+def retry_limit() -> int:
+    """Return `$TASKQ_RETRY_LIMIT` as int, default 2.
+
+    Citations:
+        - SPEC.md §3 FR-02 (TASKQ_RETRY_LIMIT default 2).
+    """
+    return int(os.environ.get("TASKQ_RETRY_LIMIT", "2"))

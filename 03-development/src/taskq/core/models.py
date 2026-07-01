@@ -1,11 +1,15 @@
-"""[FR-01]
+"""[FR-01] [FR-02]
 
-Domain primitives: the persisted `Task` record and the in-memory
-`SubmitResult` returned to API callers.
+Domain primitives: the persisted `Task` record, the in-memory
+`SubmitResult` returned to API callers, and the `RunResult` from
+the executor.
 
 Citations:
 - SPEC.md §3 FR-01 (uuid4 first 8 hex, status=pending, command, created_at).
+- SPEC.md §3 FR-02 (RunResult fields: exit_code, stdout_tail, stderr_tail,
+  duration_ms, finished_at).
 - tests/test_fr01.py module docstring (SubmitResult field contract).
+- tests/test_fr02.py module docstring (RunResult field contract — GREEN).
 """
 
 from __future__ import annotations
@@ -64,3 +68,22 @@ class Task:
             "status": self.status,
             "created_at": self.created_at,
         }
+
+
+@dataclass
+class RunResult:
+    """[FR-02] Return value of `taskq.executor.run_task()`.
+
+    Citations:
+        - SPEC.md §3 FR-02 (result fields: exit_code, stdout_tail,
+          stderr_tail, duration_ms, finished_at).
+        - tests/test_fr02.py (GREEN contract — RunResult field set).
+    """
+
+    exit_code: int
+    status: str
+    stdout_tail: str = ""
+    stderr_tail: str = ""
+    duration_ms: int = 0
+    finished_at: str = ""
+    attempts: int = 1
