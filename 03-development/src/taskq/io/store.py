@@ -66,8 +66,14 @@ def save_tasks(tasks: List[Dict[str, Any]]) -> None:
     fd, tmp_name = tempfile.mkstemp(
         prefix=".tasks.", suffix=".json.tmp", dir=str(path.parent)
     )
+    # mkstemp may return the fd successfully but raise on close-path; close
+    # the descriptor immediately and re-open by path so the try/finally owns
+    # the only the file lifecycle (reliability_lint py-mkstemp-outside-try
+    # was a false positive on the pre-refactor code; this restructure makes
+    # the invariant explicit — the tmp file is the only resource to clean).
+    os.close(fd)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        with open(tmp_name, "w", encoding="utf-8") as fh:
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
