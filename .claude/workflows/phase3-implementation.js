@@ -145,14 +145,23 @@ phase('Manifest Integrity')
 // zero completed FRs and re-dispatches TDD agents that also cannot
 // complete — causing an infinite stall. Detect the three known corruption
 // patterns before we ever read the manifest.
+// Reusable checker: the 2026-07-02 incident proved corruption can ALSO happen
+// MID-RUN (a Gate 2 sub-agent ran bare `pytest`, collecting harness/tests/
+// whose non-hermetic tests overwrote the manifest via CWD fallback). A single
+// entry check misses that window, so Gate 2 rounds and Advance re-verify.
 const integrityCmd = PY + ' -c "import json, sys; m = json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); ids = m.get(\'fr_ids\') or []; mt = m.get(\'fr_module_traceability\') or {}; g1 = (m.get(\'gate_results\',{}) or {}).get(\'gate1\',{}) or {}; ok_ids = len(ids) >= 2; ok_trace = len(mt) >= len(ids); ok_g1 = isinstance(g1, dict); print(\'OK\' if (ok_ids and ok_trace and ok_g1) else json.dumps({\'BROKEN\': True, \'fr_ids_count\': len(ids), \'traceability_count\': len(mt), \'gate1_keys\': len(g1), \'recovery\': \'git checkout HEAD -- .methodology/quality_manifest.json\'}))"'
-const integrityRaw = await agent(
-  'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + integrityCmd + '`',
-  { label: 'manifest-integrity', phase: 'Manifest Integrity', agentType: 'general-purpose' },
-)
-if (!(typeof integrityRaw === 'string' && /^OK$/.test(String(integrityRaw).trim()))) {
-  log('  manifest integrity FAIL: ' + String(integrityRaw ?? '').trim())
-  return { error: 'Manifest Integrity: quality_manifest.json appears corrupted', detail: String(integrityRaw ?? '').trim(), recovery: 'git checkout HEAD -- .methodology/quality_manifest.json', note: 'Working-tree manifest does not match HEAD. A sub-agent likely wrote to it directly. Restore from HEAD and re-run the workflow.' }
+async function checkManifestIntegrity(phaseLabel, agentLabel) {
+  const raw = await agent(
+    'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + integrityCmd + '`',
+    { label: agentLabel, phase: phaseLabel, agentType: 'general-purpose' },
+  )
+  const ok = typeof raw === 'string' && /^OK$/.test(String(raw).trim())
+  if (!ok) log('  manifest integrity FAIL [' + agentLabel + ']: ' + String(raw ?? '').trim())
+  return { ok, raw: String(raw ?? '').trim() }
+}
+const integrity0 = await checkManifestIntegrity('Manifest Integrity', 'manifest-integrity')
+if (!integrity0.ok) {
+  return { error: 'Manifest Integrity: quality_manifest.json appears corrupted', detail: integrity0.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json', note: 'Working-tree manifest does not match HEAD. A sub-agent likely wrote to it directly. Restore from HEAD and re-run the workflow.' }
 }
 log('  manifest integrity OK')
 
@@ -393,6 +402,13 @@ log('Gate 2 exit (composite ≥75, 9 dims: 8 self-scored + traceability framewor
 let gate2Pass = false, gate2Report = ''
 for (let round = 1; round <= 3; round++) {
     log('  Gate 2 round ' + round + '/3')
+  // Mid-run integrity guard: a prior round's sub-agent may have corrupted the
+  // manifest (2026-07-02 incident — bare pytest → harness test CWD leak).
+  // Catch it BEFORE burning a full evaluation round on poisoned SAB baselines.
+  const g2Integrity = await checkManifestIntegrity('Gate 2', 'g2-integrity-r' + round)
+  if (!g2Integrity.ok) {
+    return { error: 'Gate 2 round ' + round + ': quality_manifest.json corrupted mid-run', detail: g2Integrity.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first — a corrupted manifest may already be committed)', note: 'Corruption appeared AFTER the entry integrity check. Inspect the previous round\'s agent transcript for the writer before restoring.' }
+  }
   gate2Report = await agent(
     'YOU ARE THE GATE-2 ORCHESTRATOR (Phase 3 exit). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
@@ -429,6 +445,13 @@ if (!gate2Pass) {
 // ════════════════════════════════════════════════════════════════════════
 phase('Advance')
 log('p3-post-gate2 milestone + advance-phase --completed 3 (TDD-PRECHECK enforced)')
+// Last-line integrity guard before the milestone commit: push-milestone
+// commits .methodology/ wholesale, so a corrupted manifest here gets
+// PERMANENTLY baked into git history (2026-07-02: commit 3198402).
+const advIntegrity = await checkManifestIntegrity('Advance', 'advance-integrity')
+if (!advIntegrity.ok) {
+  return { error: 'Advance: quality_manifest.json corrupted after Gate 2 — refusing to commit it via push-milestone', detail: advIntegrity.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first), then merge gate2_result.json back into gate_results.gate2 and resume', note: 'Blocking here prevents the corruption from being committed into the p3-post-gate2 milestone.' }
+}
 const advanceReport = await agent(
   'YOU ARE THE PHASE-3 EXIT ORCHESTRATOR. Push formal exit + advance to Phase 4.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
