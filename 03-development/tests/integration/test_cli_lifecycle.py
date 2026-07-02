@@ -4,6 +4,11 @@ Exercises `python -m taskq` as a real subprocess against an isolated
 $TASKQ_HOME so the full persistence + executor + query path is covered
 beyond what the unit-level fr01/fr02/fr03 tests exercise.
 
+This file verifies that the FR-01 (submit persistence), FR-02 (executor
+retry + state machine) and FR-03 (CLI surface) requirements all hold
+under realistic process boundaries (separate interpreter, separate
+$TASKQ_HOME directory, real subprocess invocations).
+
 Citations:
 - SPEC.md S3 FR-01 (submit -> persisted -> status -> clear).
 - SPEC.md S3 FR-02 (submit -> run subprocess -> state transitions).

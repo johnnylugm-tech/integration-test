@@ -40,7 +40,7 @@ def _run_subprocess(args: list[str], home: Path) -> subprocess.CompletedProcess:
     env = {
         **os.environ,
         "TASKQ_HOME": str(home),
-        "PYTHONPATH": str(_ROOT),
+        "PYTHONPATH": str(_SRC),
         "COVERAGE_PROCESS_START": str(_ROOT / ".coveragerc"),
         "COVERAGE_FILE": str(_ROOT / ".coverage.subproc"),
     }

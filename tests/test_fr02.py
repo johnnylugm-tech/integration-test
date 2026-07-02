@@ -40,9 +40,6 @@ NOTE on TEST_SPEC mirroring:
 """
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -263,7 +260,10 @@ def test_fr02_state_machine(taskq_home):
     submitted = submit(cmd)
     assert submitted.exit_code == 0
 
-    result = run_task(submitted.id)
+    # Side-effect check: run_task must persist the terminal status; we
+    # re-read the JSON below rather than asserting on the return value,
+    # so discard the immediate result without an unused-variable lint.
+    _ = run_task(submitted.id)
 
     # Verify the on-disk state matches the in-memory result.
     tasks_file = taskq_home / "tasks.json"

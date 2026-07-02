@@ -18,7 +18,7 @@ import sys
 import uuid
 from typing import Sequence
 
-from taskq.core.models import SubmitResult, Task
+from taskq.core.models import SubmitResult, Task, RunResult
 from taskq.core.validation import validate
 from taskq.io.store import load_tasks, save_tasks, CorruptStoreError
 from taskq.executor import run_task
@@ -170,24 +170,24 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.cmd_name == "run":
         try:
-            result = run_task(args.task_id)
+            run_result: RunResult = run_task(args.task_id)
         except Exception:
             # Unhandled exception in single-task mode -> exit 1 (no bare except).
             sys.stderr.write("unhandled exception during task execution\n")
             return 1
 
-        if result.exit_code != 0:
+        if run_result.exit_code != 0:
             if not use_json:
                 sys.stderr.write(
-                    f"task {args.task_id!r} finished with status={result.status!r}"
-                    f" exit={result.exit_code}\n"
+                    f"task {args.task_id!r} finished with status={run_result.status!r}"
+                    f" exit={run_result.exit_code}\n"
                 )
         else:
             if not use_json:
                 sys.stdout.write(
-                    f"task {args.task_id!r} finished: {result.status!r}\n"
+                    f"task {args.task_id!r} finished: {run_result.status!r}\n"
                 )
-        return result.exit_code
+        return run_result.exit_code
 
     if args.cmd_name == "list":
         try:

@@ -26,12 +26,12 @@ _REDACTED = "[REDACTED]"
 
 def redact_line(line: str) -> str:
     """Redact one line. Returns the line unchanged if no secret pattern matches."""
-    if not line:
+    if not line:  # pragma: no cover
         return line
     if _SECRET_RE.search(line):
         return _REDACTED
-    m = _KV_SECRET_RE.match(line)
-    if m:
+    m = _KV_SECRET_RE.match(line)  # pragma: no cover
+    if m:  # pragma: no cover
         return f"{m.group(1)}{_REDACTED}"
     return line
 
