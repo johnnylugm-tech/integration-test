@@ -7,7 +7,6 @@
     {
       "name": "cli",
       "modules": [
-        "taskq.cli",
         "taskq.__main__"
       ],
       "allowed_dependencies": [
@@ -18,8 +17,7 @@
     {
       "name": "service",
       "modules": [
-        "taskq.executor",
-        "taskq.query"
+        "taskq.executor"
       ],
       "allowed_dependencies": [
         "store"
@@ -82,7 +80,7 @@
   "fr_module_traceability": {
     "FR-01": "taskq.models",
     "FR-02": "taskq.executor",
-    "FR-03": "taskq.cli"
+    "FR-03": "taskq.__main__"
   },
   "architecture_constraints": [
     "no_circular_dependencies"
