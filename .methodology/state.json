@@ -1,9 +1,9 @@
 {
   "state": "RUNNING",
   "current_phase": 4,
-  "last_gate": 2,
-  "last_fr": "FR-03",
-  "last_update": "2026-07-02T17:50:56.476688+00:00",
+  "last_gate": 1,
+  "last_fr": "FR-01",
+  "last_update": "2026-07-02T18:28:00.713290+00:00",
   "phase_truth_passed": true,
   "last_milestone_command": "advance-phase --completed-phase 3",
   "ci_readiness_ack": {
