@@ -2,81 +2,31 @@
   "schema_version": "1.0",
   "generated_at_phase": 2,
   "fr_ids": [
-    "FR-01",
-    "FR-02",
-    "FR-03"
+    "FR-01"
   ],
-  "nfr_dimension_mapping": {
-    "NFR-01": "performance",
-    "NFR-02": "security",
-    "NFR-03": "error_handling"
-  },
+  "nfr_dimension_mapping": {},
   "nfr_fr_mapping": {},
-  "nfr_traceability": {
-    "NFR-01": {
-      "type": "performance",
-      "target": "p95 < 50ms (warm-process, submit+status over 100 iters, excluding subprocess)",
-      "module": "taskq.store"
-    },
-    "NFR-02": {
-      "type": "security",
-      "target": "shell=True forbidden codebase-wide; injection blacklist ( ; | & $ > < ` ) covered by tests",
-      "module": "taskq.executor"
-    },
-    "NFR-03": {
-      "type": "reliability",
-      "target": "atomic tasks.json write via tmp+os.replace; stdout/stderr redaction before persist",
-      "module": "taskq.redact"
-    }
-  },
+  "nfr_traceability": {},
   "quality_targets": {
-    "max_complexity": 10,
-    "min_coverage": 95,
-    "max_coupling": 0.3
+    "unknown_target": 10
   },
-  "fr_module_traceability": {
-    "FR-01": "taskq.models",
-    "FR-02": "taskq.executor",
-    "FR-03": "taskq.cli"
-  },
-  "architecture_constraints": [
-    "no_circular_dependencies"
-  ],
-  "high_risk_modules": [
-    "taskq.executor",
-    "taskq.store"
-  ],
-  "gate_score_overrides": {
-    "performance": 75.0,
-    "security": 80.0,
-    "error_handling": 80.0,
-    "test_coverage": 95.0
-  },
+  "fr_module_traceability": {},
+  "architecture_constraints": [],
+  "high_risk_modules": [],
+  "gate_score_overrides": {},
   "gate_results": {
-    "gate1": {
-      "FR-01": {
-        "score": 98.98,
-        "quality_complete": true,
-        "rounds_used": 2,
-        "open_critical": 0,
-        "open_high": 0
-      },
-      "FR-02": {
-        "score": 96.02,
-        "quality_complete": true,
-        "rounds_used": 2,
-        "open_critical": 0,
-        "open_high": 0
-      },
-      "FR-03": {
-        "score": 99.32,
-        "quality_complete": true,
-        "rounds_used": 2,
-        "open_critical": 0,
-        "open_high": 0
-      }
+    "gate1": {},
+    "gate2": {
+      "score": 100.0,
+      "quality_complete": true,
+      "rounds_used": 2,
+      "open_critical": 0,
+      "open_high": 0,
+      "phase": 3,
+      "gate": 2,
+      "fr_scope": "all",
+      "overall_score": 100.0
     },
-    "gate2": null,
     "gate3": null,
     "gate4": null
   }

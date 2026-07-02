@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-07-02
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 2 - Architecture Design
 > **Status**: Full version (including Phase 2 detailed tasks)
@@ -496,6 +496,27 @@ are not re-opened. This bounds backtracking to a single step.
   - `REJECT` → fix all gaps → re-dispatch B. Max 5 rounds (HR-12).
     > If round 5 REJECT: escalate to human — orchestrator cannot self-resolve.
     > Human fix → re-dispatch Agent B (same prompt + updated content) → `APPROVE` required before continuing.
+
+- **[B-APPROVAL]** ✅ Persist Agent B approval JSONs for each deliverable to `.methodology/agent_b_approvals/<id>.json`
+  > Required by `harness_cli.py advance-phase` via `_verify_agent_b_approvals_core`.
+  > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"]}`
+  > Phase 2 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[2]`, e.g., for Phase 1: SRS.md, SPEC_TRACKING.md, TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml).
+  > `<id>` MUST match the full _PHASE_DELIVERABLES[N] entry EXACTLY, including file extension (e.g. `SRS.md` → file `SRS.md.json`). Harness matches `approvals_dir / f"{did}.json"` directly without stem-stripping.
+  > Use Bash + Python (harness_cli.py write-approval subcommand if available, else direct Write tool) — do NOT use Edit (whole-file write only).
+  > **v27 — Retry-with-verify pattern (mandatory)**: The Bash invocation that performs `write-approval` MUST also perform `verify-file` on the produced artifact, wrapped in a bash `for` loop of MAX_PERSIST_ATTEMPTS=3 attempts inside a SINGLE Bash invocation (one shell-wrapper agent call):
+  > ```bash
+  > # compound retry script — runs write-approval + verify-file up to 3× inside one Bash call
+  > ok=0
+  > for attempt in 1 2 3; do
+  >   if python harness_cli.py write-approval --fr-id <id> --json '<json>' \
+  >      && python harness_cli.py verify-file --file .methodology/agent_b_approvals/<id>.json --expect json --min-bytes 10; then
+  >     ok=1; break
+  >   fi
+  >   sleep 1
+  > done
+  > [ $ok -eq 1 ]
+  > ```
+  > Rationale: workflow JS sandbox (playbook §3-§4) forbids native fs / child_process; the outer `await agent()` is one LLM-as-shell-wrapper call with ~5% random-failure rate. We compensate by retrying INSIDE bash (deterministic) so the only LLM touch-point is the outer invocation. After MAX_PERSIST_ATTEMPTS attempts all fail → throw (option A — fail loudly rather than silently lose the approval). Trust `verify-file OK` on disk as the success signal (more robust than regex-matching write-approval stdout).
 
 - **[B-PUSH]** ✅ PUSH ② — Push to GitHub + HANDOVER.md — retry until success (CHECKPOINT-PEER-REVIEW saved):
   > Run `push-checkpoint` → if blocked, read the error → fix → re-run until green.

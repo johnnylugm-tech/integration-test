@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-07-02
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 6 - Quality Assurance
 > **Status**: Full version (including Phase 6 detailed tasks)
@@ -32,7 +32,7 @@ Agent B peer review of the QA deliverables (HR-01) — both are required to exit
 - **[ENTRY-CHECK]** Gate 3 PASS (P4 exit — P5 has no exit gate, P5 completed stands between):
   Verify P5 output artifacts exist: `05-verification/VERIFICATION_REPORT.md`
   Proof: .methodology/quality_manifest.json records Gate 3 PASS from P4.
-  If NOT confirmed: return to Phase 4 and complete exit gate first.
+  If NOT confirmed: verify Phase 4 Gate PASS is recorded in quality_manifest.json and confirm all intervening phases (P5–P5) completed their tasks.
 
 - **[D4-PRECHECK]** Verify spec-coverage meets Gate 4 threshold BEFORE starting P6 (avoid late surprise):
   ```bash

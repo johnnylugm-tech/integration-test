@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-07-02
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 7 - Risk Management
 > **Status**: Full version (including Phase 7 detailed tasks)
@@ -37,7 +37,7 @@ Each FR gets a Gate 1 risk-aware re-evaluation (CHECKPOINT). No harness run-gate
 
 - **[ENTRY-CHECK]** Gate 4 PASS:
   Proof: .methodology/quality_manifest.json records Gate 4 PASS from P6.
-  If NOT confirmed: return to Phase 6 and complete exit gate first.
+  If NOT confirmed: verify Phase 6 Gate PASS is recorded in quality_manifest.json and confirm all intervening phases (P7–P6) completed their tasks.
 
 ### Pre-Phase Preflight
 

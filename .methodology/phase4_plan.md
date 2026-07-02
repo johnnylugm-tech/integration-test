@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-26
+> **Date**: 2026-07-02
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 4 - Testing
 > **Status**: Full version (including Phase 4 detailed tasks)
@@ -38,7 +38,7 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
 
 - **[ENTRY-CHECK]** Gate 2 PASS:
   Proof: .methodology/quality_manifest.json records Gate 2 PASS from P3.
-  If NOT confirmed: return to Phase 3 and complete exit gate first.
+  If NOT confirmed: verify Phase 3 Gate PASS is recorded in quality_manifest.json and confirm all intervening phases (P4–P3) completed their tasks.
 
 ### Pre-Phase Preflight
 

@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from taskq.config import retry_limit, task_timeout
 from taskq.core.models import RunResult
 from taskq.io.store import load_tasks, save_tasks
+from taskq.redact import redact_text
 
 
 def run_task(task_id: str) -> RunResult:
@@ -75,6 +76,9 @@ def run_task(task_id: str) -> RunResult:
             )
             stdout_tail = _tail(proc.stdout, 2000)
             stderr_tail = _tail(proc.stderr, 2000)
+            # NFR-03 redact-before-persist: scrub secret-shaped lines BEFORE persisting.
+            stdout_tail = redact_text(stdout_tail)
+            stderr_tail = redact_text(stderr_tail)
 
             if proc.returncode == 0:
                 exit_code = 0

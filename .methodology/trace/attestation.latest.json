@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "cb3c178d331649afa890b7bb7237db498a88c9aa",
-  "content_sha256": "3fb6d2e0036fc474d76ca3b82542872730a9db8515d29e7eaf86d69124d0dfa1",
+  "git_sha": "ac0449e4f718fa3f9722dfab18e0b2105c477aea",
+  "content_sha256": "2216c8d889ccff608807d03dd8826a6c539c244ec873274dbc99e26a136f4e82",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -14,7 +14,7 @@
       "code_coverage": "100.0%",
       "test_coverage": "100.0%",
       "verification_rate": "100.0%",
-      "total_links": 25,
+      "total_links": 28,
       "missing_mappings": {
         "fr_without_srs": [],
         "fr_without_code": [],
@@ -42,10 +42,11 @@
           "03-development/src/taskq/core/validation.py",
           "03-development/src/taskq/io/__init__.py",
           "03-development/src/taskq/io/store.py",
+          "03-development/tests/integration/test_cli_lifecycle.py",
           "tests/test_fr01.py"
         ],
         "test_files": [
-          "tests/test_fr01.py"
+          "tests/integration/test_cli_lifecycle.py"
         ],
         "sad_module": "models.py",
         "priority": "HIGH"
@@ -59,10 +60,11 @@
           "03-development/src/taskq/config.py",
           "03-development/src/taskq/core/models.py",
           "03-development/src/taskq/executor.py",
+          "03-development/tests/integration/test_cli_lifecycle.py",
           "tests/test_fr02.py"
         ],
         "test_files": [
-          "tests/test_fr02.py"
+          "tests/integration/test_cli_lifecycle.py"
         ],
         "sad_module": "executor.py",
         "priority": "HIGH"
@@ -74,10 +76,11 @@
         "code_files": [
           "03-development/src/taskq/cli/cli.py",
           "03-development/src/taskq/query.py",
+          "03-development/tests/integration/test_cli_lifecycle.py",
           "tests/test_fr03.py"
         ],
         "test_files": [
-          "tests/test_fr03.py"
+          "tests/integration/test_cli_lifecycle.py"
         ],
         "sad_module": "cli.py",
         "priority": "HIGH"

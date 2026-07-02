@@ -2,10 +2,12 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-06-28
+> **Date**: 2026-07-02
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 1 - Requirements Specification
 > **Status**: Full version (including Phase 1 detailed tasks)
+> **Mode**: Dynamic (load-context at execution time)
+
 
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
@@ -58,6 +60,14 @@ Phase 1 is the project starting point. Define complete SRS.
   ```
   Re-verify items 1-3 after running.
   If still failing after `init-project`: escalate to human — provide `init-project` error output.
+
+### 🔄 [PHASE-CONTEXT] — Load Before Starting
+
+```bash
+python3 harness_cli.py load-context --phase 1 --project . --json \
+  > .sessi-work/phase1_ctx.json
+```
+> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
 
 ### Task Decomposition (Dependency Analysis)
 
@@ -303,7 +313,7 @@ are not re-opened. This bounds backtracking to a single step.
 **Agent B**: BUSINESS_ANALYST
 
 **A/B Work** (HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews):
-- **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Generate TEST_INVENTORY.yaml from SRS.md FR acceptance criteria → assign test function names per FR → validate naming convention
+- **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Generate TEST_INVENTORY.yaml from SRS.md FR acceptance criteria → assign test function names per FR → validate naming convention. **1:1 rule**: matrix sub-ranges (e.g. `TC-FR01-05a..g` = 7 sub-cases) MUST enumerate as separate tc_ids in YAML — one entry per sub-case, NOT collapse into a single entry with internal loop. This prevents B-2 review from REJECT-ing on 1:1 violation.
   - FORBIDDEN: vague/non-testable acceptance criteria
 - **[A-2]** Agent A returns `{status, files, confidence, citations, summary}`
 - **[B-1]** Agent B (BUSINESS_ANALYST) — dispatch as **STATELESS** subagent:
@@ -342,6 +352,7 @@ are not re-opened. This bounds backtracking to a single step.
   - Every FR has ≥1 test function?
   - Test function names follow naming convention?
   - All FRs from TRACEABILITY_MATRIX covered?
+  - 1:1 expansion: matrix sub-ranges (a..g, etc.) must enumerate as separate tc_ids — no collapsing N sub-cases into 1 entry
   - All upstream deliverables consistent with each other? No contradictory decisions?
 
   Return JSON only:
@@ -446,6 +457,27 @@ are not re-opened. This bounds backtracking to a single step.
     > If round 5 REJECT: escalate to human — orchestrator cannot self-resolve.
     > Human fix → re-dispatch Agent B (same prompt + updated content) → `APPROVE` required before continuing.
 
+- **[B-APPROVAL]** ✅ Persist Agent B approval JSONs for each deliverable to `.methodology/agent_b_approvals/<id>.json`
+  > Required by `harness_cli.py advance-phase` via `_verify_agent_b_approvals_core`.
+  > Each file MUST contain: `{"fr": "<id>", "review_status": "APPROVE", "reason": "<≥40 chars>", "citations": ["file:line"], "docs_embedded": ["<basename of each source doc>"]}`
+  > Phase 1 deliverable IDs = phase deliverables (see `harness_cli.py _PHASE_DELIVERABLES[1]`, e.g., for Phase 1: SRS.md, SPEC_TRACKING.md, TRACEABILITY_MATRIX.md, TEST_INVENTORY.yaml).
+  > `<id>` MUST match the full _PHASE_DELIVERABLES[N] entry EXACTLY, including file extension (e.g. `SRS.md` → file `SRS.md.json`). Harness matches `approvals_dir / f"{did}.json"` directly without stem-stripping.
+  > Use Bash + Python (harness_cli.py write-approval subcommand if available, else direct Write tool) — do NOT use Edit (whole-file write only).
+  > **v27 — Retry-with-verify pattern (mandatory)**: The Bash invocation that performs `write-approval` MUST also perform `verify-file` on the produced artifact, wrapped in a bash `for` loop of MAX_PERSIST_ATTEMPTS=3 attempts inside a SINGLE Bash invocation (one shell-wrapper agent call):
+  > ```bash
+  > # compound retry script — runs write-approval + verify-file up to 3× inside one Bash call
+  > ok=0
+  > for attempt in 1 2 3; do
+  >   if python harness_cli.py write-approval --fr-id <id> --json '<json>' \
+  >      && python harness_cli.py verify-file --file .methodology/agent_b_approvals/<id>.json --expect json --min-bytes 10; then
+  >     ok=1; break
+  >   fi
+  >   sleep 1
+  > done
+  > [ $ok -eq 1 ]
+  > ```
+  > Rationale: workflow JS sandbox (playbook §3-§4) forbids native fs / child_process; the outer `await agent()` is one LLM-as-shell-wrapper call with ~5% random-failure rate. We compensate by retrying INSIDE bash (deterministic) so the only LLM touch-point is the outer invocation. After MAX_PERSIST_ATTEMPTS attempts all fail → throw (option A — fail loudly rather than silently lose the approval). Trust `verify-file OK` on disk as the success signal (more robust than regex-matching write-approval stdout).
+
 - **[B-PUSH]** ✅ PUSH ① — Push to GitHub + HANDOVER.md — retry until success (CHECKPOINT-PEER-REVIEW saved):
   > Run `push-checkpoint` → if blocked, read the error → fix → re-run until green.
   > Do NOT use `--no-verify` to bypass.
@@ -458,11 +490,6 @@ are not re-opened. This bounds backtracking to a single step.
 
 ### Phase 1 → Phase 2: Architecture Design
 
-- Generate Phase 2 plan:
-  ```bash
-  python3 harness_cli.py plan-phase --phase 2 --project . \
-    --output .methodology/phase2_plan.md
-  ```
 - Advance FSM to Phase 2 (writes new HANDOVER.md + local commit):
   ```bash
   python3 harness_cli.py advance-phase --completed 1 --project .
