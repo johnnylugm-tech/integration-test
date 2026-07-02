@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -38,6 +39,9 @@ import pytest
 # Top-level imports — NOT wrapped in try/except. ModuleNotFoundError on import
 # is the expected RED signal that drives the failing-test result.
 from taskq.cli.cli import submit, main
+from taskq.core.validation import validate
+from taskq.io import store as store_mod
+from taskq import query as query_mod
 
 
 # ---------------------------------------------------------------------------
@@ -348,4 +352,286 @@ def test_fr03_exit_code_matrix(taskq_home, monkeypatch):
     assert raw_corrupt.exit_code == 1, (
         f"status on corrupt store expected exit 1, got {raw_corrupt.exit_code}"
     )
+
+
+# ===========================================================================
+# Coverage-targeted additions — exercise code paths NOT covered by the seven
+# TEST_SPEC.md FR-03 cases. These tests use the same helpers and fixture so
+# they share the per-test $TASKQ_HOME isolation.
+# ===========================================================================
+
+
+# --- CLI surface: submit subcommand via main() --------------------------------
+
+def test_fr03_cli_submit_human(taskq_home):
+    """Coverage: cli.main() submit branch, human path (no --json, exit 0)."""
+    raw = _run_main(["submit", "echo hi"])
+    assert raw.exit_code == 0, f"submit human expected 0, got {raw.exit_code}: {raw.stderr!r}"
+    # Human path writes a single line: the new task id.
+    assert raw.stdout.strip() != "", "submit human must print the new task id"
+    assert len(raw.stdout.strip()) == 8, (
+        f"submit human output should be 8-char id, got {raw.stdout.strip()!r}"
+    )
+
+
+def test_fr03_cli_submit_json(taskq_home):
+    """Coverage: cli.main() submit branch, --json path (single-line JSON, exit 0)."""
+    raw = _run_main(["--json", "submit", "echo hi"])
+    assert raw.exit_code == 0, f"submit --json expected 0, got {raw.exit_code}: {raw.stderr!r}"
+    assert "\n" not in raw.stdout, "--json submit output must be single-line"
+    assert raw.stdout.startswith("{"), "--json submit output must be JSON object"
+    parsed = json.loads(raw.stdout)
+    assert parsed.get("status") == "pending"
+    assert parsed.get("command") == "echo hi"
+    assert len(parsed.get("id", "")) == 8
+
+
+def test_fr03_cli_submit_validation_fail(taskq_home):
+    """Coverage: cli.main() submit branch on validation failure (exit 2)."""
+    raw = _run_main(["submit", ""])
+    assert raw.exit_code == 2, f"submit empty expected 2, got {raw.exit_code}"
+    assert "non-empty" in raw.stderr or "invalid" in raw.stderr.lower(), (
+        f"validation fail must write reason to stderr, got {raw.stderr!r}"
+    )
+
+
+# --- CLI surface: status subcommand human path on a known id ------------------
+
+def test_fr03_cli_status_known_id_human(taskq_home):
+    """Coverage: cli.main() status branch human path + query.format_task_human."""
+    s = submit("echo hi")
+    assert s.exit_code == 0
+    raw = _run_main(["status", s.id])
+    assert raw.exit_code == 0, f"status known id expected 0, got {raw.exit_code}: {raw.stderr!r}"
+    # Human format_task_human writes "key: value" lines.
+    assert "id:" in raw.stdout, f"status human must list fields, got {raw.stdout!r}"
+    assert s.id in raw.stdout
+    assert "pending" in raw.stdout
+
+
+# --- CLI surface: list subcommand --json path + format_list_json --------------
+
+def test_fr03_cli_list_json(taskq_home):
+    """Coverage: cli.main() list --json branch + query.format_list_json."""
+    s = submit("echo hi")
+    assert s.exit_code == 0
+    raw = _run_main(["--json", "list"])
+    assert raw.exit_code == 0, f"list --json expected 0, got {raw.exit_code}: {raw.stderr!r}"
+    assert "\n" not in raw.stdout, "list --json must be single-line"
+    parsed = json.loads(raw.stdout)
+    assert isinstance(parsed, list)
+    assert len(parsed) == 1
+    assert parsed[0]["id"] == s.id
+    assert parsed[0]["command"] == "echo hi"
+    # truncation invariant
+    assert len(parsed[0]["command"]) <= 50
+
+
+# --- CLI surface: list subcommand on corrupt store (exit 1) ------------------
+
+def test_fr03_cli_list_corrupt_store(taskq_home):
+    """Coverage: cli.main() list branch CorruptStoreError -> exit 1."""
+    tasks_file = taskq_home / "tasks.json"
+    tasks_file.write_text("not valid json")
+    raw = _run_main(["list"])
+    assert raw.exit_code == 1, f"list on corrupt store expected 1, got {raw.exit_code}"
+    assert "store corrupted" in raw.stderr, (
+        f"list corrupt must write 'store corrupted' to stderr, got {raw.stderr!r}"
+    )
+
+
+# --- CLI surface: list subcommand on empty store (format_list_human empty) ----
+
+def test_fr03_cli_list_empty(taskq_home):
+    """Coverage: query.format_list_human empty-list early-return branch."""
+    raw = _run_main(["list"])
+    assert raw.exit_code == 0, f"list empty expected 0, got {raw.exit_code}: {raw.stderr!r}"
+    # empty list -> format_list_human returns "" -> main writes "\n"
+    assert raw.stdout.strip() == "", (
+        f"list empty should produce no rows, got {raw.stdout!r}"
+    )
+
+
+# --- CLI surface: clear on missing tasks.json (idempotent FileNotFoundError) --
+
+def test_fr03_cli_clear_idempotent_missing_file(taskq_home):
+    """Coverage: query.clear() FileNotFoundError branch (no tasks.json)."""
+    tasks_file = taskq_home / "tasks.json"
+    assert not tasks_file.exists()
+    raw = _run_main(["clear"])
+    assert raw.exit_code == 0, f"clear on missing file expected 0, got {raw.exit_code}"
+    assert not tasks_file.exists(), "clear must NOT create tasks.json"
+
+
+# --- CLI surface: run on nonexistent task id (executor run_task not-found) ----
+
+def test_fr03_cli_run_nonexistent_task(taskq_home):
+    """Coverage: executor.run_task line 35-43 (task id not found -> failed/1)."""
+    raw = _run_main(["run", "deadbeef"])
+    assert raw.exit_code == 1, f"run on missing task expected 1, got {raw.exit_code}"
+    # run_task returns RunResult(exit_code=1, status="failed"); main surfaces
+    # the non-zero branch in human mode.
+    assert "failed" in raw.stderr or raw.exit_code != 0
+
+
+# --- CLI surface: run on a task that fails (subprocess returncode != 0) -------
+
+def test_fr03_cli_run_task_failure(taskq_home):
+    """Coverage: executor.run_task line 82-84 (returncode != 0 -> failed)."""
+    s = submit("false")
+    assert s.exit_code == 0
+    raw = _run_main(["run", s.id])
+    # `false` exits with 1 — single-task mode surfaces non-zero.
+    assert raw.exit_code != 0, (
+        f"run on `false` expected non-zero exit, got {raw.exit_code}"
+    )
+    assert "failed" in raw.stderr, (
+        f"human run-fail must surface 'failed' status, got {raw.stderr!r}"
+    )
+
+
+# --- CLI surface: run on a task that raises (unhandled-exception path) --------
+
+def test_fr03_cli_run_task_unhandled(taskq_home):
+    """Coverage: cli.main() run branch unhandled-exception -> exit 1."""
+    # Use a command that resolves to a non-existent binary; subprocess raises
+    # FileNotFoundError, executor.run_task catches it (line 95-104) as
+    # failed/exit_code=1. The single-task CLI surfaces exit_code=1.
+    s = submit("/nonexistent/path/binary_xyz")
+    assert s.exit_code == 0, (
+        f"submit of nonexistent binary should pass validation, got exit {s.exit_code}"
+    )
+    raw = _run_main(["run", s.id])
+    assert raw.exit_code == 1, (
+        f"run on nonexistent binary expected exit 1, got {raw.exit_code}"
+    )
+
+
+# --- Validation rules: length > 1000, blacklist char, non-string input -------
+
+def test_fr03_validation_length_over_limit(taskq_home):
+    """Coverage: core.validation line 45-46 (cmd length > 1000)."""
+    cmd = "a" * 1001
+    outcome = validate(cmd)
+    assert outcome.ok is False
+    assert "1000" in outcome.reason, (
+        f"length-reject reason must mention 1000, got {outcome.reason!r}"
+    )
+
+
+def test_fr03_validation_blacklist_char(taskq_home):
+    """Coverage: core.validation line 48-50 (blacklist character rejected)."""
+    # Each blacklist char independently rejected.
+    for hit in [";", "|", "&", "$", ">", "<", "`"]:
+        outcome = validate(f"echo a{hit}b")
+        assert outcome.ok is False, f"blacklist char {hit!r} must be rejected"
+        assert "disallowed" in outcome.reason, (
+            f"blacklist reject reason must say 'disallowed', got {outcome.reason!r}"
+        )
+
+
+def test_fr03_validation_non_string(taskq_home):
+    """Coverage: core.validation line 39-40 (non-string input)."""
+    outcome = validate(None)
+    assert outcome.ok is False
+    assert "non-empty" in outcome.reason
+    outcome = validate(12345)
+    assert outcome.ok is False
+
+
+# --- Store: payload not dict / tasks not list --------------------------------
+
+def test_fr03_store_payload_not_dict(taskq_home):
+    """Coverage: io.store.load_tasks line 44-45 (payload not a dict)."""
+    tasks_file = taskq_home / "tasks.json"
+    tasks_file.write_text("[1, 2, 3]")  # valid JSON, but a list, not a dict
+    result = store_mod.load_tasks()
+    assert result == [], "payload-not-dict must yield empty list, not raise"
+
+
+def test_fr03_store_tasks_not_list(taskq_home):
+    """Coverage: io.store.load_tasks line 47 (tasks field is not a list)."""
+    tasks_file = taskq_home / "tasks.json"
+    tasks_file.write_text('{"tasks": "not-a-list"}')
+    result = store_mod.load_tasks()
+    assert result == [], "tasks-not-list must yield empty list, not raise"
+
+
+# --- Query helpers (direct unit coverage of pure functions) ------------------
+
+def test_fr03_query_list_tasks_empty(taskq_home):
+    """Coverage: query.list_tasks on empty store."""
+    result = query_mod.list_tasks()
+    assert result == []
+
+
+def test_fr03_query_format_task_human(taskq_home):
+    """Coverage: query.format_task_human pure function."""
+    out = query_mod.format_task_human({"id": "deadbeef", "status": "pending"})
+    assert "id: deadbeef" in out
+    assert "status: pending" in out
+
+
+def test_fr03_query_format_list_json_empty(taskq_home):
+    """Coverage: query.format_list_json empty-list path."""
+    out = query_mod.format_list_json([])
+    assert out == "[]"
+    assert "\n" not in out
+
+
+# --- SubmitResult.attempts field assignment via the CLI --json submit branch --
+
+def test_fr03_cli_submit_json_attempts_field(taskq_home):
+    """Coverage: cli.main() submit --json writes attempts: 0 (line 142)."""
+    raw = _run_main(["--json", "submit", "echo hi"])
+    assert raw.exit_code == 0
+    parsed = json.loads(raw.stdout)
+    assert "attempts" in parsed, "--json submit output must include attempts"
+    assert parsed["attempts"] == 0
+
+
+# --- CLI run unhandled exception: monkeypatch run_task to raise ---------------
+
+def test_fr03_cli_run_unhandled_exception(monkeypatch, taskq_home):
+    """Coverage: cli.main() run branch `except Exception` -> exit 1 (line 175-178)."""
+    from taskq.cli import cli as cli_mod
+
+    def _boom(_task_id):
+        raise RuntimeError("synthetic executor failure")
+
+    monkeypatch.setattr(cli_mod, "run_task", _boom)
+    raw = _run_main(["run", "deadbeef"])
+    assert raw.exit_code == 1, (
+        f"unhandled run exception expected exit 1, got {raw.exit_code}"
+    )
+    assert "unhandled exception" in raw.stderr, (
+        f"unhandled path must write 'unhandled exception', got {raw.stderr!r}"
+    )
+
+
+# --- Store save_tasks exception cleanup (mock os.replace to raise) -----------
+
+def test_fr03_store_save_tasks_exception_cleanup(monkeypatch, taskq_home):
+    """Coverage: io.store.save_tasks line 75-81 (best-effort orphan tmp cleanup).
+
+    Monkeypatch os.replace to raise OSError so the except branch is taken,
+    then monkeypatch os.unlink to also raise OSError so the inner
+    `except OSError: pass` (line 79-80) is exercised.
+    """
+    original_replace = os.replace
+
+    def _replace_raises(src, dst):
+        raise OSError("synthetic replace failure")
+
+    def _unlink_raises(path):
+        raise OSError("synthetic unlink failure")
+
+    monkeypatch.setattr(store_mod.os, "replace", _replace_raises)
+    monkeypatch.setattr(store_mod.os, "unlink", _unlink_raises)
+
+    with pytest.raises(OSError):
+        store_mod.save_tasks([{"id": "deadbeef", "command": "echo hi", "status": "pending"}])
+
+    # restore os.replace so the test's tmp_path teardown works
+    monkeypatch.setattr(store_mod.os, "replace", original_replace)
 

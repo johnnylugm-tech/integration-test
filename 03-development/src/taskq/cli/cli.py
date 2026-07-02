@@ -21,6 +21,7 @@ from typing import Sequence
 from taskq.core.models import SubmitResult, Task
 from taskq.core.validation import validate
 from taskq.io.store import load_tasks, save_tasks, CorruptStoreError
+from taskq.executor import run_task
 from taskq.query import (
     UnknownTaskError,
     status as query_status,
@@ -32,7 +33,7 @@ from taskq.query import (
     format_list_json,
 )
 
-__all__ = ["submit", "main", "build_parser"]
+__all__ = ["submit", "main", "build_parser", "run_task"]
 
 
 def submit(cmd: object) -> SubmitResult:
@@ -168,8 +169,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.cmd_name == "run":
-        from taskq.executor import run_task  # late import keeps module-top flat
-
         try:
             result = run_task(args.task_id)
         except Exception:
@@ -207,7 +206,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         query_clear()
         return 0
 
-    return 1
+    return 1  # pragma: no cover -- argparse `required=True` rejects unknown cmd_name before dispatch
 
 
 if __name__ == "__main__":  # pragma: no cover -- normal entry is __main__.py
