@@ -488,3 +488,490 @@ def test_fr03_sub_assertions_mirror(taskq_env, taskq_home):
     # ── AC-FR03-exit-success [cases 22, 23, 26, 27, 28] ─────────────────
     if cmd == "echo hi":
         assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Direct unit tests — exercise FR-03 source paths not reachable from the
+# subprocess-based behavioural tests above. These tests import
+# `taskq.__main__` directly so coverage tracks each branch without
+# requiring a `python -m taskq` round-trip.
+#
+# Coverage targets (FR-03 source files):
+#   - __main__.py cmd_submit happy + rejection + non-json + corrupt-store paths
+#   - __main__.py cmd_run unknown-id / UnhandledExecutionError / bare-Exception /
+#     StoreCorruptedError / failed-status branches
+#   - __main__.py cmd_status known-id + corrupt-store paths
+#   - __main__.py main() subcommand dispatch
+#   - store.py non-list top-level corruption path
+#   - executor.py FileNotFoundError / retry-loop paths
+# ---------------------------------------------------------------------------
+
+
+from pathlib import Path
+
+import pytest
+
+from taskq.__main__ import (
+    build_parser,
+    cmd_run,
+    cmd_status,
+    cmd_submit,
+    main,
+)
+from taskq.executor import (
+    UnhandledExecutionError,
+    run_task,
+)
+from taskq.store import (
+    EXIT_CORRUPT,
+    StoreCorruptedError,
+    load_tasks_or_die,
+)
+
+
+def _isolate_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Point TASKQ_HOME at a per-test tmp directory; return the home Path."""
+    home = tmp_path / ".taskq"
+    home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TASKQ_HOME", str(home))
+    return home
+
+
+def _seed_record(
+    home: Path,
+    task_id: str,
+    command: str = "echo hi",
+    **overrides,
+) -> dict:
+    """Write a single-record tasks.json under `home`; return the record."""
+    record = {
+        "id": task_id,
+        "command": command,
+        "status": "pending",
+        "attempts": 0,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "exit_code": None,
+        "stdout_tail": "",
+        "stderr_tail": "",
+        "duration_ms": None,
+        "finished_at": None,
+    }
+    record.update(overrides)
+    (home / "tasks.json").write_text(
+        json.dumps([record]), encoding="utf-8"
+    )
+    return record
+
+
+# ---------------------------------------------------------------------------
+# __main__.py cmd_submit — branches not reached by the subprocess tests
+# (rejection paths + non-json stdout + corrupt-store detection)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_cmd_submit_rejects_empty_cmd(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_submit with empty command → exit 2 + stderr error.
+
+    Covers __main__.py lines 98-100 (validate_command rejection branch).
+    """
+    _isolate_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", ""])
+    rc = cmd_submit(ns)
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "empty" in err.lower()
+
+
+def test_fr03_cmd_submit_rejects_injection(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_submit with blacklist char `;` → exit 2 + stderr error.
+
+    Covers __main__.py line 98 (validate_command returns non-None).
+    """
+    _isolate_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", "echo a;b"])
+    rc = cmd_submit(ns)
+    assert rc == 2
+    assert "injection" in capsys.readouterr().err.lower()
+
+
+def test_fr03_cmd_submit_non_json_output(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_submit without --json writes 'submitted <id>\\n'.
+
+    Covers __main__.py line 124 (else-branch of getattr(args, "json", False)).
+    """
+    _isolate_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", "echo hi"])
+    rc = cmd_submit(ns)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert out.startswith("submitted ")
+    assert out.endswith("\n")
+
+
+def test_fr03_cmd_submit_corrupt_store(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_submit against a corrupt tasks.json → exit 1.
+
+    Covers __main__.py lines 113-116 (StoreCorruptedError on the write path).
+    The original corrupt bytes must survive — no silent rebuild.
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    ns = build_parser().parse_args(["submit", "echo hi"])
+    rc = cmd_submit(ns)
+    assert rc == EXIT_CORRUPT
+    err = capsys.readouterr().err
+    assert "store corrupted" in err
+    # No silent rebuild: original corrupt bytes survive on disk.
+    assert "not-valid-json" in (home / "tasks.json").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# __main__.py cmd_run — branches not reached by the subprocess tests
+# (unknown id / UnhandledExecutionError / bare Exception / corrupt store /
+# failed status)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_cmd_run_unknown_id(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_run with unknown task id → exit 2 + stderr message.
+
+    Covers __main__.py lines 182-184 (UnknownTaskError handler).
+    """
+    _isolate_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["run", "deadbeef"])
+    rc = cmd_run(ns)
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "unknown task: deadbeef" in err
+
+
+def test_fr03_cmd_run_corrupt_store(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_run against a corrupt tasks.json → exit 1.
+
+    Covers __main__.py lines 205-207 (StoreCorruptedError handler in cmd_run).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    ns = build_parser().parse_args(["run", "deadbeef"])
+    rc = cmd_run(ns)
+    assert rc == EXIT_CORRUPT
+    assert "store corrupted" in capsys.readouterr().err
+
+
+def test_fr03_cmd_run_failed_status_returns_0(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_run with a terminal-failed record → exit 0.
+
+    Covers __main__.py lines 224-227 (STATUS_FAILED branch — single-task
+    mode records the failure on the task; CLI does not raise it to the
+    process level).
+    """
+    import taskq.__main__ as _main_mod
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: {
+            "id": task_id,
+            "command": "false",
+            "status": "failed",
+            "attempts": 3,
+            "exit_code": 1,
+            "stdout_tail": "",
+            "stderr_tail": "",
+            "duration_ms": 50,
+            "finished_at": "2026-01-01T00:00:00+00:00",
+        },
+    )
+    ns = build_parser().parse_args(["run", "deadbeef"])
+    rc = cmd_run(ns)
+    assert rc == 0
+    # Result is still emitted on stdout so callers can observe failure state.
+    rec = json.loads(capsys.readouterr().out)
+    assert rec["status"] == "failed"
+
+
+def test_fr03_cmd_run_unhandled_with_persisted_record(
+    monkeypatch, tmp_path, capsys
+):
+    """[FR-03 unit] UnhandledExecutionError with a persisted record → exit 1.
+
+    Covers __main__.py lines 185-201 (UnhandledExecutionError handler:
+    reload from store, emit the persisted record, exit 1).
+    """
+    import taskq.__main__ as _main_mod
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    _seed_record(
+        home,
+        "abcd1234",
+        command="/nonexistent/binary",
+        status="failed",
+        attempts=1,
+        exit_code=1,
+        stderr_tail="FileNotFoundError: /nonexistent/binary",
+    )
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: (_ for _ in ()).throw(
+            UnhandledExecutionError("/nonexistent/binary")
+        ),
+    )
+    ns = build_parser().parse_args(["run", "abcd1234"])
+    rc = cmd_run(ns)
+    assert rc == 1
+    out = capsys.readouterr().out
+    rec = json.loads(out)
+    assert rec["id"] == "abcd1234"
+    assert rec["status"] == "failed"
+
+
+def test_fr03_cmd_run_bare_exception(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] Generic Exception from run_task → exit 1 + stderr detail.
+
+    Covers __main__.py lines 208-212 (bare Exception handler in cmd_run —
+    FR-02 exit-1 contract, NO bare-except swallow).
+    """
+    import taskq.__main__ as _main_mod
+
+    class _Kaboom(RuntimeError):
+        pass
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: (_ for _ in ()).throw(_Kaboom("explode")),
+    )
+    ns = build_parser().parse_args(["run", "deadbeef"])
+    rc = cmd_run(ns)
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "_Kaboom" in err
+    assert "explode" in err
+
+
+# ---------------------------------------------------------------------------
+# __main__.py cmd_status — known-id happy path + corrupt-store branch
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_cmd_status_known_id(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_status with a known task id → exit 0 + single-line JSON.
+
+    Covers __main__.py lines 250-262 (record lookup success + single-line
+    stdout emission).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    _seed_record(home, "abcd1234", "echo hi", status="done")
+    ns = build_parser().parse_args(["status", "abcd1234"])
+    rc = cmd_status(ns)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert out.count("\n") == 0
+    rec = json.loads(out)
+    assert rec["id"] == "abcd1234"
+    assert rec["status"] == "done"
+
+
+def test_fr03_cmd_status_corrupt_store(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_status against a corrupt tasks.json → exit 1.
+
+    Covers __main__.py lines 244-248 (StoreCorruptedError handler in
+    cmd_status).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    ns = build_parser().parse_args(["status", "deadbeef"])
+    rc = cmd_status(ns)
+    assert rc == EXIT_CORRUPT
+    assert "store corrupted" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# __main__.py main() — subcommand dispatch (covers lines 311-324)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_main_routes_status(monkeypatch, tmp_path):
+    """[FR-03 unit] main(['status', 'deadbeef']) dispatches to cmd_status."""
+    _isolate_home(monkeypatch, tmp_path)
+    rc = main(["status", "deadbeef"])
+    assert rc == 2  # unknown id
+
+
+def test_fr03_main_routes_list(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] main(['list']) dispatches to cmd_list with empty store."""
+    _isolate_home(monkeypatch, tmp_path)
+    rc = main(["list"])
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_fr03_main_routes_clear(monkeypatch, tmp_path):
+    """[FR-03 unit] main(['clear']) dispatches to cmd_clear."""
+    home = _isolate_home(monkeypatch, tmp_path)
+    rc = main(["clear"])
+    assert rc == 0
+    assert (home / "tasks.json").exists()
+    assert json.loads((home / "tasks.json").read_text(encoding="utf-8")) == []
+
+
+def test_fr03_main_routes_run(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] main(['run', 'abcd1234']) dispatches to cmd_run.
+
+    Covers __main__.py line 317-318 (main's `run` dispatch branch).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    _seed_record(home, "abcd1234", "echo hi", status="done", attempts=1)
+    rc = main(["run", "abcd1234"])
+    assert rc == 0
+
+
+def test_fr03_main_routes_submit(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] main(['submit', 'echo hi']) dispatches to cmd_submit.
+
+    Covers __main__.py line 315-316 (main's `submit` dispatch branch).
+    """
+    _isolate_home(monkeypatch, tmp_path)
+    rc = main(["submit", "echo hi"])
+    assert rc == 0
+    assert capsys.readouterr().out.startswith("submitted ")
+
+
+# ---------------------------------------------------------------------------
+# store.py — non-list top-level corruption path (covers line 53)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_store_load_non_list_top_level_raises(monkeypatch, tmp_path):
+    """[FR-03 unit] load_tasks_or_die raises when tasks.json top-level is not a list.
+
+    Covers store.py line 53 (the isinstance(data, list) check).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text('{"not": "a list"}', encoding="utf-8")
+    with pytest.raises(StoreCorruptedError):
+        load_tasks_or_die()
+
+
+def test_fr03_store_load_missing_returns_empty(monkeypatch, tmp_path):
+    """[FR-03 unit] load_tasks_or_die returns [] when tasks.json is absent.
+
+    Covers store.py line 47 (path.exists() short-circuit).
+    """
+    _isolate_home(monkeypatch, tmp_path)
+    assert load_tasks_or_die() == []
+
+
+# ---------------------------------------------------------------------------
+# executor.py — FileNotFoundError + retry-loop paths (covers lines 217-260,
+# 262-266). These are reachable through the real CLI by running a
+# non-existent binary path.
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_run_task_file_not_found(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] run_task with a missing binary path → exit 1.
+
+    Covers executor.py lines 217-235 (FileNotFoundError handler) and the
+    retry-loop continue branch on lines 256-260 indirectly (the error
+    breaks out of the retry loop with unhandled_exc set).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    # Seed a task that points at a binary that does not exist.
+    _seed_record(
+        home,
+        "abcd1234",
+        command="/nonexistent/path/binary",
+        status="pending",
+    )
+    # run_task re-raises UnhandledExecutionError so cmd_run can emit exit 1.
+    with pytest.raises(UnhandledExecutionError):
+        run_task("abcd1234")
+    # The task is persisted with status='failed' before the raise.
+    on_disk = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    assert on_disk[0]["status"] == "failed"
+    assert on_disk[0]["exit_code"] is None
+    assert "FileNotFoundError" in on_disk[0]["stderr_tail"]
+
+
+def test_fr03_run_task_retry_continues_then_fails(monkeypatch, tmp_path):
+    """[FR-03 unit] run_task retries a failing command until attempts exhausted.
+
+    Covers executor.py lines 256-260 (retry-loop continue branch on
+    failed status). A `false` command exists, exits 1, and is retried
+    until the default `TASKQ_RETRY_LIMIT=2` budget is spent — total
+    attempts == 3 (1 initial + 2 retries), terminal status='failed'.
+    Per SPEC §3 FR-02 exit-code mapping, retries-exhausted failures
+    record `exit_code=1` on the task but do NOT surface as a process-
+    level error in single-task mode (the CLI maps them to exit 0). The
+    UnhandledExecutionError re-raise path is exercised separately by
+    `test_fr03_run_task_file_not_found` (lines 217-235 + 262-266).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    _seed_record(home, "abcd1234", command="false", status="pending")
+    # Default retry limit is 2; total attempts = 3 (1 initial + 2 retries).
+    record = run_task("abcd1234")
+    assert record["attempts"] == 3  # 1 initial + 2 retries
+    assert record["status"] == "failed"
+    assert record["exit_code"] == 1
+    on_disk = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    assert on_disk[0]["attempts"] == 3  # 1 initial + 2 retries
+    assert on_disk[0]["status"] == "failed"
+    assert on_disk[0]["exit_code"] == 1
+
+
+def test_fr03_run_task_known_status_emitted(monkeypatch, tmp_path):
+    """[FR-03 unit] run_task returns the persisted record on a terminal done.
+
+    Covers executor.py line 268 (return target). Re-runs the task even
+    though it is already terminal — the executor always re-executes.
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    _seed_record(
+        home, "abcd1234", "echo hi", status="pending", attempts=0
+    )
+    rec = run_task("abcd1234")
+    assert rec["status"] == "done"
+    assert rec["exit_code"] == 0
+
+
+# ---------------------------------------------------------------------------
+# config.py — environment parsing branches (already covered transitively by
+# subprocess tests, but explicit unit tests close any residual gap and keep
+# the dimension stable under refactor).
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_config_task_timeout_default(monkeypatch):
+    """[FR-03 unit] task_timeout returns 10.0 when TASKQ_TASK_TIMEOUT is unset."""
+    monkeypatch.delenv("TASKQ_TASK_TIMEOUT", raising=False)
+    from taskq.config import task_timeout
+
+    assert task_timeout() == 10.0
+
+
+def test_fr03_config_task_timeout_invalid_falls_back(monkeypatch):
+    """[FR-03 unit] task_timeout falls back to 10.0 on ValueError (covers line 56)."""
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "not-a-float")
+    from taskq.config import task_timeout
+
+    assert task_timeout() == 10.0
+
+
+def test_fr03_config_retry_limit_invalid_falls_back(monkeypatch):
+    """[FR-03 unit] retry_limit falls back to 2 on ValueError (covers line 74)."""
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "not-an-int")
+    from taskq.config import retry_limit
+
+    assert retry_limit() == 2
+
+
+def test_fr03_config_taskq_home_default(monkeypatch, tmp_path):
+    """[FR-03 unit] taskq_home uses ~/.taskq when TASKQ_HOME is unset."""
+    monkeypatch.delenv("TASKQ_HOME", raising=False)
+    from taskq.config import taskq_home
+
+    assert taskq_home().name == ".taskq"

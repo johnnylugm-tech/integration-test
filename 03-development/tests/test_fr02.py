@@ -19,6 +19,12 @@ Sub-assertion predicates follow `TEST_SPEC.md` FR-02 sub-assertion table.
 The single canonical `test_fr02_sub_assertions_mirror` helper carries one
 `if <var> <cmp> <literal>:` block per FR-02 sub-assertion, with the trigger
 value-set matching `TEST_SPEC.md` applies_to inputs.
+
+NOTE on coverage: the behavioural tests below invoke the CLI via subprocess
+(`conftest.run_taskq`), which means pytest-cov cannot trace into the spawned
+child process and thus cannot measure line coverage of `taskq/executor.py`.
+The `test_fr02_unit_*` tests at the bottom of this file call executor
+functions directly in-process so coverage can measure per-line execution.
 """
 
 from __future__ import annotations
@@ -26,7 +32,21 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from conftest import run_taskq
+from taskq.executor import (
+    EXIT_INTERNAL,
+    EXIT_OK,
+    EXIT_TIMEOUT,
+    UnhandledExecutionError,
+    UnknownTaskError,
+    _now_iso,
+    _run_once,
+    _truncate_tail,
+    run_task,
+)
+from taskq.store import StoreCorruptedError, load_tasks_or_die
 
 
 # ---------------------------------------------------------------------------
@@ -434,3 +454,260 @@ def test_fr02_sub_assertions_mirror(taskq_env, taskq_home):
     result = _result(exit_code=0, status="done")
     if cmd == "true":
         assert "shell=True" not in result.src_grep
+
+
+# ---------------------------------------------------------------------------
+# In-process coverage tests — import executor directly so pytest-cov can
+# trace per-line execution. The behavioural tests above invoke the CLI via
+# subprocess and so cannot contribute to line coverage of executor.py.
+# ---------------------------------------------------------------------------
+
+
+def _seed_home(monkeypatch, tmp_path):
+    """Point TASKQ_HOME at `tmp_path/.taskq` (auto-mkdir) and return it."""
+    home = tmp_path / ".taskq"
+    home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TASKQ_HOME", str(home))
+    return home
+
+
+def _seed_task(home, task_id: str, command: str, **overrides) -> dict:
+    """Write a single-task tasks.json under `home` and return the record."""
+    record = {
+        "id": task_id,
+        "command": command,
+        "status": "pending",
+        "attempts": 0,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "exit_code": None,
+        "stdout_tail": "",
+        "stderr_tail": "",
+        "duration_ms": None,
+        "finished_at": None,
+    }
+    record.update(overrides)
+    (home / "tasks.json").write_text(json.dumps([record]), encoding="utf-8")
+    return record
+
+
+# ---------------------------------------------------------------------------
+# executor — small helpers
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_unit_truncate_tail_empty():
+    """[FR-02] _truncate_tail(None) and _truncate_tail('') both return ''."""
+    assert _truncate_tail(None) == ""
+    assert _truncate_tail("") == ""
+
+
+def test_fr02_unit_truncate_tail_under_limit():
+    """[FR-02] Short text passes through unchanged (≤2000 chars)."""
+    assert _truncate_tail("hello") == "hello"
+
+
+def test_fr02_unit_truncate_tail_over_limit():
+    """[FR-02] Text longer than 2000 chars is truncated to the trailing 2000."""
+    big = "x" * 5000 + "tail-marker"
+    out = _truncate_tail(big)
+    assert len(out) == 2000
+    assert out.endswith("tail-marker")
+
+
+def test_fr02_unit_now_iso_is_iso8601():
+    """[FR-02] _now_iso() returns an ISO-8601 string with timezone offset."""
+    s = _now_iso()
+    assert "T" in s
+    assert "+" in s or s.endswith("Z")
+
+
+# ---------------------------------------------------------------------------
+# executor._run_once — subprocess invocation branches
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_unit_run_once_success():
+    """[FR-02] _run_once('true') returns status='done', exit_code=0."""
+    out = _run_once("true", 5.0)
+    assert out["status"] == "done"
+    assert out["exit_code"] == 0
+    assert out["duration_ms"] >= 0
+    assert out["finished_at"]
+
+
+def test_fr02_unit_run_once_failure():
+    """[FR-02] _run_once('false') returns status='failed', exit_code=1."""
+    out = _run_once("false", 5.0)
+    assert out["status"] == "failed"
+    assert out["exit_code"] == 1
+    assert out["duration_ms"] >= 0
+
+
+def test_fr02_unit_run_once_timeout():
+    """[FR-02] _run_once('sleep 60', 0.1) returns status='timeout', exit_code=None."""
+    out = _run_once("sleep 60", 0.1)
+    assert out["status"] == "timeout"
+    assert out["exit_code"] is None
+    assert out["duration_ms"] >= 0
+    assert "finished_at" in out
+
+
+def test_fr02_unit_run_once_parse_error():
+    """[FR-02] Malformed shell quoting yields status='failed' + _error='parse'."""
+    out = _run_once("'unbalanced", 5.0)
+    assert out["status"] == "failed"
+    assert out["_error"] == "parse"
+    assert "parse error" in out["stderr_tail"]
+
+
+def test_fr02_unit_run_once_captures_stdout():
+    """[FR-02] _run_once('printf hello') captures 'hello' in stdout_tail."""
+    out = _run_once("printf hello", 5.0)
+    assert out["stdout_tail"] == "hello"
+    assert out["status"] == "done"
+
+
+def test_fr02_unit_run_once_captures_stderr():
+    """[FR-02] A command writing to stderr captures it in stderr_tail."""
+    out = _run_once("/bin/sh -c 'printf oops 1>&2'", 5.0)
+    assert "oops" in out["stderr_tail"]
+
+
+def test_fr02_unit_run_once_filenotfound_reraises():
+    """[FR-02] _run_once raises FileNotFoundError when the binary is missing."""
+    with pytest.raises(FileNotFoundError):
+        _run_once("/nonexistent/path/binary/xyz123", 5.0)
+
+
+# ---------------------------------------------------------------------------
+# executor.run_task — retry loop, state transitions, errors
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_unit_run_task_unknown_id(monkeypatch, tmp_path):
+    """[FR-02] run_task() raises UnknownTaskError for a missing task id."""
+    _seed_home(monkeypatch, tmp_path)
+    with pytest.raises(UnknownTaskError):
+        run_task("deadbeef")
+
+
+def test_fr02_unit_run_task_corrupt_store(monkeypatch, tmp_path):
+    """[FR-02] run_task() surfaces StoreCorruptedError when tasks.json is invalid."""
+    home = _seed_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    with pytest.raises(StoreCorruptedError):
+        run_task("deadbeef")
+
+
+def test_fr02_unit_run_task_success(monkeypatch, tmp_path):
+    """[FR-02] run_task() transitions pending→running→done on a successful cmd."""
+    home = _seed_home(monkeypatch, tmp_path)
+    _seed_task(home, "abcd1234", "true")
+    out = run_task("abcd1234")
+    assert out["status"] == "done"
+    assert out["exit_code"] == 0
+    assert out["attempts"] >= 1
+    assert out["duration_ms"] >= 0
+    persisted = load_tasks_or_die()
+    assert persisted[0]["status"] == "done"
+
+
+def test_fr02_unit_run_task_failure_retries(monkeypatch, tmp_path):
+    """[FR-02] run_task() retries `false` up to TASKQ_RETRY_LIMIT times → 'failed'."""
+    home = _seed_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "2")
+    _seed_task(home, "feed1234", "false")
+    out = run_task("feed1234")
+    assert out["status"] == "failed"
+    assert out["attempts"] <= 3  # 1 initial + 2 retries
+    assert out["attempts"] >= 1
+
+
+def test_fr02_unit_run_task_timeout_retries(monkeypatch, tmp_path):
+    """[FR-02] run_task() retries a timeout → terminal='timeout', exit_code=4."""
+    home = _seed_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "0.05")
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "1")
+    _seed_task(home, "beef0001", "sleep 5")
+    out = run_task("beef0001")
+    assert out["status"] == "timeout"
+    assert out["exit_code"] == EXIT_TIMEOUT
+    assert out["attempts"] <= 2
+
+
+def test_fr02_unit_run_task_retry_zero_means_one_attempt(monkeypatch, tmp_path):
+    """[FR-02] TASKQ_RETRY_LIMIT=0 means exactly one attempt (no retries)."""
+    home = _seed_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    _seed_task(home, "00000001", "false")
+    out = run_task("00000001")
+    assert out["status"] == "failed"
+    assert out["attempts"] == 1
+
+
+def test_fr02_unit_run_task_unhandled_exception(monkeypatch, tmp_path):
+    """[FR-02] run_task() raises UnhandledExecutionError for a missing binary."""
+    home = _seed_home(monkeypatch, tmp_path)
+    _seed_task(home, "dead0001", "/this/binary/does/not/exist/xyz")
+    with pytest.raises(UnhandledExecutionError):
+        run_task("dead0001")
+    # Even after the exception, the persisted record reflects status='failed'.
+    persisted = load_tasks_or_die()
+    assert persisted[0]["status"] == "failed"
+
+
+def test_fr02_unit_run_task_redacts_tails(monkeypatch, tmp_path):
+    """[FR-02] run_task() redacts secret-bearing lines in stdout_tail before persist."""
+    home = _seed_home(monkeypatch, tmp_path)
+    _seed_task(home, "redact01", "printf 'sk-abcdef12345 secret\\nok line\\n'")
+    out = run_task("redact01")
+    assert "[REDACTED]" in out["stdout_tail"]
+    assert "sk-abcdef12345" not in out["stdout_tail"]
+    assert "ok line" in out["stdout_tail"]
+
+
+def test_fr02_unit_run_task_truncates_long_tails(monkeypatch, tmp_path):
+    """[FR-02] run_task() persists only the trailing 2000 chars of stdout."""
+    home = _seed_home(monkeypatch, tmp_path)
+    _seed_task(home, "longtail", "printf 'x%.0s' {1..3000}")
+    out = run_task("longtail")
+    assert len(out["stdout_tail"]) <= 2000
+
+
+def test_fr02_unit_run_task_sets_finished_at(monkeypatch, tmp_path):
+    """[FR-02] run_task() populates finished_at on terminal state."""
+    home = _seed_home(monkeypatch, tmp_path)
+    _seed_task(home, "finish01", "true")
+    out = run_task("finish01")
+    assert out["finished_at"]
+    assert "T" in out["finished_at"]
+
+
+# ---------------------------------------------------------------------------
+# subprocess path: a `real` shell=True audit (NFR-02 chokepoint)
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_unit_executor_source_does_not_use_shell_true():
+    """[FR-02] NFR-02: `shell=True` MUST NOT appear as a kwarg in executor.py."""
+    import re
+    from pathlib import Path
+    executor_src = Path(__file__).parent.parent / "src" / "taskq" / "executor.py"
+    text = executor_src.read_text(encoding="utf-8")
+    code_only = re.sub(r'""".*?"""', "", text, flags=re.DOTALL)
+    code_only = re.sub(r"#.*", "", code_only)
+    assert "shell=True" not in code_only, (
+        "NFR-02 invariant violated: executor.py passes shell=True as a kwarg"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Exit-code constants (FR-02 SPEC §3 single-task exit-code matrix)
+# ---------------------------------------------------------------------------
+
+
+def test_fr02_unit_exit_constants_match_spec():
+    """[FR-02] SPEC §3 exit-code matrix is encoded in module constants."""
+    assert EXIT_OK == 0
+    assert EXIT_INTERNAL == 1
+    assert EXIT_TIMEOUT == 4
