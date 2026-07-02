@@ -14,15 +14,12 @@ above 80% for the FR-scoped Gate 1 evaluation.
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import time
 from pathlib import Path
 
 import pytest
 
 from taskq import redact as _redact_fn_re
-from taskq.redact import redact as _redact_fn
+from taskq.config import retry_limit, task_timeout
 from taskq.executor import (
     EXIT_INTERNAL,
     EXIT_OK,
