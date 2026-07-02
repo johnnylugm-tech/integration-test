@@ -462,7 +462,7 @@ for (let attempt = 1; attempt <= MAX_PREFLIGHT_ATTEMPTS; attempt++) {
     + '2. P1-ARTIFACTS: `ls ' + REPO + '/01-requirements/SRS.md ' + REPO + '/01-requirements/SPEC_TRACKING.md ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md ' + REPO + '/TEST_INVENTORY.yaml`. ALL 4 must exist — if any missing, report FAIL (return to Phase 1).\n'
     + '3. PREFLIGHT: `' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 2 --project ' + REPO + '`. If FAIL: fix FSM/Constitution/Drift, re-run.\n'
     + '4. HANDOFF: `' + PY + ' ' + REPO + '/harness_cli.py validate-handoff --from-phase 1 --project ' + REPO + '`. Must exit 0; if exit 1, read errors, fix upstream P1 deliverable, re-run.\n'
-    + '5. PREFLIGHT-CI: confirm `' + REPO + '/.github/workflows/harness_quality_gate.yml` + `' + REPO + '/.git/hooks/prepare-commit-msg` exist; confirm state.json current_phase=2. If stale: `' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 2 --project ' + REPO + ' --overwrite`.\n'
+    + '5. PREFLIGHT-CI: confirm `' + REPO + '/.github/workflows/harness_quality_gate.yml` (CI workflow) + `' + REPO + '/.git/hooks/prepare-commit-msg` (git hook) both exist; confirm state.json current_phase=2. If stale: `' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 2 --project ' + REPO + ' --overwrite`.\n'
     + '6. LOAD-CONTEXT: `mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 2 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase2_ctx.json`.\n\n'
     + 'Report plain text: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <one-line reason>".\n\n'
     + 'SCOPE RULES:\n'

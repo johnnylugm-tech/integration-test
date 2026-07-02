@@ -4,8 +4,14 @@
 // challenge for Tier 3 dims) PLUS Agent B peer review of the QA deliverables
 // (both required to exit). Then release notes + final sign-off + git tag + advance.
 //
-// Playbook lessons: NO import/fs/process/schema:, Bash CLI, SCOPE RULES,
+// Playbook lessons: NO import/fs/process, Bash CLI, SCOPE RULES,
 // PY = .venv/bin/python, scriptPath launch.
+// v4 (2026-07-02): gate verdicts use FLAT schema: (playbook §5.2 rev) — regex
+// over LLM prose was the root cause of the #126/#134/#135/#136/ENV_CHECK_RC
+// bug class. Heavy orchestrators keep prose narrative; verdicts come from
+// schema proxy agents reading harness artifacts (manifest qc, state.json).
+// EXCEPTION kept as prose+parser: Peer Review's complex nested verdicts JSON
+// (the original v2 schema failure case — heavy-cognition agent + big schema).
 
 export const meta = {
   name: 'phase6-quality',
@@ -66,19 +72,19 @@ async function writeApprovalJson(deliverableId, obj) {
     let res
     try {
       res = await agent(
-        'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command and emit stdout + exit code verbatim:\n\n' + cmd + '\n\nNo commentary, no preamble, no other tool calls.',
-        { label: 'write-approval-' + deliverableId + '-try' + attempt, phase: 'Peer Review', agentType: 'general-purpose' },
+        'You are a SHELL WRAPPER AGENT. Run EXACTLY this Bash command:\n\n' + cmd + '\n\nThen report via the StructuredOutput tool: pass = true ONLY if stdout contains `[write-approval] OK`; reason = the verbatim stdout tail. No other tool calls.',
+        { label: 'write-approval-' + deliverableId + '-try' + attempt, phase: 'Peer Review', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
       )
     } catch (e) {
       lastErr = 'agent() threw: ' + (e && e.message ? e.message : String(e))
       log('  writeApprovalJson ' + deliverableId + ' attempt ' + attempt + '/' + MAX + ': ' + lastErr.slice(0, 200))
       continue
     }
-    if (typeof res === 'string' && /\[write-approval\]\s*OK/.test(res)) {
+    if (res && res.pass === true) {
       log('  wrote approval: ' + deliverableId + ' (attempt ' + attempt + '/' + MAX + ')')
       return
     }
-    lastErr = 'CLI did not return OK; got: ' + String(res).slice(0, 400)
+    lastErr = 'CLI did not return OK; got: ' + (res ? String(res.reason ?? '').slice(0, 400) : 'agent returned null')
     log('  writeApprovalJson ' + deliverableId + ' attempt ' + attempt + '/' + MAX + ': ' + lastErr)
   }
   throw new Error('writeApprovalJson FAILED for ' + deliverableId + ' after ' + MAX + ' attempts. Last error: ' + lastErr)
@@ -105,7 +111,34 @@ if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 20
 const WRITE_SCOPE_TMP = REPO + '/.sessi-work/tmp'
 log('WRITE SCOPE: debug artifacts → ' + WRITE_SCOPE_TMP)
 
+// ---- Gate verdict schemas (flat, top-level consts — playbook §5.2/§5.3) ----
+const VERDICT_SCHEMA = {
+  type: 'object',
+  properties: {
+    pass: { type: 'boolean', description: 'true only if the command output proves PASS' },
+    reason: { type: 'string', description: 'verbatim command output tail (or failure reason)' },
+  },
+  required: ['pass', 'reason'],
+}
+const GATE_VERIFY_SCHEMA = {
+  type: 'object',
+  properties: {
+    manifest_qc: { type: 'boolean', description: 'gate_results.gate4.quality_complete is exactly true' },
+    d4_rc: { type: 'integer', description: 'exit code of spec-coverage-check --threshold 90.0' },
+    detail: { type: 'string' },
+  },
+  required: ['manifest_qc', 'd4_rc'],
+}
+const PHASE_SCHEMA = {
+  type: 'object',
+  properties: { current_phase: { type: 'integer', description: 'current_phase value read from state.json' } },
+  required: ['current_phase'],
+}
+
 // ---- JSON parsing (balanced-brace; playbook §5.2) ----
+// KEPT deliberately for Peer Review ONLY: its verdicts payload is a complex
+// nested array on a heavy-cognition agent — the exact shape that broke schema
+// compliance in v2. Flat gate verdicts use schema: (above) instead.
 function balancedJsonAt(text, start) {
   if (text[start] !== '{' && text[start] !== '[') return null
   let depth = 0, inStr = false, esc = false
@@ -151,14 +184,14 @@ const preflightReport = await agent(
   + '2. D4-PRECHECK: `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 90.0`. Gate 4 blocks at 90% — if below, ADD missing test implementations NOW. Do NOT proceed until this passes.\n'
   + '3. PREFLIGHT: `' + PY + ' ' + REPO + '/harness_cli.py run-phase --phase 6 --project ' + REPO + '`. FAIL → fix (reliability lint / config liveness / attestation), re-run (max 3).\n'
   + '4. HANDOFF: `' + PY + ' ' + REPO + '/harness_cli.py validate-handoff --from-phase 5 --project ' + REPO + '`. Must exit 0.\n'
-  + '5. PREFLIGHT-CI: harness_quality_gate.yml + prepare-commit-msg exist; state.json current_phase=6. If stale: init-project --phase 6 --overwrite.\n'
+  + '5. PREFLIGHT-CI: confirm `' + REPO + '/.github/workflows/harness_quality_gate.yml` (CI workflow) + `' + REPO + '/.git/hooks/prepare-commit-msg` (git hook) both exist; confirm state.json current_phase=6. If stale: `init-project --phase 6 --project ' + REPO + ' --overwrite`.\n'
   + '6. PHASE-CONTEXT (load-context): `mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 6 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase6_ctx.json`.\n\n'
-  + 'Report: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <reason>".\n\n'
+  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if ALL 6 steps succeeded; reason = one-line summary (on FAIL: which step + verbatim error tail).\n\n'
   + 'SCOPE RULES:\n- DO NOT run run-gate / generate release docs / peer review.\n- DO NOT run advance-phase / git tag.\n- DO NOT modify harness/.\n- ONLY preflight commands + load-context + spec-coverage fixes.',
-  { label: 'preflight', phase: 'Entry & Preflight', agentType: 'general-purpose' },
+  { label: 'preflight', phase: 'Entry & Preflight', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
 )
-if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightReport))) {
-  return { error: 'Phase 6 preflight did not PASS', raw: String(preflightReport ?? '').slice(-600) }
+if (!(preflightReport && preflightReport.pass === true)) {
+  return { error: 'Phase 6 preflight did not PASS', reason: preflightReport ? String(preflightReport.reason ?? '').slice(-600) : 'agent returned null (skipped or terminal API error)' }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -172,13 +205,15 @@ phase('Manifest Integrity')
 // corruption is never baked into a milestone commit.
 const integrityCmd = PY + ' -c "import json, sys; m = json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); ids = m.get(\'fr_ids\') or []; mt = m.get(\'fr_module_traceability\') or {}; g1 = (m.get(\'gate_results\',{}) or {}).get(\'gate1\',{}) or {}; ok_ids = len(ids) >= 2; ok_trace = len(mt) >= len(ids); ok_g1 = isinstance(g1, dict) and len(g1) >= len(ids); print(\'OK\' if (ok_ids and ok_trace and ok_g1) else json.dumps({\'BROKEN\': True, \'fr_ids_count\': len(ids), \'traceability_count\': len(mt), \'gate1_keys\': len(g1), \'recovery\': \'git checkout HEAD -- .methodology/quality_manifest.json\'}))"'
 async function checkManifestIntegrity(phaseLabel, agentLabel) {
-  const raw = await agent(
-    'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + integrityCmd + '`',
-    { label: agentLabel, phase: phaseLabel, agentType: 'general-purpose' },
+  const verdict = await agent(
+    'Run EXACTLY this command via the Bash tool:\n`' + integrityCmd + '`\n'
+    + 'Then report via the StructuredOutput tool: pass = true ONLY if stdout is exactly `OK`; reason = the verbatim stdout.',
+    { label: agentLabel, phase: phaseLabel, agentType: 'general-purpose', schema: VERDICT_SCHEMA },
   )
-  const ok = typeof raw === 'string' && /^OK$/.test(String(raw).trim())
-  if (!ok) log('  manifest integrity FAIL [' + agentLabel + ']: ' + String(raw ?? '').trim())
-  return { ok, raw: String(raw ?? '').trim() }
+  const ok = !!(verdict && verdict.pass === true)
+  const raw = verdict ? String(verdict.reason ?? '').trim() : 'agent returned null'
+  if (!ok) log('  manifest integrity FAIL [' + agentLabel + ']: ' + raw)
+  return { ok, raw }
 }
 const integrity0 = await checkManifestIntegrity('Manifest Integrity', 'manifest-integrity')
 if (!integrity0.ok) {
@@ -227,9 +262,23 @@ for (let round = 1; round <= 3; round++) {
     log('  Gate 4 agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
     break
   }
-  gate4Pass = typeof gate4Report === 'string' && /GATE4:\s*PASS/.test(gate4Report)
-  if (gate4Pass) { log('  Gate 4 PASS'); break }
-  log('  Gate 4 not yet PASS — retry round ' + (round + 1))
+  // AUTHORITATIVE Gate 4 verdict (verdict-authority rule, same as Gate 1):
+  // finalize-gate writes gate_results.gate4.{score,quality_complete} to the
+  // manifest as an aggregate payload. The orchestrator's prose "GATE4: PASS"
+  // is narrative only — never parsed. D4 (spec-coverage ≥90%) is not in the
+  // manifest, so the verify agent re-runs spec-coverage-check (exit code
+  // reflects pass/fail).
+  const gate4VerifyCmd = PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate4\') or {}; print(json.dumps({\'qc\': (isinstance(g,dict) and g.get(\'quality_complete\') is True), \'score\': (g.get(\'score\') if isinstance(g,dict) else None)}))"'
+  const g4v = await agent(
+    'Run these TWO commands via the Bash tool, in order:\n'
+    + '1. `' + gate4VerifyCmd + '` — stdout is a single JSON line with qc + score.\n'
+    + '2. `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 90.0; echo "RC=$?"`\n'
+    + 'Then report via the StructuredOutput tool: manifest_qc = the exact qc boolean from command 1; d4_rc = the exact numeric exit code echoed on command 2\'s final RC= line; detail = qc/score/RC in one line.',
+    { label: 'gate4-verify-r' + round, phase: 'Gate 4', agentType: 'general-purpose', schema: GATE_VERIFY_SCHEMA },
+  )
+  gate4Pass = !!(g4v && g4v.manifest_qc === true && g4v.d4_rc === 0)
+  if (gate4Pass) { log('  Gate 4 PASS [harness-verified: manifest qc=true, D4 rc=0]'); break }
+  log('  Gate 4 not yet PASS [' + (g4v ? String(g4v.detail ?? '') : 'verify agent null') + '] — retry round ' + (round + 1))
 }
 if (gate4Blocked) {
   return { session_limit_blocked: true, gate: 4, message: 'Agent hit session/rate limit during Gate 4 evaluation. Resume after quota reset — GUARD checks will skip completed FRs.' }
@@ -249,12 +298,12 @@ const releaseReport = await agent(
   + 'Steps:\n'
   + '1. G4e RELEASE_NOTES: write ' + REPO + '/RELEASE_NOTES.md (project root). Summarise changes since Gate 3. Include: version, date, FR list, Gate 4 composite score (read from .methodology/quality_manifest.json — persistent SoT, per phase6_plan.md v2.12.0), known limitations. Reference 06-quality/QUALITY_REPORT.md (auto-generated by G4c).\n'
   + '2. G4f FINAL_SIGN_OFF: write ' + REPO + '/FINAL_SIGN_OFF.md (project root). Include: project name, completion date, Gate 4 composite score, sign-off statement. MUST reference 05-verification/VERIFICATION_REPORT.md (verification provenance). BASELINE.md is no longer a separate P5 artifact per phase5_plan.md v2.12.0 — do NOT reference it.\n\n'
-  + 'Report: "RELEASE-DOCS: PASS" or "RELEASE-DOCS: FAIL — <reason>".\n\n'
+  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if both docs were written with the required references; reason = one-line summary.\n\n'
   + 'SCOPE RULES:\n- DO NOT run advance-phase / git tag / peer review dispatch.\n- DO NOT modify harness/.\n- DO NOT re-run Gate 4.\n- ONLY generate RELEASE_NOTES.md + FINAL_SIGN_OFF.md.',
-  { label: 'release-docs', phase: 'Release Docs', agentType: 'general-purpose' },
+  { label: 'release-docs', phase: 'Release Docs', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
 )
-if (!(typeof releaseReport === 'string' && /RELEASE-DOCS:\s*PASS/.test(releaseReport))) {
-  return { error: 'Phase 6 release docs did not PASS', raw: String(releaseReport ?? '').slice(-500) }
+if (!(releaseReport && releaseReport.pass === true)) {
+  return { error: 'Phase 6 release docs did not PASS', reason: releaseReport ? String(releaseReport.reason ?? '').slice(-500) : 'agent returned null' }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -367,9 +416,18 @@ for (let round = 1; round <= ADVANCE_MAX_ROUNDS; round++) {
     log('  Tag & Advance agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
     return { session_limit_blocked: true, phase: 6, step: 'tag-advance', message: 'Agent hit session/rate limit during Tag & Advance. Resume after quota reset — the GUARD step skips if already advanced/tagged.' }
   }
-  advancePass = typeof advanceReport === 'string' && /ADVANCE:\s*PASS/.test(advanceReport)
-  if (advancePass) { log('  Tag & Advance PASS'); break }
-  log('  Tag & Advance not yet PASS — retry round ' + (round + 1))
+  // AUTHORITATIVE Advance verdict: advance-phase atomically writes
+  // state.json current_phase=7 on success. Read it via a schema proxy —
+  // the orchestrator's prose "ADVANCE: PASS" is narrative only.
+  const advVerifyCmd = PY + ' -c "import json; print(json.dumps({\'current_phase\': int(json.load(open(\'' + REPO + '/.methodology/state.json\')).get(\'current_phase\') or 0)}))"'
+  const advV = await agent(
+    'Run EXACTLY this command via the Bash tool (stdout is a single JSON line):\n`' + advVerifyCmd + '`\n'
+    + 'Then report via the StructuredOutput tool: current_phase = the exact integer from that JSON.',
+    { label: 'advance-verify-r' + round, phase: 'Tag & Advance', agentType: 'general-purpose', schema: PHASE_SCHEMA },
+  )
+  advancePass = !!(advV && advV.current_phase >= 7)
+  if (advancePass) { log('  Tag & Advance PASS [harness-verified: state.json current_phase=' + advV.current_phase + ']'); break }
+  log('  Tag & Advance not yet PASS [state.json current_phase=' + (advV ? advV.current_phase : '?') + '] — retry round ' + (round + 1))
 }
 
 if (!advancePass) {
@@ -379,7 +437,10 @@ log('Phase 6 workflow complete. Open .methodology/phase7_plan.md to continue.')
 return {
   phase: 6,
   gate4_status: gate4Pass ? 'PASS' : 'unknown',
-  peer_review_status: typeof peerReport === 'string' && /PEER-REVIEW:\s*PASS/.test(peerReport) ? 'PASS' : 'unknown',
+  // Pre-existing latent bug fixed 2026-07-02: this line referenced `peerReport`,
+  // a for-block const out of scope here — the final return would have thrown
+  // ReferenceError after everything passed. peerVerdict is the in-scope truth.
+  peer_review_status: (peerVerdict && Array.isArray(peerVerdict.verdicts) && peerVerdict.verdicts.every(v => v.review_status === 'APPROVE')) ? 'APPROVE' : 'unknown',
   advance_status: 'PASS',
   artifacts: ['06-quality/QUALITY_REPORT.md', 'RELEASE_NOTES.md', 'FINAL_SIGN_OFF.md', '.methodology/agent_b_approvals/', '.sessi-work/gate4_result.json', '.methodology/quality_manifest.json', 'HANDOVER.md'],
   notes: 'Phase 6 complete per phase6_plan.md v2.12.0. Gate 4 PASS + Agent B peer review APPROVE. Phase 7 (Risk Management) ready.',

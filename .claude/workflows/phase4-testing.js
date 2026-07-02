@@ -5,8 +5,12 @@
 // Step 4b bug hunt (adversarial_review is a Gate 3 dim, needs bug_hunt_report.json)
 // → Gate 3 → p4-pre-gate3 milestone + advance.
 //
-// Playbook lessons: NO import/fs/process/schema:, Bash CLI, SCOPE RULES,
+// Playbook lessons: NO import/fs/process, Bash CLI, SCOPE RULES,
 // PY = .venv/bin/python, scriptPath launch.
+// v4 (2026-07-02): gate verdicts use FLAT schema: (playbook §5.2 rev) — regex
+// over LLM prose was the root cause of the #126/#134/#135/#136/ENV_CHECK_RC
+// bug class. Heavy orchestrators keep prose narrative; verdicts come from
+// schema proxy agents reading harness artifacts (manifest qc, state.json, rc).
 
 export const meta = {
   name: 'phase4-testing',
@@ -59,36 +63,45 @@ if (typeof budget !== 'undefined' && budget.remaining && budget.remaining() < 20
 const WRITE_SCOPE_TMP = REPO + '/.sessi-work/tmp'
 log('WRITE SCOPE: debug artifacts → ' + WRITE_SCOPE_TMP)
 
-// ---- JSON parsing (balanced-brace; playbook §5.2) ----
-function balancedJsonAt(text, start) {
-  if (text[start] !== '{' && text[start] !== '[') return null
-  let depth = 0, inStr = false, esc = false
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === '{' || c === '[') depth++
-    else if (c === '}' || c === ']') { depth--; if (depth === 0) return text.slice(start, i + 1) }
-  }
-  return null
+// ---- Gate verdict schemas (flat, top-level consts — playbook §5.2/§5.3) ----
+// Verdict authority rule: heavy orchestrator agents keep prose narrative;
+// their PASS/FAIL is NEVER parsed from that prose. A separate bash-proxy
+// agent reads the harness's own artifact (manifest quality_complete,
+// state.json current_phase, CLI exit code) and reports through the schema.
+const VERDICT_SCHEMA = {
+  type: 'object',
+  properties: {
+    pass: { type: 'boolean', description: 'true only if the command output proves PASS' },
+    reason: { type: 'string', description: 'verbatim command output tail (or failure reason)' },
+  },
+  required: ['pass', 'reason'],
 }
-function extractLastJson(text) {
-  if (typeof text !== 'string') return null
-  let last = null
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '{' || text[i] === '[') {
-      const block = balancedJsonAt(text, i)
-      if (block) { try { last = JSON.parse(block); i += block.length - 1 } catch {} }
-    }
-  }
-  return last
+const RC_SCHEMA = {
+  type: 'object',
+  properties: { rc: { type: 'integer', description: 'exact numeric exit code of the command' } },
+  required: ['rc'],
 }
-function parseAgentJson(text, label) {
-  const parsed = extractLastJson(text)
-  if (parsed !== null) return parsed
-  throw new Error('PARSE_FAIL [' + label + ']: no balanced JSON. tail=' + (text ?? '').toString().slice(-200))
+const CTX_SCHEMA = {
+  type: 'object',
+  properties: {
+    fr_ids: { type: 'array', items: { type: 'string' } },
+    fr_count: { type: 'integer' },
+  },
+  required: ['fr_ids', 'fr_count'],
+}
+const GATE_VERIFY_SCHEMA = {
+  type: 'object',
+  properties: {
+    manifest_qc: { type: 'boolean', description: 'gate_results.<gate>.quality_complete is exactly true' },
+    d4_rc: { type: 'integer', description: 'exit code of spec-coverage-check' },
+    detail: { type: 'string' },
+  },
+  required: ['manifest_qc', 'd4_rc'],
+}
+const PHASE_SCHEMA = {
+  type: 'object',
+  properties: { current_phase: { type: 'integer', description: 'current_phase value read from state.json' } },
+  required: ['current_phase'],
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -106,13 +119,13 @@ const preflightReport = await agent(
   + '   - reliability lint: subprocess.run/Popen without timeout=, tempfile.mkstemp outside try/finally, os.path.exists before open/unlink (TOCTOU), time.sleep inside async def.\n'
   + '   - config liveness: env keys read in code but absent from .env.example/docker-compose/deployment. Add the key (or fix the typo).\n'
   + '3. HANDOFF: `' + PY + ' ' + REPO + '/harness_cli.py validate-handoff --from-phase 3 --project ' + REPO + '`. Must exit 0.\n'
-  + '4. PREFLIGHT-CI: harness_quality_gate.yml + prepare-commit-msg exist; state.json current_phase=4. If stale: init-project --phase 4 --overwrite.\n\n'
-  + 'Report: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <reason>".\n\n'
+  + '4. PREFLIGHT-CI: confirm `' + REPO + '/.github/workflows/harness_quality_gate.yml` (CI workflow) + `' + REPO + '/.git/hooks/prepare-commit-msg` (git hook) both exist; confirm state.json current_phase=4. If stale: `init-project --phase 4 --project ' + REPO + ' --overwrite`.\n\n'
+  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if ALL 4 steps succeeded; reason = one-line summary (on FAIL: which step + verbatim error tail).\n\n'
   + 'SCOPE RULES:\n- DO NOT generate TEST_PLAN / run TDD / run-gate / bug hunt.\n- DO NOT run advance-phase/push-milestone.\n- DO NOT modify harness/.\n- ONLY preflight commands + fixes.',
-  { label: 'preflight', phase: 'Entry & Preflight', agentType: 'general-purpose' },
+  { label: 'preflight', phase: 'Entry & Preflight', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
 )
-if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightReport))) {
-  return { error: 'Phase 4 preflight did not PASS', raw: String(preflightReport ?? '').slice(-600) }
+if (!(preflightReport && preflightReport.pass === true)) {
+  return { error: 'Phase 4 preflight did not PASS', reason: preflightReport ? String(preflightReport.reason ?? '').slice(-600) : 'agent returned null (skipped or terminal API error)' }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -127,12 +140,12 @@ const testPlanReport = await agent(
   + '1. Read 01-requirements/SRS.md FR acceptance criteria + .methodology/quality_manifest.json FR list.\n'
   + '2. Write ' + REPO + '/04-testing/TEST_PLAN.md. For each FR: test case ID, description, input, expected output, priority. Include positive, negative, boundary, and edge-case categories. Cover ALL FRs + NFRs.\n'
   + '3. Verify TEST_PLAN.md covers every FR from the manifest.\n\n'
-  + 'Report: "TEST-PLAN: PASS" or "TEST-PLAN: FAIL — <reason>".\n\n'
+  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if TEST_PLAN.md was written and covers every FR; reason = one-line summary.\n\n'
   + 'SCOPE RULES:\n- DO NOT run TDD/run-gate/bug-hunt/advance.\n- DO NOT modify harness/.\n- ONLY author TEST_PLAN.md.',
-  { label: 'test-plan', phase: 'Test Plan', agentType: 'general-purpose' },
+  { label: 'test-plan', phase: 'Test Plan', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
 )
-if (!(typeof testPlanReport === 'string' && /TEST-PLAN:\s*PASS/.test(testPlanReport))) {
-  return { error: 'Phase 4 TEST_PLAN did not PASS', raw: String(testPlanReport ?? '').slice(-500) }
+if (!(testPlanReport && testPlanReport.pass === true)) {
+  return { error: 'Phase 4 TEST_PLAN did not PASS', reason: testPlanReport ? String(testPlanReport.reason ?? '').slice(-500) : 'agent returned null' }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -143,15 +156,17 @@ log('run-env-check (root-cause fix: CLI exit code reflects ready flag)')
 // Bug #127 root-cause fix (2026-06-27): `cmd_run_env_check` now returns
 // exit 0 when ready=true and 1 when ready=false (previously always 0).
 // Workflows check `$?` directly with no LLM orchestrator agent in the loop.
+// 2026-07-02 paraphrase incident (phase3): the agent rewrote ENV_CHECK_RC=0
+// as "RC=0" and the regex gate false-negatived a READY environment. Schema
+// transport is paraphrase-proof.
 const envReport = await agent(
-  'You MUST use the Bash tool. Run exactly:\n'
-  + PY + ' ' + REPO + '/harness_cli.py run-env-check --phase 4 --project ' + REPO + '\n'
-  + 'echo "ENV_CHECK_RC=$?"\n'
-  + 'Return the raw stdout verbatim. Do not paraphrase.',
-  { label: 'env-check', phase: 'Env Check', agentType: 'general-purpose' },
+  'You MUST use the Bash tool. Run exactly this ONE command (single line, the `;` keeps $? bound to run-env-check):\n'
+  + PY + ' ' + REPO + '/harness_cli.py run-env-check --phase 4 --project ' + REPO + '; echo "RC=$?"\n'
+  + 'Then report via the StructuredOutput tool: rc = the exact numeric exit code echoed on the final RC= line.',
+  { label: 'env-check', phase: 'Env Check', agentType: 'general-purpose', schema: RC_SCHEMA },
 )
-if (!(typeof envReport === 'string' && /ENV_CHECK_RC=0\b/.test(envReport))) {
-  return { error: 'Phase 4 env-check did not PASS', raw: String(envReport ?? '').slice(-500) }
+if (!(envReport && envReport.rc === 0)) {
+  return { error: 'Phase 4 env-check did not PASS', rc: envReport ? envReport.rc : null, note: envReport ? 'run-env-check exit ' + envReport.rc + ' — read .sessi-work/env_check_result.json' : 'agent returned null (skipped or terminal API error)' }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -165,13 +180,15 @@ phase('Manifest Integrity')
 // corruption is never baked into a milestone commit.
 const integrityCmd = PY + ' -c "import json, sys; m = json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); ids = m.get(\'fr_ids\') or []; mt = m.get(\'fr_module_traceability\') or {}; g1 = (m.get(\'gate_results\',{}) or {}).get(\'gate1\',{}) or {}; ok_ids = len(ids) >= 2; ok_trace = len(mt) >= len(ids); ok_g1 = isinstance(g1, dict) and len(g1) >= len(ids); print(\'OK\' if (ok_ids and ok_trace and ok_g1) else json.dumps({\'BROKEN\': True, \'fr_ids_count\': len(ids), \'traceability_count\': len(mt), \'gate1_keys\': len(g1), \'recovery\': \'git checkout HEAD -- .methodology/quality_manifest.json\'}))"'
 async function checkManifestIntegrity(phaseLabel, agentLabel) {
-  const raw = await agent(
-    'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + integrityCmd + '`',
-    { label: agentLabel, phase: phaseLabel, agentType: 'general-purpose' },
+  const verdict = await agent(
+    'Run EXACTLY this command via the Bash tool:\n`' + integrityCmd + '`\n'
+    + 'Then report via the StructuredOutput tool: pass = true ONLY if stdout is exactly `OK`; reason = the verbatim stdout.',
+    { label: agentLabel, phase: phaseLabel, agentType: 'general-purpose', schema: VERDICT_SCHEMA },
   )
-  const ok = typeof raw === 'string' && /^OK$/.test(String(raw).trim())
-  if (!ok) log('  manifest integrity FAIL [' + agentLabel + ']: ' + String(raw ?? '').trim())
-  return { ok, raw: String(raw ?? '').trim() }
+  const ok = !!(verdict && verdict.pass === true)
+  const raw = verdict ? String(verdict.reason ?? '').trim() : 'agent returned null'
+  if (!ok) log('  manifest integrity FAIL [' + agentLabel + ']: ' + raw)
+  return { ok, raw }
 }
 const integrity0 = await checkManifestIntegrity('Manifest Integrity', 'manifest-integrity')
 if (!integrity0.ok) {
@@ -184,7 +201,7 @@ log('  manifest integrity OK')
 // ════════════════════════════════════════════════════════════════════════
 phase('Load FRs')
 log('load-context --phase 4 → fr_ids')
-// v15: retry loop — agent() + parseAgentJson both wrapped (Bug #2)
+// v15: retry loop — agent() wrapped (Bug #2); v4: schema transport, no prose parsing
 // v2.13.1: hardened against agent hallucination — verify file exists + non-empty
 // fr_ids before accepting (Bug #122).
 let ctx = null
@@ -197,11 +214,11 @@ for (let attempt = 1; attempt <= 3; attempt++) {
     // mid-write → no FILE_OK marker → regen path triggered.
     // Bug #136 sibling: bash built via template literal (single quotes safe).
     const ctxCheckCmd = `${PY} -c "import json,os,sys; json.load(open('${ctxFile}')); print('FILE_OK_'+str(os.path.getsize('${ctxFile}')))" || echo FILE_MISSING`
-    const existsRaw = await agent(
-      `You MUST use the Bash tool. Run exactly:\n${ctxCheckCmd}\nReturn the raw stdout as your final message. Do not paraphrase.`,
-      { label: 'ctx-check-' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
+    const existsVerdict = await agent(
+      `You MUST use the Bash tool. Run exactly:\n${ctxCheckCmd}\nThen report via the StructuredOutput tool: pass = true ONLY if stdout starts with FILE_OK_; reason = the verbatim stdout.`,
+      { label: 'ctx-check-' + attempt, phase: 'Load FRs', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
     )
-    if (!/FILE_OK_\d+/.test(String(existsRaw ?? ''))) {
+    if (!(existsVerdict && existsVerdict.pass === true)) {
       log('  ctx file missing/invalid (attempt ' + attempt + ') — regenerating')
       const ctxRegenCmd = `${PY} ${REPO}/harness_cli.py load-context --phase 4 --project ${REPO} --json > ${ctxFile} && ${PY} -c "import json,os; json.load(open('${ctxFile}')); print('REGEN_OK_'+str(os.path.getsize('${ctxFile}')))"`
       await agent(
@@ -212,27 +229,22 @@ for (let attempt = 1; attempt <= 3; attempt++) {
     }
   } catch (e) { log('  ctx-check agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
 
-  // Bug #135 fix (2026-06-28): emit parseable JSON via Python, not `cat`.
-  // Root-cause: agent LLM paraphrased cat output into prose → balancedJsonAt
-  // failed. Have Python emit a single JSON line with ONLY fr_ids + fr_count.
-  let ctxResult = ''
+  // Bug #135 fix (2026-06-28) + v4 schema transport: emit parseable JSON via
+  // Python; the agent transcribes the fields into StructuredOutput (AJV-
+  // validated, retries on mismatch). No prose parsing left on this path.
   try {
-    const ctxParseCmd = `${PY} -c "import json; d=json.load(open('${ctxFile}')); print(json.dumps({'fr_ids':d.get('fr_ids',[]),'fr_count':len(d.get('fr_ids',[])),'fr_details_keys':list((d.get('fr_details') or {}).keys())}))"`
-    ctxResult = await agent(
-      `You MUST use the Bash tool. Run exactly:\n${ctxParseCmd}\nReturn the raw stdout as your final message. Do not paraphrase. Do not add commentary.`,
-      { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose' },
+    const ctxParseCmd = `${PY} -c "import json; d=json.load(open('${ctxFile}')); print(json.dumps({'fr_ids':d.get('fr_ids',[]),'fr_count':len(d.get('fr_ids',[]))}))"`
+    const ctxResult = await agent(
+      `You MUST use the Bash tool. Run exactly:\n${ctxParseCmd}\nStdout is a single JSON line. Report via the StructuredOutput tool: fr_ids, fr_count = the EXACT values from that JSON line (transcribe, do not recompute).`,
+      { label: 'load-ctx-a' + attempt, phase: 'Load FRs', agentType: 'general-purpose', schema: CTX_SCHEMA },
     )
-    if (!/"fr_count"\s*:\s*[1-9]\d*/.test(String(ctxResult ?? ''))) {
-      log('  load-ctx agent did not return parseable JSON (attempt ' + attempt + '): ' + String(ctxResult ?? '').slice(0, 200))
-      continue
+    if (ctxResult && Array.isArray(ctxResult.fr_ids) && ctxResult.fr_ids.length > 0) {
+      ctx = ctxResult
+      log('  load-ctx OK (schema-validated, ' + ctx.fr_ids.length + ' FRs)')
+      break
     }
+    log('  load-ctx returned empty fr_ids (attempt ' + attempt + '): keys=' + Object.keys(ctxResult ?? {}).join(','))
   } catch (e) { log('  load-ctx agent failed: ' + String(e.message ?? e).slice(0, 80)); continue }
-  try {
-    ctx = parseAgentJson(ctxResult, 'load-ctx')
-    if (Array.isArray(ctx.fr_ids) && ctx.fr_ids.length > 0) break
-    log('  load-ctx returned empty fr_ids (attempt ' + attempt + '): keys=' + Object.keys(ctx ?? {}).join(','))
-    ctx = null
-  } catch (e) { log('  load-ctx parse failed (attempt ' + attempt + '): ' + e.message.slice(0, 120)); ctx = null }
 }
 if (!ctx) return { error: 'Load FRs: ctx failed after 3 attempts', ctxFile }
 let frIds = Array.isArray(ctx.fr_ids) ? ctx.fr_ids
@@ -276,11 +288,12 @@ for (const frId of frIds) {
   // sub-agent can report PASS even when finalize-gate raised GateBlockedError,
   // silently advancing a FR the harness actually blocked (2026-06-30 incident).
   const verifyCmd = PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'' + frId + '\',{}) or {}; print(\'GATE1_VERIFIED_PASS\' if g.get(\'quality_complete\') is True else \'GATE1_VERIFIED_FAIL score=\'+str(g.get(\'score\')))"'
-  const verdictRaw = await agent(
-    'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + verifyCmd + '`',
-    { label: 'gate1-verify-' + frId, phase: 'Per-FR Delta', agentType: 'general-purpose' },
+  const verdict = await agent(
+    'Run EXACTLY this command via the Bash tool:\n`' + verifyCmd + '`\n'
+    + 'Then report via the StructuredOutput tool: pass = true ONLY if stdout is GATE1_VERIFIED_PASS; reason = the verbatim stdout.',
+    { label: 'gate1-verify-' + frId, phase: 'Per-FR Delta', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
   )
-  const passed = typeof verdictRaw === 'string' && /GATE1_VERIFIED_PASS/.test(verdictRaw)
+  const passed = !!(verdict && verdict.pass === true)
   if (passed) { gate1Pass.push(frId); log('  ' + frId + ' Gate 1 PASS [harness-verified]') }
   else { gate1Fail.push(frId); log('  ' + frId + ' Gate 1 FAIL [harness manifest qc != true; sub-agent self-report ignored]') }
 
@@ -317,12 +330,12 @@ const coverageReport = await agent(
   + '1. TEST_RESULTS: write ' + REPO + '/04-testing/TEST_RESULTS.md — summarise test execution: cases run, pass/fail, deferred issues. (Real execution is enforced by advance-phase pytest --cov-fail-under=100, not by string-matching this doc.)\n'
   + '2. COVERAGE: run `' + PY + ' -m pytest --cov=03-development/src --cov-report=term-missing -q | tee ' + REPO + '/04-testing/coverage_raw.txt` then `' + PY + ' -m coverage report --format=total`. Write ' + REPO + '/04-testing/COVERAGE_REPORT.md with overall coverage % (≥80% for Gate 3), per-module breakdown, uncovered lines.\n'
   + '   WARNING: cross_artifact.py validates these numbers against live pytest --cov at Gate 3 — fabricated numbers are caught. Use REAL numbers.\n\n'
-  + 'Report: "COVERAGE: PASS" or "COVERAGE: FAIL — <reason>".\n\n'
+  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if both docs were written from real pytest output; reason = one-line summary.\n\n'
   + 'SCOPE RULES:\n- DO NOT run run-gate / bug-hunt / advance.\n- DO NOT modify harness/.\n- DO NOT fabricate coverage numbers.\n- ONLY generate the 2 docs from real pytest output.',
-  { label: 'coverage', phase: 'Coverage', agentType: 'general-purpose' },
+  { label: 'coverage', phase: 'Coverage', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
 )
-if (!(typeof coverageReport === 'string' && /COVERAGE:\s*PASS/.test(coverageReport))) {
-  return { error: 'Phase 4 coverage docs did not PASS', raw: String(coverageReport ?? '').slice(-500) }
+if (!(coverageReport && coverageReport.pass === true)) {
+  return { error: 'Phase 4 coverage docs did not PASS', reason: coverageReport ? String(coverageReport.reason ?? '').slice(-500) : 'agent returned null' }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -342,12 +355,12 @@ const huntReport = await agent(
   + '   - resolved: include fix_commit (SHA) or repro_test (path in tests/).\n'
   + '   - refuted: include refute_evidence (explanation + line citation).\n'
   + '   Medium/low: record only (not required to resolve before Gate 3).\n\n'
-  + 'Report: "BUG-HUNT: PASS" (report written AND all confirmed critical/high resolved-or-refuted) or "BUG-HUNT: FAIL — <reason>".\n\n'
+  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if bug_hunt_report.json was written AND all confirmed critical/high findings are resolved-or-refuted; reason = one-line summary. (Truth is enforced downstream: Gate 3\'s framework-owned adversarial_review dim re-reads the report itself.)\n\n'
   + 'SCOPE RULES:\n- DO NOT run run-gate (Gate 3) / advance-phase / push-milestone.\n- DO NOT modify harness/ (running its scripts/prompts is fine; editing is NOT — HR-17).\n- ONLY targets + hunt + resolve + write bug_hunt_report.json.',
-  { label: 'bug-hunt', phase: 'Bug Hunt', agentType: 'general-purpose', model: HUNT_MODEL },
+  { label: 'bug-hunt', phase: 'Bug Hunt', agentType: 'general-purpose', model: HUNT_MODEL, schema: VERDICT_SCHEMA },
 )
-if (!(typeof huntReport === 'string' && /BUG-HUNT:\s*PASS/.test(huntReport))) {
-  return { error: 'Phase 4 bug hunt did not PASS (Gate 3 adversarial_review will block)', raw: String(huntReport ?? '').slice(-600) }
+if (!(huntReport && huntReport.pass === true)) {
+  return { error: 'Phase 4 bug hunt did not PASS (Gate 3 adversarial_review will block)', reason: huntReport ? String(huntReport.reason ?? '').slice(-600) : 'agent returned null' }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -382,9 +395,23 @@ for (let round = 1; round <= 3; round++) {
     log('  Gate 3 agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
     break
   }
-  gate3Pass = typeof gate3Report === 'string' && /GATE3:\s*PASS/.test(gate3Report)
-  if (gate3Pass) { log('  Gate 3 PASS'); break }
-  log('  Gate 3 not yet PASS — retry round ' + (round + 1))
+  // AUTHORITATIVE Gate 3 verdict (verdict-authority rule, same as Gate 1):
+  // finalize-gate writes gate_results.gate3.{score,quality_complete} to the
+  // manifest as an aggregate payload. The orchestrator's prose "GATE3: PASS"
+  // is narrative only — never parsed. D4 (spec-coverage ≥80%) is not in the
+  // manifest, so the verify agent re-runs spec-coverage-check (exit code
+  // reflects pass/fail).
+  const gate3VerifyCmd = PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate3\') or {}; print(json.dumps({\'qc\': (isinstance(g,dict) and g.get(\'quality_complete\') is True), \'score\': (g.get(\'score\') if isinstance(g,dict) else None)}))"'
+  const g3v = await agent(
+    'Run these TWO commands via the Bash tool, in order:\n'
+    + '1. `' + gate3VerifyCmd + '` — stdout is a single JSON line with qc + score.\n'
+    + '2. `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 80.0; echo "RC=$?"`\n'
+    + 'Then report via the StructuredOutput tool: manifest_qc = the exact qc boolean from command 1; d4_rc = the exact numeric exit code echoed on command 2\'s final RC= line; detail = qc/score/RC in one line.',
+    { label: 'gate3-verify-r' + round, phase: 'Gate 3', agentType: 'general-purpose', schema: GATE_VERIFY_SCHEMA },
+  )
+  gate3Pass = !!(g3v && g3v.manifest_qc === true && g3v.d4_rc === 0)
+  if (gate3Pass) { log('  Gate 3 PASS [harness-verified: manifest qc=true, D4 rc=0]'); break }
+  log('  Gate 3 not yet PASS [' + (g3v ? String(g3v.detail ?? '') : 'verify agent null') + '] — retry round ' + (round + 1))
 }
 if (gate3Blocked) {
   return { session_limit_blocked: true, gate: 3, message: 'Agent hit session/rate limit during Gate 3 evaluation. Resume after quota reset — GUARD checks will skip completed FRs.' }
@@ -434,9 +461,18 @@ for (let round = 1; round <= ADVANCE_MAX_ROUNDS; round++) {
     log('  Advance agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
     return { session_limit_blocked: true, phase: 4, step: 'advance', message: 'Agent hit session/rate limit during Advance. Resume after quota reset — the GUARD step skips if already advanced.' }
   }
-  advancePass = typeof advanceReport === 'string' && /ADVANCE:\s*PASS/.test(advanceReport)
-  if (advancePass) { log('  Advance PASS'); break }
-  log('  Advance not yet PASS — retry round ' + (round + 1))
+  // AUTHORITATIVE Advance verdict: advance-phase atomically writes
+  // state.json current_phase=5 on success. Read it via a schema proxy —
+  // the orchestrator's prose "ADVANCE: PASS" is narrative only.
+  const advVerifyCmd = PY + ' -c "import json; print(json.dumps({\'current_phase\': int(json.load(open(\'' + REPO + '/.methodology/state.json\')).get(\'current_phase\') or 0)}))"'
+  const advV = await agent(
+    'Run EXACTLY this command via the Bash tool (stdout is a single JSON line):\n`' + advVerifyCmd + '`\n'
+    + 'Then report via the StructuredOutput tool: current_phase = the exact integer from that JSON.',
+    { label: 'advance-verify-r' + round, phase: 'Advance', agentType: 'general-purpose', schema: PHASE_SCHEMA },
+  )
+  advancePass = !!(advV && advV.current_phase >= 5)
+  if (advancePass) { log('  Advance PASS [harness-verified: state.json current_phase=' + advV.current_phase + ']'); break }
+  log('  Advance not yet PASS [state.json current_phase=' + (advV ? advV.current_phase : '?') + '] — retry round ' + (round + 1))
 }
 
 if (!advancePass) {

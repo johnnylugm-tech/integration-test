@@ -176,7 +176,7 @@ const result = await agent(prompt, {
 - 沒 `schema:` → 字串 (agent 最終訊息)
 - 有 `schema:` → 已驗證的 object (runtime 幫你 JSON.parse + AJV validate)
 
-### 5.2 `schema:` 行為 — **踩坑重點**
+### 5.2 `schema:` 行為 — **踩坑重點**(v4 修訂: gate verdict 必須用扁平 schema)
 
 - `schema:` 強制 subagent 呼叫 `StructuredOutput` tool
 - Agent 必須以 tool call 形式回 JSON,**不能用 plain text**
@@ -187,7 +187,24 @@ const result = await agent(prompt, {
 > `agent({schema}): subagent completed without calling StructuredOutput (after 2 in-conversation nudges)`
 > 整個 workflow 直接 fail。
 
-> **v3 正確解法**: 移除 `schema:`,改用 balanced-brace JSON parser 自己解析 agent 回的 plain text:
+> **v3 曾經的解法(已推翻)**: 全面禁用 `schema:`,改用 balanced-brace parser 解析 prose。
+> **v4 檢討(2026-07-02)**: v3 的全面禁令本身是 workaround——它把「大聲失敗、有驗證、有 retry」
+> 換成「無聲有損通道」。之後的 #126/#134/#135/#136/ENV_CHECK_RC-paraphrase 全部是
+> regex-over-LLM-prose 這個類別的下游發作(agent 會改寫、摘要、腦補,即使 prompt 寫了
+> "verbatim. Do not paraphrase")。v2 真正的教訓是「**複雜巢狀 schema × 重認知 agent**
+> 才會 compliance 失敗」,不是 schema 機制本身。
+
+**v4 規則(現行)**:
+
+1. **Gate verdict(PASS/FAIL 判定)必須用扁平小 schema**(2-3 個欄位,如
+   `{pass: boolean, reason: string}` / `{rc: integer}`)搭配 bash-proxy agent。
+   禁止 regex 比對 agent prose 作為 gate 判定。
+2. **Verdict authority**: 重認知 orchestrator(TDD/Gate2-4/Advance)保留 prose 敘事,
+   其 PASS/FAIL **永不**從 prose 解析——由獨立的 schema proxy agent 讀 harness
+   權威產物(manifest `quality_complete` / state.json `current_phase` / CLI exit code /
+   git log milestone commit)。
+3. **複雜巢狀輸出 × 重認知 agent**(如 phase6 Peer Review 的 verdicts 陣列)維持
+   prose + balanced-brace parser——這是 v2 踩坑仍然成立的唯一範圍:
 
 ```javascript
 function balancedJsonAt(text, start) {
