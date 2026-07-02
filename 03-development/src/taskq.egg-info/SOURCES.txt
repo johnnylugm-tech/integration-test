@@ -1,0 +1,7 @@
+pyproject.toml
+taskq/__init__.py
+taskq/__main__.py
+taskq.egg-info/PKG-INFO
+taskq.egg-info/SOURCES.txt
+taskq.egg-info/dependency_links.txt
+taskq.egg-info/top_level.txt
