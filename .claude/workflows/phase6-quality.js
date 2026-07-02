@@ -329,31 +329,51 @@ for (const v of peerVerdict.verdicts) {
 // ════════════════════════════════════════════════════════════════════════
 phase('Tag & Advance')
 log('git tag (Gate 4 score) + advance-phase --completed 6')
-// Last-line integrity guard: the phase-exit push commits .methodology/
-// wholesale — block here so mid-run corruption never reaches git history
-// (2026-07-02: commit 3198402 baked a corrupted manifest into main).
-const advIntegrity = await checkManifestIntegrity('Tag & Advance', 'advance-integrity')
-if (!advIntegrity.ok) {
-  return { error: 'Tag & Advance: quality_manifest.json corrupted mid-run — refusing to commit it', detail: advIntegrity.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first), merge the latest gate result back into gate_results, then resume', note: 'Blocking prevents the corruption from being committed by the phase-exit push.' }
+// Round loop (2026-07-02 audit finding, ported from phase3): advance-phase
+// enforces more independent checks than any single prompt can safely
+// enumerate, and a static checklist goes stale the moment harness adds or
+// changes one. advance-phase is idempotent (preflight runs before any
+// FSM/state write), so the robust fix is an outer retry loop where the
+// agent reads advance-phase's own [BLOCKED] output each round instead of
+// guessing in advance. The git-tag step is separately GUARDed (step 0
+// checks for an existing tag), so it stays safe to repeat across rounds.
+let advancePass = false, advanceReport = ''
+const ADVANCE_MAX_ROUNDS = 5
+for (let round = 1; round <= ADVANCE_MAX_ROUNDS; round++) {
+  log('  Tag & Advance round ' + round + '/' + ADVANCE_MAX_ROUNDS)
+  // Last-line integrity guard: the phase-exit push commits .methodology/
+  // wholesale — block here so mid-run corruption never reaches git history
+  // (2026-07-02: commit 3198402 baked a corrupted manifest into main).
+  // Re-check every round — a fix attempt in a prior round could reintroduce it.
+  const advIntegrity = await checkManifestIntegrity('Tag & Advance', 'advance-integrity-r' + round)
+  if (!advIntegrity.ok) {
+    return { error: 'Tag & Advance round ' + round + ': quality_manifest.json corrupted — refusing to commit it', detail: advIntegrity.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first), merge the latest gate result back into gate_results, then resume', note: 'Blocking prevents the corruption from being committed by the phase-exit push.' }
+  }
+  advanceReport = await agent(
+    'YOU ARE THE PHASE-6 EXIT ORCHESTRATOR. Tag the Gate 4 release + advance to Phase 7. ROUND ' + round + '.\n'
+    + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
+    + 'Steps:\n'
+    + '0. GUARD — already advanced? `PHASE=$(jq -r .current_phase ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 7 ]`. Also check: `git -C ' + REPO + ' tag -l "harness-v4-*" | head -1`. If Phase 7 is confirmed OR tag already exists, report "ADVANCE: PASS (already advanced)" and stop.\n'
+    + '1. GIT-TAG (skip if step 0 found an existing tag): read composite_score from .methodology/quality_manifest.json (persistent SoT per phase6_plan.md v2.12.0; gate4_result.json is ephemeral), then:\n'
+    + '   `git -C ' + REPO + ' tag -a "harness-v4-$(date +%Y%m%d)-score<SCORE>" -m "Gate 4 PASS (score <SCORE>)" && git -C ' + REPO + ' push origin --tags`\n'
+    + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 6 --project ' + REPO + '`\n'
+    + '   advance-phase independently re-verifies EVERYTHING before it will advance — its own output tells you exactly what is missing. If it prints "[BLOCKED] ...", that message IS the fix instruction: read it verbatim and do exactly what it says, then re-run this same advance-phase command. Do NOT guess what might be wrong — trust only what advance-phase itself reports. It is safe to re-run repeatedly within this round.\n'
+    + '3. Read ' + REPO + '/.methodology/state.json; confirm current_phase = 7 (advance-phase atomically writes state.json when complete).\n\n'
+    + 'Report final line: "ADVANCE: PASS|FAIL — <details>". If still FAIL after exhausting this round\'s turn, report the LAST [BLOCKED] message verbatim so the next round starts from where this one left off. PHASE_7_PLAN: ' + REPO + '/.methodology/phase7_plan.md\n\n'
+    + 'SCOPE RULES:\n- DO NOT re-do Gate 4 / release docs.\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY git tag + advance-phase + verify HANDOVER.md + the specific fixes advance-phase\'s own output asked for.',
+    { label: 'tag-advance-r' + round, phase: 'Tag & Advance', agentType: 'general-purpose' },
+  )
+  if (advanceReport === null || advanceReport === undefined || (typeof advanceReport === 'string' && advanceReport.length < 10)) {
+    log('  Tag & Advance agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
+    return { session_limit_blocked: true, phase: 6, step: 'tag-advance', message: 'Agent hit session/rate limit during Tag & Advance. Resume after quota reset — the GUARD step skips if already advanced/tagged.' }
+  }
+  advancePass = typeof advanceReport === 'string' && /ADVANCE:\s*PASS/.test(advanceReport)
+  if (advancePass) { log('  Tag & Advance PASS'); break }
+  log('  Tag & Advance not yet PASS — retry round ' + (round + 1))
 }
-const advanceReport = await agent(
-  'YOU ARE THE PHASE-6 EXIT ORCHESTRATOR. Tag the Gate 4 release + advance to Phase 7.\n'
-  + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-  + 'Steps:\n'
-  + '0. GUARD — already advanced? `PHASE=$(jq -r .current_phase ' + REPO + '/.methodology/state.json 2>/dev/null); echo "current_phase=$PHASE"; [ "$PHASE" -ge 7 ]`. Also check: `git -C ' + REPO + ' tag -l "harness-v4-*" | head -1`. If Phase 7 is confirmed OR tag already exists, report "ADVANCE: PASS (already advanced)" and stop.\n'
-  + '1. GIT-TAG: read composite_score from .methodology/quality_manifest.json (persistent SoT per phase6_plan.md v2.12.0; gate4_result.json is ephemeral), then:\n'
-  + '   `git -C ' + REPO + ' tag -a "harness-v4-$(date +%Y%m%d)-score<SCORE>" -m "Gate 4 PASS (score <SCORE>)" && git -C ' + REPO + ' push origin --tags`\n'
-  + '2. advance-phase: `' + PY + ' ' + REPO + '/harness_cli.py advance-phase --completed 6 --project ' + REPO + '`\n'
-  + '   TDD-PRECHECK enforced: gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 90%. Fix blockers, re-run.\n'
-  + '   PHASE-TRUTH (HR-11): if advance-phase fails on Phase Truth (<90%), check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
-  + '3. Read ' + REPO + '/.methodology/state.json; confirm current_phase = 7 (advance-phase atomically writes state.json when complete).\n\n'
-  + 'Report: "ADVANCE: PASS|FAIL — <details>". PHASE_7_PLAN: ' + REPO + '/.methodology/phase7_plan.md\n\n'
-  + 'SCOPE RULES:\n- DO NOT re-do Gate 4 / release docs.\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY git tag + advance-phase + verify HANDOVER.md.',
-  { label: 'tag-advance', phase: 'Tag & Advance', agentType: 'general-purpose' },
-)
 
-if (!advanceReport || !/ADVANCE:\s*PASS/.test(advanceReport)) {
-  return { error: 'Advance phase did not confirm PASS — check HANDOVER.md + state.json. If Phase 7 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-400) }
+if (!advancePass) {
+  return { error: 'Tag & Advance did not PASS in ' + ADVANCE_MAX_ROUNDS + ' rounds — check HANDOVER.md + state.json + the last [BLOCKED] message below. If Phase 7 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-600) }
 }
 log('Phase 6 workflow complete. Open .methodology/phase7_plan.md to continue.')
 return {

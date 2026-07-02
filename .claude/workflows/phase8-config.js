@@ -314,28 +314,44 @@ if (!(typeof archiveReport === 'string' && /ARCHIVE:\s*PASS/.test(archiveReport)
 // ════════════════════════════════════════════════════════════════════════
 phase('Final Push')
 log('push-milestone p8 (final — pipeline complete)')
-// Last-line integrity guard: the phase-exit push commits .methodology/
-// wholesale — block here so mid-run corruption never reaches git history
-// (2026-07-02: commit 3198402 baked a corrupted manifest into main).
-const advIntegrity = await checkManifestIntegrity('Final Push', 'advance-integrity')
-if (!advIntegrity.ok) {
-  return { error: 'Final Push: quality_manifest.json corrupted mid-run — refusing to commit it', detail: advIntegrity.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first), merge the latest gate result back into gate_results, then resume', note: 'Blocking prevents the corruption from being committed by the p8 final push.' }
+// Round loop (2026-07-02 audit finding, ported from phase3): push-milestone
+// p8's completion checks (gitleaks/ruff/mypy/coverage/spec-coverage/Phase
+// Truth, and more via _validate_p8_completion) are more than any single
+// prompt can safely enumerate, and a static checklist goes stale the moment
+// harness adds or changes one. The GUARD at step 0 makes this safe to
+// re-run: an already-pushed p8 commit short-circuits immediately.
+let p8Ok = false, pushReport = ''
+const ADVANCE_MAX_ROUNDS = 5
+for (let round = 1; round <= ADVANCE_MAX_ROUNDS; round++) {
+  log('  Final Push round ' + round + '/' + ADVANCE_MAX_ROUNDS)
+  // Last-line integrity guard: the phase-exit push commits .methodology/
+  // wholesale — block here so mid-run corruption never reaches git history
+  // (2026-07-02: commit 3198402 baked a corrupted manifest into main).
+  // Re-check every round — a fix attempt in a prior round could reintroduce it.
+  const advIntegrity = await checkManifestIntegrity('Final Push', 'advance-integrity-r' + round)
+  if (!advIntegrity.ok) {
+    return { error: 'Final Push round ' + round + ': quality_manifest.json corrupted — refusing to commit it', detail: advIntegrity.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first), merge the latest gate result back into gate_results, then resume', note: 'Blocking prevents the corruption from being committed by the p8 final push.' }
+  }
+  pushReport = await agent(
+    'YOU ARE THE P8 FINAL PUSHER. This is the LAST step of the 8-phase pipeline. ROUND ' + round + '.\n'
+    + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
+    + 'Steps:\n'
+    + '0. GUARD: `git -C ' + REPO + ' log --oneline --grep="p8" -1`. If exists, report "P8-PUSH: PASS (already pushed)" and stop.\n'
+    + '1. PUSH ⑩: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p8 --project ' + REPO + '`. _validate_p8_completion independently re-verifies EVERYTHING before it will push (lint, types, coverage, Phase Truth, .methodology-archive/ presence, and more) — its own output tells you exactly what is missing. If it prints "[BLOCKED] ...", that message IS the fix instruction: read it verbatim and do exactly what it says, then re-run this same push-milestone command. Do NOT guess what might be wrong — trust only what push-milestone itself reports. It is safe to re-run repeatedly within this round. On success it writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n'
+    + '2. Confirm: pipeline complete (all 8 phases done).\n\n'
+    + 'Report final line: "P8-PUSH: PASS|FAIL — <details>". If still FAIL after exhausting this round\'s turn, report the LAST [BLOCKED] message verbatim so the next round starts from where this one left off.\n\n'
+    + 'SCOPE RULES:\n- DO NOT run advance-phase (Phase 8 is the final phase — there is no Phase 9).\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY push-milestone p8 + the specific fixes its own output asked for.',
+    { label: 'final-push-r' + round, phase: 'Final Push', agentType: 'general-purpose' },
+  )
+  if (pushReport === null || pushReport === undefined || (typeof pushReport === 'string' && pushReport.length < 10)) {
+    log('  Final Push agent blocked (session limit / rate limit) — aborting retries, resume after quota reset')
+    return { session_limit_blocked: true, phase: 8, step: 'final-push', message: 'Agent hit session/rate limit during Final Push. Resume after quota reset — the GUARD step skips if already pushed.' }
+  }
+  p8Ok = typeof pushReport === 'string' && /P8-PUSH:\s*PASS/.test(pushReport)
+  if (p8Ok) { log('  Final Push PASS'); break }
+  log('  Final Push not yet PASS — retry round ' + (round + 1))
 }
-const pushReport = await agent(
-  'YOU ARE THE P8 FINAL PUSHER. This is the LAST step of the 8-phase pipeline.\n'
-  + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
-  + 'Steps:\n'
-  + '0. GUARD: `git -C ' + REPO + ' log --oneline --grep="p8" -1`. If exists, report "P8-PUSH: PASS (already pushed)" and stop.\n'
-  + '1. P8 completion checklist (TDD-PRECHECK): confirm gitleaks + ruff + mypy + pytest --cov-fail-under=100 + spec-coverage 90% all pass. Fix blockers.\n'
-  + '2. PUSH ⑩: `' + PY + ' ' + REPO + '/harness_cli.py push-milestone --type p8 --project ' + REPO + '`. _validate_p8_completion auto-verifies .methodology-archive/ exists. Writes HANDOVER.md + commits + pushes. If a hook blocks, reword commit to start with `chore(harness):` (NOT --no-verify), retry.\n'
-  + '   PHASE-TRUTH (HR-11): push-milestone p8 / _validate_p8_completion verifies Phase Truth ≥90%; if it fails, check phase_truth_verifier output in .sessi-work/, fix the failing phase-link/gate artifact, re-run (max 3, then escalate to human).\n'
-  + '3. Confirm: pipeline complete (all 8 phases done).\n\n'
-  + 'Report: "P8-PUSH: PASS|FAIL — <details>".\n\n'
-  + 'SCOPE RULES:\n- DO NOT run advance-phase (Phase 8 is the final phase — there is no Phase 9).\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY the completion checklist + push-milestone p8.',
-  { label: 'final-push', phase: 'Final Push', agentType: 'general-purpose' },
-)
-const p8Ok = typeof pushReport === 'string' && /P8-PUSH:\s*PASS/.test(pushReport)
-if (!p8Ok) return { error: 'Phase 8 p8 push did not PASS', raw: String(pushReport ?? '').slice(-500) }
+if (!p8Ok) return { error: 'Phase 8 p8 push did not PASS in ' + ADVANCE_MAX_ROUNDS + ' rounds — check the last [BLOCKED] message below', raw: String(pushReport ?? '').slice(-600) }
 
 log('Phase 8 workflow complete. 🎉 8-phase pipeline complete.')
 return {
