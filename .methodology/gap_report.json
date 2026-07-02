@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 18,
+    "total": 26,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 18,
+    "orphaned": 26,
     "critical": 0,
     "major": 0,
-    "minor": 18
+    "minor": 26
   },
   "gaps": [
     {
@@ -116,6 +116,54 @@
       "severity": "minor",
       "reason": "'save_tasks' has no corresponding specification in SPEC.md",
       "action": "Add spec for save_tasks or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'UnknownTaskError' has no corresponding specification in SPEC.md",
+      "action": "Add spec for UnknownTaskError or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'status' has no corresponding specification in SPEC.md",
+      "action": "Add spec for status or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'list_tasks' has no corresponding specification in SPEC.md",
+      "action": "Add spec for list_tasks or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'clear' has no corresponding specification in SPEC.md",
+      "action": "Add spec for clear or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'format_task_human' has no corresponding specification in SPEC.md",
+      "action": "Add spec for format_task_human or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'format_task_json' has no corresponding specification in SPEC.md",
+      "action": "Add spec for format_task_json or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'format_list_human' has no corresponding specification in SPEC.md",
+      "action": "Add spec for format_list_human or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'format_list_json' has no corresponding specification in SPEC.md",
+      "action": "Add spec for format_list_json or remove if unnecessary"
     }
   ]
 }
