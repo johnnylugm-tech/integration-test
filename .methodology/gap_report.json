@@ -1,12 +1,85 @@
 {
   "summary": {
-    "total": 0,
+    "total": 12,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 0,
+    "orphaned": 12,
     "critical": 0,
     "major": 0,
-    "minor": 0
+    "minor": 12
   },
-  "gaps": []
+  "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_submit' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_submit or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_list' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_list or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'build_parser' has no corresponding specification in SPEC.md",
+      "action": "Add spec for build_parser or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'main' has no corresponding specification in SPEC.md",
+      "action": "Add spec for main or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'taskq_home' has no corresponding specification in SPEC.md",
+      "action": "Add spec for taskq_home or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'tasks_json_path' has no corresponding specification in SPEC.md",
+      "action": "Add spec for tasks_json_path or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'StoreCorruptedError' has no corresponding specification in SPEC.md",
+      "action": "Add spec for StoreCorruptedError or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'load_tasks_or_die' has no corresponding specification in SPEC.md",
+      "action": "Add spec for load_tasks_or_die or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'atomic_write_tasks' has no corresponding specification in SPEC.md",
+      "action": "Add spec for atomic_write_tasks or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'append_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for append_task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'report_corrupt_and_exit' has no corresponding specification in SPEC.md",
+      "action": "Add spec for report_corrupt_and_exit or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'validate_command' has no corresponding specification in SPEC.md",
+      "action": "Add spec for validate_command or remove if unnecessary"
+    }
+  ]
 }

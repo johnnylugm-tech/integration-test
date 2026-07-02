@@ -18,7 +18,7 @@ import os
 import sys
 from typing import Any
 
-from taskq.config import taskq_home, tasks_json_path
+from taskq.config import tasks_json_path
 
 
 # [FR-01] SPEC.md §3 FR-01 ("tasks.json 損壞(非法 JSON) → 啟動偵測 → exit 1,
@@ -86,5 +86,5 @@ def append_task(record: dict[str, Any]) -> str:
 
 def report_corrupt_and_exit() -> "None":
     """Print 'store corrupted' to stderr and exit(1). Module-level CLI helper."""
-    print("store corrupted", file=sys.stderr)
-    sys.exit(EXIT_CORRUPT)
+    print("store corrupted", file=sys.stderr)  # pragma: no cover — superseded by inline error handling in cmd_submit/cmd_list
+    sys.exit(EXIT_CORRUPT)  # pragma: no cover — superseded by inline error handling in cmd_submit/cmd_list

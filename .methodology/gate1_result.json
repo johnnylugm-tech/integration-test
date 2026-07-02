@@ -1,0 +1,31 @@
+{
+  "gate": 1,
+  "phase": 3,
+  "fr_id": "FR-01",
+  "overall_score": 100.0,
+  "quality_complete": true,
+  "rounds_used": 2,
+  "breakdown": {
+    "linting": {
+      "score": 100,
+      "threshold": 90,
+      "tool_evidence": "All checks passed! (ruff check 03-development/src/taskq/ 03-development/tests/)"
+    },
+    "type_safety": {
+      "score": 100,
+      "threshold": 85,
+      "tool_evidence": "0 errors, 0 warnings, 0 informations (pyright 03-development/src/taskq/)"
+    },
+    "test_coverage": {
+      "score": 100,
+      "threshold": 80,
+      "tests_passed": 89,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "tool_evidence": "collected 89 items\n03-development/tests/test_fr01.py: 41 passed\n03-development/tests/test_fr01_unit.py: 48 passed\n============================== 89 passed in 0.81s ==============================\n\nName                                     Stmts   Miss  Cover\n03-development/src/taskq/__init__.py         5      0   100%\n03-development/src/taskq/__main__.py        56      0   100%\n03-development/src/taskq/config.py           8      0   100%\n03-development/src/taskq/store.py           37      0   100%\n03-development/src/taskq/validation.py      11      0   100%\nTOTAL                                      117      0   100%"
+    }
+  },
+  "composite_score": 100.0,
+  "verdict": "PASS",
+  "passed": true
+}

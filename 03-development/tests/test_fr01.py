@@ -37,15 +37,33 @@ Sub-assertion predicates follow `TEST_SPEC.md` FR-01 sub-assertion table.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import taskq
 
 from conftest import (
     load_tasks,
     run_taskq,
     tasks_json_path,
     write_corrupt_tasks_json,
+)
+from taskq import (
+    COMMAND_MAX_LENGTH,
+    INJECTION_CHARS,
+    StoreCorruptedError,
+    append_task,
+    atomic_write_tasks,
+    load_tasks_or_die,
+    validate_command,
+)
+from taskq.__main__ import (
+    _generate_task_id,
+    build_parser,
+    cmd_list,
+    cmd_submit,
+    main,
 )
 
 
@@ -60,7 +78,7 @@ ID_HEX_CHARS = set("0123456789abcdef")
 # SPEC §3 FR-01: 命令 > 1000 字元 → 拒絕 (canonical 1000 / 1001)
 LENGTH_LIMIT = 1000
 # SPEC §3 FR-01: 命令含 ; | & $ > < ` 任一 → 拒絕 (NFR-02)
-INJECTION_CHARS = set(";|$><`")
+INJECTION_CHARS = set(";|&$><`")
 
 
 def _parse_json_output(proc) -> dict:
@@ -558,3 +576,288 @@ def test_fr01_sub_assertions_mirror(taskq_env, taskq_home):
     # ── AC-FR01-corrupt-stderr [case 14] ────────────────────────────────
     if tasks_json == "not-valid-json":
         assert "store corrupted" in result_corrupt.stderr
+
+
+# ---------------------------------------------------------------------------
+# In-process unit tests for source-line coverage.
+#
+# pytest-cov measures coverage of in-process code only; the behavioural
+# test_fr01_* cases above run the CLI as a SUBPROCESS (python -m taskq),
+# so they execute the same source but in a child process that pytest-cov
+# doesn't track. The unit tests below import the `taskq` modules directly
+# and call their public functions so coverage counts those statements.
+# ---------------------------------------------------------------------------
+
+
+def _unit_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Point TASKQ_HOME at `tmp_path/.taskq` (auto-mkdir) and return it."""
+    home = tmp_path / ".taskq"
+    home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TASKQ_HOME", str(home))
+    return home
+
+
+# ── taskq.validation (FR-01 rows 「非空」「長度」「注入字元」) ──────────
+
+
+def test_unit_validation_accepts_simple():
+    """[cov] simple command is accepted by validate_command."""
+    assert validate_command("echo hi") is None
+
+
+def test_unit_validation_rejects_empty():
+    """[cov] validate_command rejects empty string with 'empty' hint."""
+    err = validate_command("")
+    assert err is not None
+    assert "empty" in err.lower()
+
+
+def test_unit_validation_rejects_whitespace():
+    """[cov] validate_command rejects whitespace-only with 'empty' hint."""
+    err = validate_command("   ")
+    assert err is not None
+    assert "empty" in err.lower()
+
+
+def test_unit_validation_accepts_at_limit():
+    """[cov] COMMAND_MAX_LENGTH chars is on the boundary (accepted)."""
+    assert validate_command("a" * COMMAND_MAX_LENGTH) is None
+
+
+def test_unit_validation_rejects_over_limit():
+    """[cov] COMMAND_MAX_LENGTH+1 chars is rejected with 'exceeds' hint."""
+    err = validate_command("a" * (COMMAND_MAX_LENGTH + 1))
+    assert err is not None
+    assert "exceeds" in err
+
+
+@pytest.mark.parametrize("ch", sorted(INJECTION_CHARS))
+def test_unit_validation_rejects_injection(ch):
+    """[cov] each blacklist char triggers rejection with 'injection' hint."""
+    err = validate_command(f"echo a{ch}b")
+    assert err is not None
+    assert "injection" in err.lower()
+
+
+def test_unit_injection_chars_set_shape():
+    """[cov] blacklist is exactly 7 distinct chars per SPEC §3 FR-01."""
+    assert INJECTION_CHARS == frozenset(";|&$><`")
+    assert len(INJECTION_CHARS) == 7
+
+
+def test_unit_command_max_length_is_1000():
+    """[cov] COMMAND_MAX_LENGTH matches SPEC row 「長度」."""
+    assert COMMAND_MAX_LENGTH == 1000
+
+
+# ── taskq.config (FR-01 "$TASKQ_HOME/tasks.json") ─────────────────────
+
+
+def test_unit_taskq_home_default(monkeypatch):
+    """[cov] TASKQ_HOME absent → ~/.taskq (expanduser branch)."""
+    monkeypatch.delenv("TASKQ_HOME", raising=False)
+    assert taskq.taskq_home().name == ".taskq"
+
+
+def test_unit_taskq_home_from_env(monkeypatch, tmp_path):
+    """[cov] TASKQ_HOME env var wins (no default branch)."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path / "q-home"))
+    assert taskq.taskq_home() == tmp_path / "q-home"
+
+
+def test_unit_tasks_json_path_under_home(monkeypatch, tmp_path):
+    """[cov] tasks.json lives under TASKQ_HOME/tasks.json."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    assert taskq.tasks_json_path() == tmp_path / "tasks.json"
+
+
+# ── taskq.store (FR-01 atomic write + corruption) ─────────────────
+
+
+def test_unit_load_tasks_missing_returns_empty(monkeypatch, tmp_path):
+    """[cov] missing tasks.json → [] (no error)."""
+    _unit_home(monkeypatch, tmp_path)
+    assert load_tasks_or_die() == []
+
+
+def test_unit_load_tasks_corrupt_raises(monkeypatch, tmp_path):
+    """[cov] malformed JSON raises StoreCorruptedError."""
+    home = _unit_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    with pytest.raises(StoreCorruptedError):
+        load_tasks_or_die()
+
+
+def test_unit_load_tasks_non_list_raises(monkeypatch, tmp_path):
+    """[cov] top-level non-list raises StoreCorruptedError (data-is-list check)."""
+    home = _unit_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text('{"oops": true}', encoding="utf-8")
+    with pytest.raises(StoreCorruptedError):
+        load_tasks_or_die()
+
+
+def test_unit_atomic_write_tasks_creates_file(monkeypatch, tmp_path):
+    """[cov] atomic_write_tasks writes the payload to tasks.json."""
+    _unit_home(monkeypatch, tmp_path)
+    payload = [{"id": "abcd1234", "status": "pending"}]
+    atomic_write_tasks(payload, "abcd1234")
+    on_disk = json.loads((tmp_path / ".taskq" / "tasks.json").read_text(encoding="utf-8"))
+    assert on_disk == payload
+
+
+def test_unit_atomic_write_tasks_no_tmp_leftover(monkeypatch, tmp_path):
+    """[cov] atomic write replaces — no tmp leftover."""
+    home = _unit_home(monkeypatch, tmp_path)
+    atomic_write_tasks([{"id": "deadbeef"}], "deadbeef")
+    leftover = [p for p in home.iterdir() if p.name.startswith("tasks.json.tmp")]
+    assert leftover == []
+
+
+def test_unit_append_task_writes_record(monkeypatch, tmp_path):
+    """[cov] append_task persists the record atomically and returns id."""
+    _unit_home(monkeypatch, tmp_path)
+    record = {"id": "feed1234", "status": "pending", "command": "echo hi"}
+    new_id = append_task(record)
+    assert new_id == "feed1234"
+    on_disk = json.loads((tmp_path / ".taskq" / "tasks.json").read_text(encoding="utf-8"))
+    assert on_disk == [record]
+
+
+# ── taskq.__main__ helpers ─────────────────────────────────────────
+
+
+def test_unit_generate_task_id_is_8_hex():
+    """[cov] _generate_task_id returns 8 lowercase hex chars."""
+    for _ in range(50):
+        tid = _generate_task_id()
+        assert len(tid) == 8
+        assert all(c in "0123456789abcdef" for c in tid)
+
+
+def test_unit_build_parser_submit():
+    """[cov] build_parser registers `submit` subcommand + --json flag."""
+    parser = build_parser()
+    ns = parser.parse_args(["submit", "echo hi"])
+    assert ns.command_name == "submit"
+    assert ns.command == "echo hi"
+    assert ns.json is False
+
+
+def test_unit_build_parser_submit_json_flag():
+    """[cov] --json flag is stored on the args namespace."""
+    parser = build_parser()
+    ns = parser.parse_args(["submit", "--json", "echo hi"])
+    assert ns.json is True
+
+
+def test_unit_build_parser_list():
+    """[cov] build_parser registers `list` subcommand."""
+    parser = build_parser()
+    ns = parser.parse_args(["list"])
+    assert ns.command_name == "list"
+
+
+# ── cmd_submit / cmd_list in-process ──────────────────────────────
+
+
+def test_unit_cmd_submit_rejects_empty(monkeypatch, tmp_path, capsys):
+    """[cov] cmd_submit rejects empty cmd → exit 2 + stderr."""
+    _unit_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", ""])
+    assert cmd_submit(ns) == 2
+    assert "empty" in capsys.readouterr().err.lower()
+
+
+def test_unit_cmd_submit_rejects_over_limit(monkeypatch, tmp_path):
+    """[cov] cmd_submit rejects over-limit cmd → exit 2 (length branch)."""
+    _unit_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", "a" * (COMMAND_MAX_LENGTH + 1)])
+    assert cmd_submit(ns) == 2
+
+
+def test_unit_cmd_submit_rejects_injection(monkeypatch, tmp_path):
+    """[cov] cmd_submit rejects injection char → exit 2 + no file written."""
+    home = _unit_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", "echo a;b"])
+    assert cmd_submit(ns) == 2
+    assert not (home / "tasks.json").exists()
+
+
+def test_unit_cmd_submit_writes_record_json(monkeypatch, tmp_path, capsys):
+    """[cov] cmd_submit on valid cmd writes record + --json JSON on stdout."""
+    _unit_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", "--json", "echo hi"])
+    assert cmd_submit(ns) == 0
+    out = capsys.readouterr().out.strip()
+    rec = json.loads(out)
+    assert rec["status"] == "pending"
+    assert rec["command"] == "echo hi"
+    assert rec["attempts"] == 0
+
+
+def test_unit_cmd_submit_writes_record_plain(monkeypatch, tmp_path, capsys):
+    """[cov] cmd_submit without --json emits 'submitted <id>' on stdout."""
+    _unit_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", "echo hi"])
+    assert cmd_submit(ns) == 0
+    out = capsys.readouterr().out.strip()
+    assert out.startswith("submitted ")
+    tail = out[len("submitted "):].strip()
+    assert len(tail) == 8 and all(c in "0123456789abcdef" for c in tail)
+
+
+def test_unit_cmd_submit_corrupt_store(monkeypatch, tmp_path, capsys):
+    """[cov] cmd_submit with corrupt store yields EXIT_CORRUPT (1) + stderr.
+
+    Mirrors cmd_list behaviour; without it a corrupt store would be
+    silently overwritten on the next successful write (partial-write
+    false-positive).
+    """
+    home = _unit_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    ns = build_parser().parse_args(["submit", "echo hi"])
+    rc = cmd_submit(ns)
+    assert rc == 1
+    assert "store corrupted" in capsys.readouterr().err
+
+
+def test_unit_cmd_list_corrupt(monkeypatch, tmp_path, capsys):
+    """[cov] cmd_list with corrupt store yields EXIT_CORRUPT + stderr."""
+    home = _unit_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    ns = build_parser().parse_args(["list"])
+    assert cmd_list(ns) == 1
+    err = capsys.readouterr().err
+    assert "store corrupted" in err
+    # Original bytes survive — no silent rebuild.
+    assert "not-valid-json" in (home / "tasks.json").read_text(encoding="utf-8")
+
+
+def test_unit_cmd_list_success(monkeypatch, tmp_path, capsys):
+    """[cov] cmd_list against healthy store emits JSON array + exit 0."""
+    home = _unit_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("[]", encoding="utf-8")
+    ns = build_parser().parse_args(["list"])
+    assert cmd_list(ns) == 0
+    out = capsys.readouterr().out.strip()
+    assert json.loads(out) == []
+
+
+# ── main() entrypoint ─────────────────────────────────────────────
+
+
+def test_unit_main_submit_round_trip(monkeypatch, tmp_path, capsys):
+    """[cov] main() drives both submit and list happy-path."""
+    _unit_home(monkeypatch, tmp_path)
+    assert main(["submit", "echo hi"]) == 0
+    assert main(["list"]) == 0
+    out = capsys.readouterr().out
+    assert "echo hi" in out
+
+
+def test_unit_main_unknown_subcommand(monkeypatch, tmp_path):
+    """[cov] main() exits non-zero on unknown subcommand via argparse.error."""
+    _unit_home(monkeypatch, tmp_path)
+    with pytest.raises(SystemExit):
+        main(["bogus"])
+

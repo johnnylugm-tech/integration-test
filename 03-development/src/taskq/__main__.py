@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit the new task record as JSON on stdout",
     )
 
-    p_list = sub.add_parser("list", help="list all tasks")
+    sub.add_parser("list", help="list all tasks")
 
     return parser
 
@@ -123,9 +123,9 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_submit(args)
     if args.command_name == "list":
         return cmd_list(args)
-    parser.error(f"unknown subcommand: {args.command_name}")
-    return EXIT_REJECTED
+    parser.error(f"unknown subcommand: {args.command_name}")  # pragma: no cover — required=True subparsers make this branch unreachable
+    return EXIT_REJECTED  # pragma: no cover — required=True subparsers make this branch unreachable
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+if __name__ == "__main__":  # pragma: no cover — script entrypoint
+    sys.exit(main())  # pragma: no cover — script entrypoint

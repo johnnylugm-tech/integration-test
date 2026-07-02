@@ -32,11 +32,7 @@
         "taskq.redact",
         "taskq.validation",
         "taskq.models",
-        "taskq.config",
-        "taskq.cli.cli",
-        "taskq.core.models",
-        "taskq.core.validation",
-        "taskq.io.store"
+        "taskq.config"
       ],
       "allowed_dependencies": []
     }
