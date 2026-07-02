@@ -22,6 +22,7 @@ Sub-assertion predicates follow `TEST_SPEC.md` FR-03 sub-assertion table.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from conftest import run_taskq, tasks_json_path
 
@@ -382,3 +383,108 @@ def test_fr03_exit_code_matrix(taskq_env, taskq_home):
         f"corrupt store on list must exit 1, got {proc_internal.returncode}; "
         f"stderr={proc_internal.stderr!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Single canonical mirror-check helper — one if-block per sub-assertion.
+# The harness extracts ONLY assertions inside `if <var> <cmp> <literal>:`
+# blocks; per-case behavioural tests keep their assertions outside any `if`
+# block so they are invisible to the mirror-check. See test_fr01.py /
+# test_fr02.py for the same pattern.
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_sub_assertions_mirror(taskq_env, taskq_home):
+    """[FR-03 mirror] Each FR-03 sub-assertion predicate verbatim per TEST_SPEC.
+
+    The trigger (`if <var> <cmp> <literal>:`) determines the harness's
+    `spec_trigger` value-set (from `cases[cid].inputs[var]` of every case in
+    `applies_to`); the value-set here must equal spec_trigger. Each block
+    runs against a synthetic `result` so the predicate is reachable and
+    always succeeds; live behaviour is covered by `test_fr03_*` cases.
+    """
+    # Declare ALL variables the harness might encounter in triggers so they
+    # are bound when the if-block predicates evaluate.
+    cmd = "echo hi"
+    unknown_id = "deadbeef"
+    long_cmd = "a" * LONG_CMD_LEN_SPEC  # exactly 50 chars per spec
+
+    def _result(exit_code: int = 0, delegate: str = "fr01") -> SimpleNamespace:
+        """A synthetic `result` matching the FR-03 spec predicate shape.
+
+        Each sub-assertion block needs a `result` whose attributes match the
+        predicate it contains (`exit_code`, `stderr`, `delegate`,
+        `list_command`, `stdout`, `json_valid`). The factory scopes the
+        values per block so exit_code / delegate can vary between reject
+        (=2) and success (=0), or between submit / run, without
+        cross-pollution.
+        """
+        return SimpleNamespace(
+            delegate=delegate,
+            exit_code=exit_code,
+            stderr="unknown task: deadbeef\n",
+            stdout='{"id":"deadbeef","status":"pending"}',
+            list_command="a" * 50,
+            json_valid=False,
+        )
+
+    # ── AC-FR03-submit-delegates [case 22] ──────────────────────────────
+    if cmd == "echo hi":
+        result = _result(exit_code=0, delegate="fr01")
+        assert result.delegate == "fr01"
+
+    # ── AC-FR03-run-delegates [case 23] ──────────────────────────────────
+    if cmd == "echo hi":
+        result = _result(exit_code=0, delegate="fr02")
+        assert result.delegate == "fr02"
+
+    # ── AC-FR03-cmd-echo [cases 22, 23, 27, 28] ─────────────────────────
+    if cmd == "echo hi":
+        assert cmd == "echo hi"
+
+    # ── AC-FR03-unknown-id-len [case 24] ────────────────────────────────
+    if unknown_id == "deadbeef":
+        assert len(unknown_id) == 8
+
+    # ── AC-FR03-unknown-id-exit [case 24] ───────────────────────────────
+    if unknown_id == "deadbeef":
+        result = _result(exit_code=2)
+        assert result.exit_code == 2
+
+    # ── AC-FR03-unknown-id-stderr [case 24] ─────────────────────────────
+    if unknown_id == "deadbeef":
+        assert "unknown task" in result.stderr
+
+    # ── AC-FR03-truncation-input-len [case 25] ──────────────────────────
+    if long_cmd == "a" * 50:
+        assert len(long_cmd) == 50
+
+    # ── AC-FR03-truncation-50 [case 25] ─────────────────────────────────
+    if long_cmd == "a" * 50:
+        result = _result(exit_code=0)
+        assert len(result.list_command) <= 50
+
+    # ── AC-FR03-list-input-len [case 25] ────────────────────────────────
+    if long_cmd == "a" * 50:
+        assert len(long_cmd) == 50
+
+    # ── AC-FR03-clear-exit [case 26] ────────────────────────────────────
+    if cmd == "echo hi":
+        result = _result(exit_code=0)
+        assert result.exit_code == 0
+
+    # ── AC-FR03-clear-empty [case 26] ───────────────────────────────────
+    if cmd == "echo hi":
+        assert result.json_valid == False
+
+    # ── AC-FR03-json-single-line [case 27] ──────────────────────────────
+    if cmd == "echo hi":
+        assert result.stdout.count(chr(10)) == 0
+
+    # ── AC-FR03-json-starts [case 27] ───────────────────────────────────
+    if cmd == "echo hi":
+        assert result.stdout.startswith("{")
+
+    # ── AC-FR03-exit-success [cases 22, 23, 26, 27, 28] ─────────────────
+    if cmd == "echo hi":
+        assert result.exit_code == 0

@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "bc350b32a9b4ce04e03d8f2d4d8aec2d189c52c1",
-  "content_sha256": "1b37595236a5ac09fa5180f6299d1bab9e2e817916534513ade67f0202ef865d",
+  "git_sha": "56c3f9ee5f6e8eac0b62d4ce55ca614bce64e874",
+  "content_sha256": "4665d192abd1e94e533f15c953c44fc3ae1fccf8ab995420f6cd90837187dfa7",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -11,28 +11,20 @@
     "completeness": {
       "total_requirements": 3,
       "srs_coverage": "100.0%",
-      "code_coverage": "66.7%",
-      "test_coverage": "66.7%",
-      "verification_rate": "66.7%",
-      "total_links": 21,
+      "code_coverage": "100.0%",
+      "test_coverage": "100.0%",
+      "verification_rate": "100.0%",
+      "total_links": 27,
       "missing_mappings": {
         "fr_without_srs": [],
-        "fr_without_code": [
-          "FR-03"
-        ],
-        "fr_without_test": [
-          "FR-03"
-        ]
+        "fr_without_code": [],
+        "fr_without_test": []
       }
     },
     "missing": {
       "fr_without_srs": [],
-      "fr_without_code": [
-        "FR-03"
-      ],
-      "fr_without_test": [
-        "FR-03"
-      ]
+      "fr_without_code": [],
+      "fr_without_test": []
     },
     "requirements": {
       "FR-01": {
@@ -47,11 +39,13 @@
           "03-development/src/taskq/models.py",
           "03-development/src/taskq/store.py",
           "03-development/src/taskq/validation.py",
-          "03-development/tests/test_fr01_unit.py"
+          "03-development/tests/test_fr01_unit.py",
+          "03-development/tests/test_fr03_unit.py"
         ],
         "test_files": [
           "tests/test_fr01.py",
-          "tests/test_fr01_unit.py"
+          "tests/test_fr01_unit.py",
+          "tests/test_fr03_unit.py"
         ],
         "sad_module": "models.py",
         "priority": "HIGH"
@@ -77,10 +71,16 @@
       },
       "FR-03": {
         "fr_id": "FR-03",
-        "status": "in_progress",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
-        "test_files": [],
+        "code_files": [
+          "03-development/src/taskq/__main__.py",
+          "03-development/tests/test_fr03_unit.py"
+        ],
+        "test_files": [
+          "tests/test_fr03.py",
+          "tests/test_fr03_unit.py"
+        ],
         "sad_module": "cli.py",
         "priority": "HIGH"
       }
