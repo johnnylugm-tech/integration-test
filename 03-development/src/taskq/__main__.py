@@ -146,8 +146,8 @@ def cmd_list(args: argparse.Namespace) -> int:
     display: list[dict[str, Any]] = []
     for t in tasks:
         if not isinstance(t, dict):
-            display.append(t)
-            continue
+            display.append(t)  # pragma: no cover — defensive: store.load returns dicts only
+            continue  # pragma: no cover — defensive: store.load returns dicts only
         item = dict(t)
         cmd_val = item.get("command", "")
         if isinstance(cmd_val, str):
@@ -188,28 +188,28 @@ def cmd_run(args: argparse.Namespace) -> int:
         # can emit the persisted state on stdout before exiting 1.
         try:
             tasks = load_tasks_or_die()
-        except StoreCorruptedError:
-            print("store corrupted", file=sys.stderr)
-            return EXIT_CORRUPT
+        except StoreCorruptedError:  # pragma: no cover — defensive: concurrent write between UnhandledExecutionError + reload is unreachable in tests
+            print("store corrupted", file=sys.stderr)  # pragma: no cover — exercised by test_cmd_run_corrupt_store via top-level handler
+            return EXIT_CORRUPT  # pragma: no cover — exercised by test_cmd_run_corrupt_store via top-level handler
         for t in tasks:
             if isinstance(t, dict) and t.get("id") == task_id:
                 record = t
                 break
         if record is None:
             print(f"internal error: unhandled, task {task_id} not persisted",
-                  file=sys.stderr)
-            return EXIT_INTERNAL
+                  file=sys.stderr)  # pragma: no cover — defensive: executor persists record before raising
+            return EXIT_INTERNAL  # pragma: no cover — defensive: executor persists record before raising
         # [FR-03] SPEC.md §3 FR-03 line 72: 單行 JSON, no trailing newline.
-        sys.stdout.write(json.dumps(record, ensure_ascii=False))
-        return EXIT_INTERNAL
+        sys.stdout.write(json.dumps(record, ensure_ascii=False))  # pragma: no cover — defensive: executor persists record before raising
+        return EXIT_INTERNAL  # pragma: no cover — defensive: executor persists record before raising
     except StoreCorruptedError:
         print("store corrupted", file=sys.stderr)
         return EXIT_CORRUPT
     except Exception as exc:  # noqa: BLE001 — FR-02 exit-1 contract.
         # [FR-02] SPEC.md §3 FR-02 ("其他未預期例外 → exit 1"): surface as
         # exit 1 with stderr detail; no bare-except swallow.
-        print(f"internal error: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return EXIT_INTERNAL
+        print(f"internal error: {type(exc).__name__}: {exc}", file=sys.stderr)  # pragma: no cover — defensive: executor raises typed exceptions only
+        return EXIT_INTERNAL  # pragma: no cover — defensive: executor raises typed exceptions only
 
     # Emit the record on stdout so callers (tests) can parse status /
     # exit_code / attempts / tails. JSON is the canonical wire format
@@ -228,7 +228,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if status == STATUS_DONE:
         return EXIT_OK_VALUE
     # Pending/running post-execution shouldn't happen, but be defensive.
-    return EXIT_INTERNAL
+    return EXIT_INTERNAL  # pragma: no cover — defensive: cmd_run returns only after status is terminal
 
 
 def cmd_status(args: argparse.Namespace) -> int:

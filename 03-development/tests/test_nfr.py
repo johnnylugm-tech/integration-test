@@ -9,17 +9,11 @@ sub-assertion; live behaviour is exercised via subprocess / import path).
 from __future__ import annotations
 
 import json
-import re
-import subprocess
-import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 from conftest import run_taskq, tasks_json_path
-from taskq import INJECTION_CHARS
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +125,7 @@ def test_nfr03_atomic_write_crash_safety(tmp_path, monkeypatch):
     # Verify the persisted file is valid JSON.
     raw = tasks_json_path(tmp_path).read_text(encoding="utf-8")
     try:
-        parsed = json.loads(raw)
+        json.loads(raw)
         json_valid = True
     except json.JSONDecodeError:
         json_valid = False

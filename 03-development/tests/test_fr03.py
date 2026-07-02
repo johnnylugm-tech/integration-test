@@ -475,7 +475,7 @@ def test_fr03_sub_assertions_mirror(taskq_env, taskq_home):
 
     # ── AC-FR03-clear-empty [case 26] ───────────────────────────────────
     if cmd == "echo hi":
-        assert result.json_valid == False
+        assert not result.json_valid
 
     # ── AC-FR03-json-single-line [case 27] ──────────────────────────────
     if cmd == "echo hi":

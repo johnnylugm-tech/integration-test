@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "e99253598d8404cb3282065810d6d23b7bd62aca",
-  "content_sha256": "d60eb08ad0ccd1fcf86de7afd8c5f454900a369245a98c24e544fa1dd4ae61d6",
+  "git_sha": "b8e81a0cc2607bba59afa475e3828ff5b63292b0",
+  "content_sha256": "df6549a4cecde666c2c78ae5f8e807fdc493314b8d5b44ac1d9e136368f8fee6",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -14,7 +14,7 @@
       "code_coverage": "100.0%",
       "test_coverage": "100.0%",
       "verification_rate": "100.0%",
-      "total_links": 30,
+      "total_links": 32,
       "missing_mappings": {
         "fr_without_srs": [],
         "fr_without_code": [],
@@ -61,12 +61,14 @@
           "03-development/src/taskq/executor.py",
           "03-development/src/taskq/models.py",
           "03-development/src/taskq/redact.py",
-          "03-development/tests/test_fr02_unit.py"
+          "03-development/tests/test_fr02_unit.py",
+          "03-development/tests/test_fr03_unit.py"
         ],
         "test_files": [
           "tests/integration/test_fr02.py",
           "tests/test_fr02.py",
-          "tests/test_fr02_unit.py"
+          "tests/test_fr02_unit.py",
+          "tests/test_fr03_unit.py"
         ],
         "sad_module": "executor.py",
         "priority": "HIGH"

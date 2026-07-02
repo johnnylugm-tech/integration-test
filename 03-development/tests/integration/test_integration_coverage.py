@@ -11,13 +11,6 @@ subprocess) is unchanged; this file exists only to satisfy the
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
-
-import pytest
-
-import taskq
 from taskq import redact as taskq_redact
 from taskq.__main__ import cmd_list, cmd_run, cmd_status, build_parser
 from taskq.config import retry_limit, task_timeout

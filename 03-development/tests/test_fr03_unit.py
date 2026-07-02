@@ -197,7 +197,7 @@ def test_unit_cmd_submit_corrupt_store(monkeypatch, tmp_path, capsys):
 
 def test_unit_cmd_submit_json_single_line(monkeypatch, tmp_path, capsys):
     """[FR-03] --json submit emits single-line JSON, no trailing newline."""
-    home = _seed_home(monkeypatch, tmp_path)
+    _seed_home(monkeypatch, tmp_path)
     ns = build_parser().parse_args(["submit", "--json", "echo hi"])
     rc = cmd_submit(ns)
     assert rc == 0
@@ -345,7 +345,7 @@ def test_unit_fr03_sub_assertions_mirror(monkeypatch, tmp_path):
         assert result.exit_code == 0
     # AC-FR03-clear-empty [case 26]
     if cmd == "echo hi":
-        assert result.json_valid == False
+        assert not result.json_valid
     # AC-FR03-json-single-line [case 27]
     if cmd == "echo hi":
         assert result.stdout.count(chr(10)) == 0
@@ -425,6 +425,94 @@ def test_unit_cmd_run_failed_returns_ok(monkeypatch, tmp_path, capsys):
     rc = _cmd_run_fn(ns)
     # Single-task mode: failed status → exit 0 (the failure is recorded on the task).
     assert rc == 0
+
+
+def test_unit_cmd_run_timeout_returns_4(monkeypatch, tmp_path, capsys):
+    """[FR-02] cmd_run on a terminal-timeout record returns exit 4 (covers line 223)."""
+    import taskq.__main__ as _main_mod
+    home = _seed_home(monkeypatch, tmp_path)
+    _seed_task(
+        home,
+        "abcd1234",
+        "sleep 60",
+        status="timeout",
+        attempts=3,
+        exit_code=None,
+    )
+    # run_task would re-run; for cmd_run's exit-code logic we short-circuit
+    # by monkeypatching run_task to return the persisted record directly.
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: {
+            "id": task_id,
+            "command": "sleep 60",
+            "status": "timeout",
+            "attempts": 3,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "exit_code": None,
+            "stdout_tail": "",
+            "stderr_tail": "",
+            "duration_ms": 10000,
+            "finished_at": "2026-01-01T00:00:10+00:00",
+        },
+    )
+    ns = build_parser().parse_args(["run", "abcd1234"])
+    rc = _cmd_run_fn(ns)
+    assert rc == 4  # EXIT_TIMEOUT
+    out = capsys.readouterr().out
+    rec = json.loads(out)
+    assert rec["status"] == "timeout"
+
+
+def test_unit_cmd_run_unhandled_emits_record(monkeypatch, tmp_path, capsys):
+    """[FR-02] UnhandledExecutionError with a persisted record → exit 1 + emit JSON record."""
+    import taskq.__main__ as _main_mod
+    from taskq.executor import UnhandledExecutionError
+    home = _seed_home(monkeypatch, tmp_path)
+    _seed_task(
+        home,
+        "abcd1234",
+        "boom",
+        status="failed",
+        attempts=1,
+        exit_code=1,
+    )
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: (_ for _ in ()).throw(
+            UnhandledExecutionError("boom")
+        ),
+    )
+    ns = build_parser().parse_args(["run", "abcd1234"])
+    rc = _cmd_run_fn(ns)
+    assert rc == 1
+    out = capsys.readouterr().out
+    rec = json.loads(out)
+    assert rec["id"] == "abcd1234"
+    assert rec["status"] == "failed"
+
+
+def test_unit_cmd_run_unexpected_exception(monkeypatch, tmp_path, capsys):
+    """[FR-02] Generic Exception from run_task → exit 1 + stderr (covers line 208-212)."""
+    import taskq.__main__ as _main_mod
+
+    class _Boom(RuntimeError):
+        pass
+
+    _seed_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: (_ for _ in ()).throw(_Boom("kaboom")),
+    )
+    ns = build_parser().parse_args(["run", "abcd1234"])
+    rc = _cmd_run_fn(ns)
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "_Boom" in err
+    assert "kaboom" in err
 
 
 # ---------------------------------------------------------------------------

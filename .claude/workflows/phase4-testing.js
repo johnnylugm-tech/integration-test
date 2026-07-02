@@ -471,7 +471,23 @@ for (let round = 1; round <= ADVANCE_MAX_ROUNDS; round++) {
     { label: 'advance-verify-r' + round, phase: 'Advance', agentType: 'general-purpose', schema: PHASE_SCHEMA },
   )
   advancePass = !!(advV && advV.current_phase >= 5)
-  if (advancePass) { log('  Advance PASS [harness-verified: state.json current_phase=' + advV.current_phase + ']'); break }
+  if (advancePass) {
+    log('  Advance PASS [harness-verified: state.json current_phase=' + advV.current_phase + ']')
+    // [Phase close cleanup] advance-phase only commits its own target paths
+    // (state.json, HANDOVER.md, CLAUDE.md, phase plan). Post-advance edits
+    // (pragma annotations, style fixes, test additions, deleted scaffolding)
+    // remain uncommitted, leaving a dirty tree for the next phase. Commit
+    // everything advance-phase didn't include. This agent is SCOPED to git
+    // housekeeping only — no code, no phase transitions.
+    await agent(
+      'Run ONE bash command and report its stdout/stderr:\n'
+      + '`git -C ' + REPO + ' add -A && git -C ' + REPO + ' commit -m "chore: phase 4 clean-up" || true`\n\n'
+      + 'Report: the verbatim stdout/stderr of that command.\n\n'
+      + 'SCOPE RULES:\n- DO NOT run any code, tests, or phase transitions.\n- ONLY the git commit above.',
+      { label: 'cleanup-r' + round, phase: 'Advance', agentType: 'general-purpose' },
+    )
+    break
+  }
   log('  Advance not yet PASS [state.json current_phase=' + (advV ? advV.current_phase : '?') + '] — retry round ' + (round + 1))
 }
 
