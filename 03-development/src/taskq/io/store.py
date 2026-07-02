@@ -63,25 +63,30 @@ def save_tasks(tasks: List[Dict[str, Any]]) -> None:
     data = json.dumps(payload, ensure_ascii=False, indent=2)
 
     # NamedTemporaryFile on the same filesystem guarantees os.replace is atomic.
-    fd, tmp_name = tempfile.mkstemp(
-        prefix=".tasks.", suffix=".json.tmp", dir=str(path.parent)
-    )
-    # mkstemp may return the fd successfully but raise on close-path; close
-    # the descriptor immediately and re-open by path so the try/finally owns
-    # the only the file lifecycle (reliability_lint py-mkstemp-outside-try
-    # was a false positive on the pre-refactor code; this restructure makes
-    # the invariant explicit — the tmp file is the only resource to clean).
-    os.close(fd)
+    # reliability_lint py-mkstemp-outside-try requires mkstemp INSIDE a
+    # try/finally (try/except alone is not accepted). Close the fd immediately
+    # and re-open by path so the only resource to clean is tmp_name.
+    tmp_name = ""
+    fd = -1
     try:
+        try:
+            fd, tmp_name = tempfile.mkstemp(
+                prefix=".tasks.", suffix=".json.tmp", dir=str(path.parent)
+            )
+        finally:
+            if fd >= 0:
+                os.close(fd)
         with open(tmp_name, "w", encoding="utf-8") as fh:
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp_name, path)
+        tmp_name = ""  # consumed by os.replace — nothing to clean up
     except Exception:
         # Best-effort cleanup of the orphan tmp; never let it shadow the real file.
-        try:
-            os.unlink(tmp_name)
-        except OSError:
-            pass
+        if tmp_name:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
         raise
