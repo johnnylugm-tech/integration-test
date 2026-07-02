@@ -1,7 +1,7 @@
 {
   "gate": 1,
   "phase": 4,
-  "fr_id": "FR-01",
+  "fr_id": "FR-02",
   "overall_score": 100.0,
   "quality_complete": true,
   "rounds_used": 1,
@@ -9,20 +9,20 @@
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "ruff check 03-development/src/ --extend-ignore RUF001,RUF002,RUF003\nAll checks passed!"
+      "tool_evidence": "All checks passed!"
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "pyright 03-development/src/ --outputjson\n{\"version\": \"1.1.409\", \"summary\": {\"filesAnalyzed\": 8, \"errorCount\": 0, \"warningCount\": 2, \"informationCount\": 0, \"timeInSec\": 0.287}}\n0 errors, 2 warnings (warnings in redact.py only, not FR-01 scope)"
+      "tool_evidence": "{\"version\": \"1.1.409\", \"summary\": {\"filesAnalyzed\": 8, \"errorCount\": 0, \"warningCount\": 2, \"informationCount\": 0}}"
     },
     "test_coverage": {
       "score": 100,
       "threshold": 80,
-      "tests_passed": 58,
+      "tests_passed": 30,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "coverage run -m pytest 03-development/tests/test_fr01.py && coverage report --include=\"03-development/src/taskq/models.py\"\ncollected 58 items\n03-development/tests/test_fr01.py ...................................... [ 65%]\n....................                                                     [100%]\n============================== 58 passed in 0.85s ==============================\nName                                 Stmts   Miss  Cover\n--------------------------------------------------------\n03-development/src/taskq/models.py      30      0   100%\nTOTAL                                   30      0   100%\nAll 16 required test functions present (16/16 = 100% spec coverage): test_fr01_submit_empty, test_fr01_submit_whitespace, test_fr01_submit_length_boundary, test_fr01_submit_injection_semicolon, test_fr01_submit_injection_pipe, test_fr01_submit_injection_amp, test_fr01_submit_injection_dollar, test_fr01_submit_injection_gt, test_fr01_submit_injection_lt, test_fr01_submit_injection_backtick, test_fr01_blacklist_chars_present, test_fr01_submit_valid, test_fr01_pending_state_record, test_fr01_atomic_write, test_fr01_corrupt_store_exit1, test_fr01_no_write_on_reject."
+      "tool_evidence": "============================== 30 passed in 1.03s ==============================\nName                                   Stmts   Miss  Cover\n03-development/src/taskq/executor.py      99      0   100%\nTOTAL                                     99      0   100%"
     }
   },
   "composite_score": 100.0,
