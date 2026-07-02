@@ -12,6 +12,7 @@ export const meta = {
   description: 'Phase 6 Quality — Gate 4 (14 dims + DA challenge) + Agent B peer review + release notes/sign-off + git tag (phase6_plan.md v2.12.0)',
   phases: [
     { title: 'Entry & Preflight' },
+    { title: 'Manifest Integrity' },
     { title: 'Gate 4' },
     { title: 'Release Docs' },
     { title: 'Peer Review' },
@@ -161,6 +162,31 @@ if (!(typeof preflightReport === 'string' && /PREFLIGHT:\s*PASS/.test(preflightR
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// Phase: Manifest Integrity (ported from phase3, 155ec07 + 286ccca)
+// ════════════════════════════════════════════════════════════════════════
+phase('Manifest Integrity')
+// 2026-07-02 incident class: a sub-agent action (bare pytest → harness test
+// CWD leak) can corrupt quality_manifest.json MID-RUN, not just before entry.
+// Detect the three known corruption patterns (fr_ids truncated, traceability
+// cleared, gate1 wiped) at entry AND re-check before the phase-exit push so
+// corruption is never baked into a milestone commit.
+const integrityCmd = PY + ' -c "import json, sys; m = json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); ids = m.get(\'fr_ids\') or []; mt = m.get(\'fr_module_traceability\') or {}; g1 = (m.get(\'gate_results\',{}) or {}).get(\'gate1\',{}) or {}; ok_ids = len(ids) >= 2; ok_trace = len(mt) >= len(ids); ok_g1 = isinstance(g1, dict) and len(g1) >= len(ids); print(\'OK\' if (ok_ids and ok_trace and ok_g1) else json.dumps({\'BROKEN\': True, \'fr_ids_count\': len(ids), \'traceability_count\': len(mt), \'gate1_keys\': len(g1), \'recovery\': \'git checkout HEAD -- .methodology/quality_manifest.json\'}))"'
+async function checkManifestIntegrity(phaseLabel, agentLabel) {
+  const raw = await agent(
+    'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + integrityCmd + '`',
+    { label: agentLabel, phase: phaseLabel, agentType: 'general-purpose' },
+  )
+  const ok = typeof raw === 'string' && /^OK$/.test(String(raw).trim())
+  if (!ok) log('  manifest integrity FAIL [' + agentLabel + ']: ' + String(raw ?? '').trim())
+  return { ok, raw: String(raw ?? '').trim() }
+}
+const integrity0 = await checkManifestIntegrity('Manifest Integrity', 'manifest-integrity')
+if (!integrity0.ok) {
+  return { error: 'Manifest Integrity: quality_manifest.json appears corrupted', detail: integrity0.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first)', note: 'Working-tree manifest fails the P4+ shape check (fr_ids/traceability/gate1 per-FR records). A sub-agent likely wrote to it directly. Restore a healthy copy and re-run.' }
+}
+log('  manifest integrity OK')
+
+// ════════════════════════════════════════════════════════════════════════
 // Phase: Gate 4 (run-gate → DA challenge A3 → eval 14 dims → finalize → D4 90%; HR-08)
 // ════════════════════════════════════════════════════════════════════════
 phase('Gate 4')
@@ -303,6 +329,13 @@ for (const v of peerVerdict.verdicts) {
 // ════════════════════════════════════════════════════════════════════════
 phase('Tag & Advance')
 log('git tag (Gate 4 score) + advance-phase --completed 6')
+// Last-line integrity guard: the phase-exit push commits .methodology/
+// wholesale — block here so mid-run corruption never reaches git history
+// (2026-07-02: commit 3198402 baked a corrupted manifest into main).
+const advIntegrity = await checkManifestIntegrity('Tag & Advance', 'advance-integrity')
+if (!advIntegrity.ok) {
+  return { error: 'Tag & Advance: quality_manifest.json corrupted mid-run — refusing to commit it', detail: advIntegrity.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first), merge the latest gate result back into gate_results, then resume', note: 'Blocking prevents the corruption from being committed by the phase-exit push.' }
+}
 const advanceReport = await agent(
   'YOU ARE THE PHASE-6 EXIT ORCHESTRATOR. Tag the Gate 4 release + advance to Phase 7.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'

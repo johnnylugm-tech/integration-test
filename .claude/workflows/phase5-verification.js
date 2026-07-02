@@ -16,6 +16,7 @@ export const meta = {
   phases: [
     { title: 'Entry & Preflight' },
     { title: 'Env Check' },
+    { title: 'Manifest Integrity' },
     { title: 'Load FRs' },
     { title: 'Per-FR Delta' },
     { title: 'Verification Docs' },
@@ -133,6 +134,31 @@ if (!(typeof envReport === 'string' && /ENV_CHECK_RC=0\b/.test(envReport))) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// Phase: Manifest Integrity (ported from phase3, 155ec07 + 286ccca)
+// ════════════════════════════════════════════════════════════════════════
+phase('Manifest Integrity')
+// 2026-07-02 incident class: a sub-agent action (bare pytest → harness test
+// CWD leak) can corrupt quality_manifest.json MID-RUN, not just before entry.
+// Detect the three known corruption patterns (fr_ids truncated, traceability
+// cleared, gate1 wiped) at entry AND re-check before the phase-exit push so
+// corruption is never baked into a milestone commit.
+const integrityCmd = PY + ' -c "import json, sys; m = json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')); ids = m.get(\'fr_ids\') or []; mt = m.get(\'fr_module_traceability\') or {}; g1 = (m.get(\'gate_results\',{}) or {}).get(\'gate1\',{}) or {}; ok_ids = len(ids) >= 2; ok_trace = len(mt) >= len(ids); ok_g1 = isinstance(g1, dict) and len(g1) >= len(ids); print(\'OK\' if (ok_ids and ok_trace and ok_g1) else json.dumps({\'BROKEN\': True, \'fr_ids_count\': len(ids), \'traceability_count\': len(mt), \'gate1_keys\': len(g1), \'recovery\': \'git checkout HEAD -- .methodology/quality_manifest.json\'}))"'
+async function checkManifestIntegrity(phaseLabel, agentLabel) {
+  const raw = await agent(
+    'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + integrityCmd + '`',
+    { label: agentLabel, phase: phaseLabel, agentType: 'general-purpose' },
+  )
+  const ok = typeof raw === 'string' && /^OK$/.test(String(raw).trim())
+  if (!ok) log('  manifest integrity FAIL [' + agentLabel + ']: ' + String(raw ?? '').trim())
+  return { ok, raw: String(raw ?? '').trim() }
+}
+const integrity0 = await checkManifestIntegrity('Manifest Integrity', 'manifest-integrity')
+if (!integrity0.ok) {
+  return { error: 'Manifest Integrity: quality_manifest.json appears corrupted', detail: integrity0.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first)', note: 'Working-tree manifest fails the P4+ shape check (fr_ids/traceability/gate1 per-FR records). A sub-agent likely wrote to it directly. Restore a healthy copy and re-run.' }
+}
+log('  manifest integrity OK')
+
+// ════════════════════════════════════════════════════════════════════════
 // Phase: Load FRs
 // ════════════════════════════════════════════════════════════════════════
 phase('Load FRs')
@@ -215,9 +241,25 @@ for (const frId of frIds) {
     + 'SCOPE RULES:\n- DO NOT touch any FR OTHER than ' + frId + '.\n- DO NOT run advance-phase / push-milestone / generate BASELINE docs.\n- DO NOT modify harness/.\n- ONLY GATE1-DELTA (+ full TDD if needed) for ' + frId + '.',
     { label: 'delta-' + frId, phase: 'Per-FR Delta', agentType: 'general-purpose' },
   )
-  const passed = typeof frReport === 'string' && new RegExp(frId + '\\s*GATE1:\\s*PASS').test(frReport)
-  if (passed) { gate1Pass.push(frId); log('  ' + frId + ' Gate 1 PASS') }
-  else { gate1Fail.push(frId); log('  ' + frId + ' Gate 1 FAIL') }
+  // L1 (ported from phase3): distinguish a session/rate-limit block (null/empty
+  // agent return) from a real Gate 1 FAIL — a rate-limit mid-DELTA must not be
+  // misreported as a code-quality failure. DELTA auto-skip makes resume safe.
+  if (frReport === null || frReport === undefined || (typeof frReport === 'string' && frReport.length < 10)) {
+    log('  ' + frId + ' agent blocked (session limit / rate limit) — aborting, resume after quota reset')
+    return { session_limit_blocked: true, phase: 5, fr_id: frId, gate1Pass, message: 'Agent hit session/rate limit during ' + frId + ' GATE1-DELTA. Resume after quota reset — completed FRs skip via DELTA auto-satisfy.' }
+  }
+  // AUTHORITATIVE Gate 1 verdict (ported from phase3, 9fe2036): read the harness
+  // quality_manifest — NOT the sub-agent's self-reported "GATE1: PASS" string. A
+  // sub-agent can report PASS even when finalize-gate raised GateBlockedError,
+  // silently advancing a FR the harness actually blocked (2026-06-30 incident).
+  const verifyCmd = PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'' + frId + '\',{}) or {}; print(\'GATE1_VERIFIED_PASS\' if g.get(\'quality_complete\') is True else \'GATE1_VERIFIED_FAIL score=\'+str(g.get(\'score\')))"'
+  const verdictRaw = await agent(
+    'Run EXACTLY this command via the Bash tool and return its raw stdout verbatim. No commentary.\n`' + verifyCmd + '`',
+    { label: 'gate1-verify-' + frId, phase: 'Per-FR Delta', agentType: 'general-purpose' },
+  )
+  const passed = typeof verdictRaw === 'string' && /GATE1_VERIFIED_PASS/.test(verdictRaw)
+  if (passed) { gate1Pass.push(frId); log('  ' + frId + ' Gate 1 PASS [harness-verified]') }
+  else { gate1Fail.push(frId); log('  ' + frId + ' Gate 1 FAIL [harness manifest qc != true; sub-agent self-report ignored]') }
 }
 if (gate1Fail.length) {
   return { error: 'Phase 5: Gate 1 FAILED for FR(s): ' + gate1Fail.join(', ') + ' (escalate)', gate1Pass, gate1Fail }
@@ -271,6 +313,13 @@ if (!(typeof milestoneReport === 'string' && /MILESTONE:\s*PASS/.test(milestoneR
 // ════════════════════════════════════════════════════════════════════════
 phase('Advance')
 log('D4 90% gap warning + advance-phase --completed 5 (TDD-PRECHECK enforced)')
+// Last-line integrity guard: the phase-exit push commits .methodology/
+// wholesale — block here so mid-run corruption never reaches git history
+// (2026-07-02: commit 3198402 baked a corrupted manifest into main).
+const advIntegrity = await checkManifestIntegrity('Advance', 'advance-integrity')
+if (!advIntegrity.ok) {
+  return { error: 'Advance: quality_manifest.json corrupted mid-run — refusing to commit it', detail: advIntegrity.raw, recovery: 'git checkout HEAD -- .methodology/quality_manifest.json (verify HEAD is healthy first), merge the latest gate result back into gate_results, then resume', note: 'Blocking prevents the corruption from being committed by the phase-exit push.' }
+}
 const advanceReport = await agent(
   'YOU ARE THE PHASE-5 EXIT ORCHESTRATOR. Advance to Phase 6.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
