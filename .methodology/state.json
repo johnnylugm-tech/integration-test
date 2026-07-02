@@ -5,8 +5,9 @@
   "last_fr": "FR-01",
   "last_update": "2026-07-02T18:28:00.713290+00:00",
   "phase_truth_passed": true,
-  "last_milestone_command": "advance-phase --completed-phase 3",
+  "last_milestone_command": "push-milestone --type p4-mid",
   "ci_readiness_ack": {
     "branch_protection": true
-  }
+  },
+  "last_milestone_at": "2026-07-02T22:50:43.008996+00:00"
 }
