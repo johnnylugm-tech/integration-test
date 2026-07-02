@@ -1,4 +1,4 @@
-import sqlite3, os, sys
+import sqlite3
 
 conn = sqlite3.connect("/Users/johnny/projects/integration-test/.coverage")
 cur = conn.cursor()

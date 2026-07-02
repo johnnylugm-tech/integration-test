@@ -1,4 +1,6 @@
-import os, sys, subprocess
+import os
+import sys
+import subprocess
 
 os.chdir("/Users/johnny/projects/integration-test")
 sys.path.insert(0, "03-development/src")

@@ -1,6 +1,5 @@
 """Helper: stage and commit lint fixes."""
 import subprocess
-import sys
 
 # Stage only src/ files (per task: git add 03-development/src/)
 r1 = subprocess.run(
