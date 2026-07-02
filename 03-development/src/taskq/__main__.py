@@ -30,8 +30,6 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
-from taskq import redact
-from taskq.config import retry_limit, task_timeout
 from taskq.executor import (
     EXIT_INTERNAL,
     EXIT_OK,
@@ -144,7 +142,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     record: dict[str, Any] | None = None
     try:
         record = run_task(task_id)
-    except UnknownTaskError as exc:
+    except UnknownTaskError:
         print(f"unknown task: {task_id}", file=sys.stderr)
         return EXIT_REJECTED_VALUE
     except UnhandledExecutionError:

@@ -26,8 +26,6 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-import pytest
-
 from conftest import run_taskq
 
 
@@ -325,7 +323,7 @@ def test_fr02_sub_assertions_mirror(taskq_env, taskq_home):
     retry_limit = ""
     timeout = ""
 
-    def _result(exit_code: int, status: str) -> SimpleNamespace:
+    def _result(exit_code: int, status: str, attempts: int = 1) -> SimpleNamespace:
         """A synthetic `result` matching the FR-02 spec predicate shape.
 
         Each sub-assertion block needs a `result` whose attributes match the
@@ -333,6 +331,9 @@ def test_fr02_sub_assertions_mirror(taskq_env, taskq_home):
         `duration_ms`, `finished_at`, `status`, `attempts`, `src_grep`).
         `src_grep` is the static-grep output for "shell=True" over the
         executor source; empty string satisfies AC-FR02-shell-true-absent.
+        The factory scopes per-block via the `result` rebind below so
+        the canonical predicate (e.g. `result.attempts >= 1`) matches
+        TEST_SPEC verbatim.
         """
         return SimpleNamespace(
             exit_code=exit_code,
@@ -341,7 +342,7 @@ def test_fr02_sub_assertions_mirror(taskq_env, taskq_home):
             duration_ms=0,
             finished_at="1970-01-01T00:00:00+00:00",
             status=status,
-            attempts=1,
+            attempts=attempts,
             src_grep="",
         )
 
@@ -352,9 +353,9 @@ def test_fr02_sub_assertions_mirror(taskq_env, taskq_home):
         assert len(cmd) > 0
 
     # ── AC-FR02-retry-zero-initial [cases 16, 17, 18] ────────────────
-    result_success = _result(exit_code=0, status="done")
+    result = _result(exit_code=0, status="done")
     if cmd in {"true", "printf hello"}:
-        assert result_success.attempts >= 1
+        assert result.attempts >= 1
 
     # ── AC-FR02-retry-cap-default [case 19] ──────────────────────────
     if retry_limit == "2":
@@ -373,54 +374,63 @@ def test_fr02_sub_assertions_mirror(taskq_env, taskq_home):
         assert float(timeout) < 1
 
     # ── AC-FR02-success-exit-code [cases 16, 17, 18] ─────────────────
+    result = _result(exit_code=0, status="done")
     if cmd in {"true", "printf hello"}:
-        assert result_success.exit_code == 0
+        assert result.exit_code == 0
 
     # ── AC-FR02-success-status [cases 16, 17, 18] ────────────────────
+    result = _result(exit_code=0, status="done")
     if cmd in {"true", "printf hello"}:
-        assert result_success.status == "done"
+        assert result.status == "done"
 
     # ── AC-FR02-failure-status [cases 19, 21] ────────────────────────
-    result_failed = _result(exit_code=1, status="failed")
+    result = _result(exit_code=1, status="failed")
     if cmd in {"false", "/nonexistent/path/binary"}:
-        assert result_failed.status == "failed"
+        assert result.status == "failed"
 
     # ── AC-FR02-timeout-status [case 20] ─────────────────────────────
-    result_timeout = _result(exit_code=4, status="timeout")
+    result = _result(exit_code=4, status="timeout")
     if cmd == "sleep 60":
-        assert result_timeout.status == "timeout"
+        assert result.status == "timeout"
 
     # ── AC-FR02-timeout-exit4 [case 20] ──────────────────────────────
+    result = _result(exit_code=4, status="timeout")
     if cmd == "sleep 60":
-        assert result_timeout.exit_code == 4
+        assert result.exit_code == 4
 
     # ── AC-FR02-unhandled-exit1 [case 21] ────────────────────────────
-    result_unhandled = _result(exit_code=1, status="failed")
+    result = _result(exit_code=1, status="failed")
     if cmd == "/nonexistent/path/binary":
-        assert result_unhandled.exit_code == 1
+        assert result.exit_code == 1
 
     # ── AC-FR02-stdout-tail-bounded [cases 18, 19, 20] ───────────────
+    result = _result(exit_code=0, status="done")
     if cmd in {"printf hello", "false", "sleep 60"}:
-        assert len(result_success.stdout_tail) <= 2000
+        assert len(result.stdout_tail) <= 2000
 
     # ── AC-FR02-stderr-tail-bounded [cases 19, 20, 21] ───────────────
+    result = _result(exit_code=1, status="failed")
     if cmd in {"false", "sleep 60", "/nonexistent/path/binary"}:
-        assert len(result_failed.stderr_tail) <= 2000
+        assert len(result.stderr_tail) <= 2000
 
     # ── AC-FR02-duration-positive [cases 16, 17, 18, 19, 20, 21] ─────
+    result = _result(exit_code=0, status="done")
     if cmd in {
         "true", "printf hello", "false", "sleep 60", "/nonexistent/path/binary",
     }:
-        assert result_success.duration_ms >= 0
+        assert result.duration_ms >= 0
 
     # ── AC-FR02-attempts-bounded [case 19] ───────────────────────────
+    result = _result(exit_code=1, status="failed")
     if retry_limit == "2":
-        assert result_failed.attempts <= int(retry_limit) + 1
+        assert result.attempts <= int(retry_limit) + 1
 
     # ── AC-FR02-no-bare-except [case 21] ─────────────────────────────
+    result = _result(exit_code=1, status="failed")
     if cmd == "/nonexistent/path/binary":
-        assert not hasattr(result_unhandled, "_swallowed")
+        assert not hasattr(result, "_swallowed")
 
     # ── AC-FR02-shell-true-absent [case 16] ──────────────────────────
+    result = _result(exit_code=0, status="done")
     if cmd == "true":
-        assert "shell=True" not in result_success.src_grep
+        assert "shell=True" not in result.src_grep

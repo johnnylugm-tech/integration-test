@@ -25,10 +25,9 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from taskq import redact
+from taskq.redact import redact as _redact_fn
 from taskq.config import retry_limit, task_timeout
 from taskq.store import (
-    EXIT_CORRUPT,
     StoreCorruptedError,
     atomic_write_tasks,
     load_tasks_or_die,
@@ -126,17 +125,17 @@ def _run_once(command: str, timeout: float) -> dict[str, Any]:
         duration_ms = int((time.monotonic() - started) * 1000)
         # `exc.stdout` / `exc.stderr` may be bytes or str depending on
         # capture mode; we passed text=True, so str.
-        stdout_partial = exc.stdout or ""
-        stderr_partial = exc.stderr or ""
+        stdout_partial = str(exc.stdout or "")
+        stderr_partial = str(exc.stderr or "")
         return {
             "status": "timeout",
             "exit_code": None,
-            "stdout_tail": redact.redact(_truncate_tail(stdout_partial)),
-            "stderr_tail": redact.redact(_truncate_tail(stderr_partial)),
+            "stdout_tail": _redact_fn(_truncate_tail(stdout_partial)),
+            "stderr_tail": _redact_fn(_truncate_tail(stderr_partial)),
             "duration_ms": duration_ms,
             "finished_at": _now_iso(),
         }
-    except (subprocess.SubprocessError, OSError) as exc:
+    except (subprocess.SubprocessError, OSError):
         # Other subprocess / OS-level errors (including FileNotFoundError
         # when the binary path is missing) propagate so `run_task` can
         # record the partial-failure state and re-raise as
@@ -152,8 +151,8 @@ def _run_once(command: str, timeout: float) -> dict[str, Any]:
     return {
         "status": status,
         "exit_code": rc,
-        "stdout_tail": redact.redact(_truncate_tail(proc.stdout or "")),
-        "stderr_tail": redact.redact(_truncate_tail(proc.stderr or "")),
+        "stdout_tail": _redact_fn(_truncate_tail(proc.stdout or "")),
+        "stderr_tail": _redact_fn(_truncate_tail(proc.stderr or "")),
         "duration_ms": duration_ms,
         "finished_at": _now_iso(),
     }
@@ -220,12 +219,11 @@ def run_task(task_id: str) -> dict[str, Any]:
             # retry-able failure (the path is fixed for this task). Mark
             # the task failed once, persist, then bubble up so the CLI
             # emits exit 1.
-            duration_ms = int(time.monotonic() * 1000) - 0  # best-effort
-            started_mono = time.monotonic() - 0
+            started_mono = time.monotonic()
             target["status"] = "failed"
             target["exit_code"] = None
             target["stdout_tail"] = ""
-            target["stderr_tail"] = redact.redact(
+            target["stderr_tail"] = _redact_fn(
                 _truncate_tail(f"{type(exc).__name__}: {exc}")
             )
             target["duration_ms"] = int((time.monotonic() - started_mono) * 1000)

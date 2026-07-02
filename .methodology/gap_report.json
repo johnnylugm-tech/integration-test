@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 12,
+    "total": 25,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 12,
+    "orphaned": 25,
     "critical": 0,
     "major": 0,
-    "minor": 12
+    "minor": 25
   },
   "gaps": [
     {
@@ -20,6 +20,12 @@
       "severity": "minor",
       "reason": "'cmd_list' has no corresponding specification in SPEC.md",
       "action": "Add spec for cmd_list or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_run' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_run or remove if unnecessary"
     },
     {
       "type": "ORPHANED",
@@ -44,6 +50,78 @@
       "severity": "minor",
       "reason": "'tasks_json_path' has no corresponding specification in SPEC.md",
       "action": "Add spec for tasks_json_path or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'task_timeout' has no corresponding specification in SPEC.md",
+      "action": "Add spec for task_timeout or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'retry_limit' has no corresponding specification in SPEC.md",
+      "action": "Add spec for retry_limit or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'UnknownTaskError' has no corresponding specification in SPEC.md",
+      "action": "Add spec for UnknownTaskError or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'TaskNotFoundError' has no corresponding specification in SPEC.md",
+      "action": "Add spec for TaskNotFoundError or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'UnhandledExecutionError' has no corresponding specification in SPEC.md",
+      "action": "Add spec for UnhandledExecutionError or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'run_task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for run_task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'make_task_id' has no corresponding specification in SPEC.md",
+      "action": "Add spec for make_task_id or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'now_iso' has no corresponding specification in SPEC.md",
+      "action": "Add spec for now_iso or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'Task' has no corresponding specification in SPEC.md",
+      "action": "Add spec for Task or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'to_dict' has no corresponding specification in SPEC.md",
+      "action": "Add spec for to_dict or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'from_dict' has no corresponding specification in SPEC.md",
+      "action": "Add spec for from_dict or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'redact' has no corresponding specification in SPEC.md",
+      "action": "Add spec for redact or remove if unnecessary"
     },
     {
       "type": "ORPHANED",

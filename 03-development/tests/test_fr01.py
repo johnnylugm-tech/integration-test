@@ -77,8 +77,6 @@ ID_LENGTH = 8
 ID_HEX_CHARS = set("0123456789abcdef")
 # SPEC §3 FR-01: 命令 > 1000 字元 → 拒絕 (canonical 1000 / 1001)
 LENGTH_LIMIT = 1000
-# SPEC §3 FR-01: 命令含 ; | & $ > < ` 任一 → 拒絕 (NFR-02)
-INJECTION_CHARS = set(";|&$><`")
 
 
 def _parse_json_output(proc) -> dict:
