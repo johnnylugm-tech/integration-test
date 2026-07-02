@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 25,
+    "total": 27,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 25,
+    "orphaned": 27,
     "critical": 0,
     "major": 0,
-    "minor": 25
+    "minor": 27
   },
   "gaps": [
     {
@@ -26,6 +26,18 @@
       "severity": "minor",
       "reason": "'cmd_run' has no corresponding specification in SPEC.md",
       "action": "Add spec for cmd_run or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_status' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_status or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'cmd_clear' has no corresponding specification in SPEC.md",
+      "action": "Add spec for cmd_clear or remove if unnecessary"
     },
     {
       "type": "ORPHANED",
