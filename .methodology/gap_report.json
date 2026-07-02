@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 26,
+    "total": 28,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 26,
+    "orphaned": 28,
     "critical": 0,
     "major": 0,
-    "minor": 26
+    "minor": 28
   },
   "gaps": [
     {
@@ -164,6 +164,18 @@
       "severity": "minor",
       "reason": "'format_list_json' has no corresponding specification in SPEC.md",
       "action": "Add spec for format_list_json or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'redact_line' has no corresponding specification in SPEC.md",
+      "action": "Add spec for redact_line or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'redact_text' has no corresponding specification in SPEC.md",
+      "action": "Add spec for redact_text or remove if unnecessary"
     }
   ]
 }
