@@ -103,6 +103,14 @@ const PHASE_SCHEMA = {
   properties: { current_phase: { type: 'integer', description: 'current_phase value read from state.json' } },
   required: ['current_phase'],
 }
+const DELTA_FAST_SCHEMA = {
+  type: 'object',
+  properties: {
+    pass_fr_ids: { type: 'array', items: { type: 'string' }, description: 'FRs whose manifest gate1 quality_complete printed True after GATE1-DELTA' },
+    fail_fr_ids: { type: 'array', items: { type: 'string' }, description: 'FRs that did not print True (False/None/timeout/error)' },
+  },
+  required: ['pass_fr_ids', 'fail_fr_ids'],
+}
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Entry & Preflight (incl. reliability lint + config liveness — P4+ blocking)
@@ -262,7 +270,34 @@ const gate1Pass = []
 const gate1Fail = []
 let p4MidPushed = false
 const p4MidThreshold = Math.ceil(frIds.length / 2)  // PUSH ⑤ trigger: ≥50% FRs Gate 1 PASS
-for (const frId of frIds) {
+// DELTA fast-path: probe every FR's GATE1-DELTA through the harness CLI in ONE
+// agent — unchanged-code FRs pass immediately inside the CLI, so N already-PASS
+// FRs cost 1 spawn instead of 2N (delta + verify). Verdict authority is the same
+// manifest qc read as gate1-verify below (NOT the agent's self-report). FRs not
+// immediately passing fall through to the full per-FR loop unchanged.
+let deltaTodo = frIds
+const fastProbe = await agent(
+  'YOU ARE THE GATE1-DELTA FAST-PATH PROBE. Classify each FR — fix NOTHING.\n'
+  + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\nFRs: ' + JSON.stringify(frIds) + '\n\n'
+  + 'For EACH FR in order, substituting <FR> with the FR id:\n'
+  + '1. `timeout 180 ' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 4 --fr-id <FR> --step GATE1-DELTA --project ' + REPO + ' 2>&1 | tail -5`\n'
+  + '2. Authoritative verdict: `' + PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'<FR>\',{}) or {}; print(g.get(\'quality_complete\'))"`\n'
+  + '   stdout `True` → pass_fr_ids; anything else (False/None/timeout/error) → fail_fr_ids.\n\n'
+  + 'HARD RULES:\n- DO NOT fix code, edit files, or run TDD steps.\n- DO NOT retry a failing FR — classify it and move on (the full loop handles it).\n- DO NOT run run-gate / bug-hunt / advance-phase / push-milestone.\n- DO NOT modify harness/.\n\n'
+  + 'Report via the StructuredOutput tool: pass_fr_ids + fail_fr_ids (every FR in exactly one list).',
+  { label: 'delta-fastpath', phase: 'Per-FR Delta', agentType: 'general-purpose', schema: DELTA_FAST_SCHEMA },
+)
+if (fastProbe && Array.isArray(fastProbe.pass_fr_ids)) {
+  const fastPassed = fastProbe.pass_fr_ids.filter((f) => frIds.includes(f))
+  for (const fr of fastPassed) {
+    gate1Pass.push(fr)
+    log('  ' + fr + ' GATE1-DELTA fast-path PASS [manifest qc] — full DELTA skipped')
+  }
+  deltaTodo = frIds.filter((f) => !fastPassed.includes(f))
+} else {
+  log('  delta-fastpath unavailable — falling back to full per-FR loop')
+}
+for (const frId of deltaTodo) {
   log('  === ' + frId + ' — GATE1-DELTA ===')
   const frReport = await agent(
     'YOU ARE THE TEST VERIFIER for ' + frId + ' (' + (frTitle[frId] || '') + '). Re-evaluate Gate 1 for THIS ONE FR.\n'
