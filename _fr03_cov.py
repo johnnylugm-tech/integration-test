@@ -1,4 +1,5 @@
-import os, subprocess
+import os
+import subprocess
 os.chdir("/Users/johnny/projects/integration-test")
 r = subprocess.run(
     ["pytest", "03-development/tests/test_fr03.py", "--cov=03-development/src",

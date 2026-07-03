@@ -1,13 +1,14 @@
-import sys, os
+import sys
+import os
 sys.path.insert(0, "/Users/johnny/projects/integration-test")
 os.chdir("/Users/johnny/projects/integration-test")
 
 # Use coverage programmatically + pytest.main
-import coverage
+import coverage  # noqa: E402
 cov = coverage.Coverage(source=["03-development/src"], data_suffix=True)
 cov.start()
 
-import importlib
+import importlib  # noqa: E402
 mod = importlib.import_module("pytest")
 rc = mod.main([
     "03-development/tests/test_fr03.py",
