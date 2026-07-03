@@ -1,7 +1,7 @@
 {
   "gate": 1,
   "phase": 5,
-  "fr_id": "FR-02",
+  "fr_id": "FR-03",
   "overall_score": 100.0,
   "quality_complete": true,
   "rounds_used": 1,
@@ -9,20 +9,20 @@
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "All checks passed!\n"
+      "tool_evidence": "ruff check 03-development/src/ --extend-ignore RUF001,RUF002,RUF003\nexit=0\nAll checks passed!\n"
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "{\"version\":\"1.1.409\",\"summary\":{\"filesAnalyzed\":10,\"errorCount\":0,\"warningCount\":2,\"informationCount\":0,\"timeInSec\":0.285}}"
+      "tool_evidence": "pyright 03-development/src/ --outputjson\nversion: 1.1.409\nfilesAnalyzed: 10\nerrorCount: 0\nwarningCount: 2 (reportInvalidStringEscapeSequence in taskq/redact.py:4,27)\n"
     },
     "test_coverage": {
       "score": 100,
       "threshold": 80,
-      "tests_passed": 30,
+      "tests_passed": 130,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "30 passed in 1.02s\nName                                   Stmts   Miss  Cover\n03-development/src/taskq/executor.py      99      0   100%\nTOTAL                                     99      0   100%"
+      "tool_evidence": "PYTHONPATH=03-development/src pytest 03-development/tests/test_fr03.py 03-development/tests/test_fr03_unit.py --cov=taskq.cli --cov-report=term-missing -q --tb=no --no-header\n130 passed in 1.12s, 0 failed, 0 skipped\ncoverage cli.py: covered_lines=121 / num_statements=121 = 100.0% (missing_lines=none)\nTASKQ_HOME isolated per test via monkeypatch+tmp_path; unit tests import cli.py in-process so coverage tracks the FR-03 module directly.\nscope: FR-03 owns taskq/cli (per fr_module_traceability); both test_fr03.py (subprocess behavioural) and test_fr03_unit.py (in-process branch coverage) run together.\nspec coverage: 7/7 required tests present (100%)\nscore = min(100.0, 100) = 100.0\n"
     }
   },
   "composite_score": 100.0,

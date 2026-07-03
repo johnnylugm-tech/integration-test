@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import subprocess, sys
+import subprocess
+import sys
 r = subprocess.run([sys.executable, "-m", "ruff", "check", "03-development/src/", "--extend-ignore", "RUF001,RUF002,RUF003"], capture_output=True, text=True, cwd="/Users/johnny/projects/integration-test")
 sys.stdout.write(r.stdout)
 sys.stdout.write("---STDERR---\n")

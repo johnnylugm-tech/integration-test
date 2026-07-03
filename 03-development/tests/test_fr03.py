@@ -958,6 +958,41 @@ def test_fr03_config_task_timeout_invalid_falls_back(monkeypatch):
     assert task_timeout() == 10.0
 
 
+def test_fr03_config_task_timeout_empty_string_default(monkeypatch):
+    """[FR-03 unit] task_timeout returns 10.0 on empty-string env value.
+
+    Covers config.py line 52 (`raw == ""` short-circuit on the
+    task_timeout read path).
+    """
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "")
+    from taskq.config import task_timeout
+
+    assert task_timeout() == 10.0
+
+
+def test_fr03_config_task_timeout_explicit(monkeypatch):
+    """[FR-03 unit] task_timeout parses a valid float env value.
+
+    Covers config.py line 55 (the `return float(raw)` success branch
+    that the existing tests only exercised through the default path).
+    """
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "3.5")
+    from taskq.config import task_timeout
+
+    assert task_timeout() == 3.5
+
+
+def test_fr03_config_retry_limit_explicit(monkeypatch):
+    """[FR-03 unit] retry_limit parses a valid int env value.
+
+    Covers config.py line 73 (the `return int(raw)` success branch).
+    """
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "5")
+    from taskq.config import retry_limit
+
+    assert retry_limit() == 5
+
+
 def test_fr03_config_retry_limit_invalid_falls_back(monkeypatch):
     """[FR-03 unit] retry_limit falls back to 2 on ValueError (covers line 74)."""
     monkeypatch.setenv("TASKQ_RETRY_LIMIT", "not-an-int")
@@ -972,3 +1007,672 @@ def test_fr03_config_taskq_home_default(monkeypatch, tmp_path):
     from taskq.config import taskq_home
 
     assert taskq_home().name == ".taskq"
+
+
+# ---------------------------------------------------------------------------
+# executor.py — OSError / SubprocessError branch (covers lines 138-143)
+# These are reachable through the real CLI when subprocess.run raises an
+# OSError subclass that is NOT FileNotFoundError (PermissionError,
+# IsADirectoryError, etc.) or a SubprocessError subclass. The branch is a
+# bare `raise` — the error then propagates up to run_task / cmd_run and is
+# mapped to CLI exit 1.
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_run_task_os_error_propagates(monkeypatch, tmp_path):
+    """[FR-03 unit] run_task with a generic OSError from subprocess.run re-raises.
+
+    Covers executor.py lines 138-143: the `_run_once` `except
+    (subprocess.SubprocessError, OSError): raise` branch. FileNotFoundError
+    is caught separately at line 217 (→ persisted failure record +
+    UnhandledExecutionError); a non-FileNotFoundError OSError (e.g.
+    PermissionError) is re-raised by `_run_once` and bubbles out of
+    `run_task` unmodified.
+    """
+    import subprocess as _subprocess
+
+    from taskq.executor import _run_once
+
+    monkeypatch.setattr(
+        _subprocess,
+        "run",
+        lambda *a, **kw: (_ for _ in ()).throw(PermissionError(13, "denied")),
+    )
+    with pytest.raises(PermissionError):
+        _run_once("echo hi", timeout=5.0)
+
+
+def test_fr03_cmd_run_os_error_returns_internal(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_run on a non-FileNotFoundError OSError → exit 1 + stderr.
+
+    Covers cli.py's bare `except Exception` branch in `cmd_run` for an
+    OSError that escaped from `run_task` via executor.py lines 138-143.
+    """
+    import taskq.__main__ as _main_mod
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    _seed_record(home, "abcd1234", "echo hi", status="pending")
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: (_ for _ in ()).throw(PermissionError(13, "denied")),
+    )
+    ns = build_parser().parse_args(["run", "abcd1234"])
+    rc = cmd_run(ns)
+    assert rc == 1  # EXIT_INTERNAL
+    err = capsys.readouterr().err
+    assert "PermissionError" in err
+
+
+# ---------------------------------------------------------------------------
+# store.py — append_task happy path under a fresh TASKQ_HOME
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_store_append_task_writes_record(monkeypatch, tmp_path):
+    """[FR-03 unit] store.append_task persists the new record + returns its id.
+
+    Covers store.py lines 78-84 (append_task body: load → append →
+    atomic_write_tasks).
+    """
+    from taskq.store import append_task as _append_direct
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    rec = {
+        "id": "abcd1234",
+        "command": "echo hi",
+        "status": "pending",
+        "attempts": 0,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "exit_code": None,
+        "stdout_tail": "",
+        "stderr_tail": "",
+        "duration_ms": None,
+        "finished_at": None,
+    }
+    returned = _append_direct(rec)
+    assert returned == "abcd1234"
+    on_disk = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    assert on_disk == [rec]
+
+
+# ---------------------------------------------------------------------------
+# query.py — status lookup happy path
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_query_status_known_id(monkeypatch, tmp_path):
+    """[FR-03 unit] query.status returns the persisted record for a known id.
+
+    Covers query.py lines 41-61 (status body: load → iterate → match).
+    """
+    from taskq.query import status as _query_status
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    seeded = _seed_record(home, "abcd1234", "echo hi", status="done")
+    rec = _query_status("abcd1234")
+    assert rec["id"] == seeded["id"]
+    assert rec["status"] == "done"
+
+
+def test_fr03_query_list_tasks_truncates(monkeypatch, tmp_path):
+    """[FR-03 unit] query.list_tasks truncates each command to 50 chars.
+
+    Covers query.py lines 64-86 (list_tasks body — including the
+    isinstance(record, dict) check that filters non-dict records).
+    """
+    from taskq.query import list_tasks as _query_list
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    long_cmd = "a" * 200
+    _seed_record(home, "abcd1234", command=long_cmd)
+    out = _query_list()
+    assert isinstance(out, list) and len(out) == 1
+    assert len(out[0]["command"]) == 50
+    assert out[0]["command"] == "a" * 50
+
+
+# ---------------------------------------------------------------------------
+# redact.py — empty / non-matching input branches (defensive coverage)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_redact_none_returns_none(monkeypatch):
+    """[FR-03 unit] redact of empty string returns empty (covers the if-not-text branch)."""
+    from taskq.redact import redact as _redact_direct
+
+    assert _redact_direct("") == ""
+
+
+def test_fr03_redact_no_match_passthrough(monkeypatch):
+    """[FR-03 unit] redact of safe text leaves content unchanged (no-match branch)."""
+    from taskq.redact import redact as _redact_direct
+
+    out = _redact_direct("hello world\nsafe line\n")
+    assert out == "hello world\nsafe line\n"
+
+
+# ---------------------------------------------------------------------------
+# validation.py — overlong / whitespace / accepted branches
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_validate_command_branches(monkeypatch):
+    """[FR-03 unit] validate_command covers all rejection branches + accepted branch."""
+    from taskq.validation import validate_command as _validate_direct
+
+    assert _validate_direct("") is not None  # empty
+    assert _validate_direct("   \t\n") is not None  # whitespace
+    assert _validate_direct("a" * 1001) is not None  # overlong
+    assert _validate_direct("echo a;b") is not None  # injection
+    assert _validate_direct("echo hi") is None  # accepted
+
+
+# ---------------------------------------------------------------------------
+# config.py — taskq_home with TASKQ_HOME explicitly set
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_config_taskq_home_explicit(monkeypatch, tmp_path):
+    """[FR-03 unit] taskq_home returns $TASKQ_HOME verbatim when set (covers config.py line 33-34 branch)."""
+    from taskq.config import taskq_home
+
+    target = tmp_path / "my_taskq_home"
+    monkeypatch.setenv("TASKQ_HOME", str(target))
+    assert taskq_home() == target.expanduser()
+
+
+# ---------------------------------------------------------------------------
+# models.py — make_task_id direct coverage (also exercised through cmd_submit)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_make_task_id_format(monkeypatch):
+    """[FR-03 unit] make_task_id returns exactly 8 lowercase hex chars.
+
+    Covers models.py lines 44-49.
+    """
+    from taskq.models import make_task_id
+
+    for _ in range(20):
+        tid = make_task_id()
+        assert len(tid) == 8
+        assert all(c in "0123456789abcdef" for c in tid)
+
+
+# ---------------------------------------------------------------------------
+# cli.py — coverage for branches not exercised above
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_cmd_list_corrupt_store(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_list against a corrupt tasks.json → exit 1 + stderr.
+
+    Covers cli.py lines 122-126 (QueryError branch in cmd_list: prints
+    'store corrupted' to stderr and returns EXIT_CORRUPT).
+    """
+    from taskq.cli import cmd_list
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    ns = build_parser().parse_args(["list"])
+    rc = cmd_list(ns)
+    assert rc == EXIT_CORRUPT
+    err = capsys.readouterr().err
+    assert "store corrupted" in err
+
+
+def test_fr03_cmd_run_unhandled_defensive_unknown_task(
+    monkeypatch, tmp_path, capsys
+):
+    """[FR-03 unit] cmd_run with UnhandledExecutionError + UnknownTaskError on reload.
+
+    Covers cli.py lines 173-177 (defensive: executor persists under a
+    different id). The query_status call inside the except branch raises
+    UnknownTaskError; the CLI prints the defensive 'internal error:
+    unhandled, task {id} not persisted' stderr message and returns
+    EXIT_INTERNAL.
+    """
+    from taskq.executor import UnknownTaskError as _UnknownTaskError
+
+    import taskq.__main__ as _main_mod
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: (_ for _ in ()).throw(
+            UnhandledExecutionError("explode")
+        ),
+    )
+    # Patch query.status inside the cli module scope to raise UnknownTaskError
+    # so the defensive `except UnknownTaskError` branch fires.
+    import taskq.cli as _cli_mod
+    monkeypatch.setattr(
+        _cli_mod,
+        "query_status",
+        lambda task_id: (_ for _ in ()).throw(_UnknownTaskError(task_id)),
+    )
+    ns = build_parser().parse_args(["run", "abcd1234"])
+    rc = cmd_run(ns)
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "internal error" in err
+    assert "abcd1234" in err
+
+
+def test_fr03_cmd_clear_dispatch(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_clear explicitly dispatches to query.clear (covers cli.py 235-244).
+
+    The existing test_fr03_main_routes_clear covers the main() dispatch
+    path; this test covers the cmd_clear body directly so coverage sees
+    lines 235-244 of cli.py (including the `del args` placeholder).
+    """
+    from taskq.cli import cmd_clear
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    # Seed the store with content so clear has something to empty.
+    (home / "tasks.json").write_text("[]", encoding="utf-8")
+    ns = build_parser().parse_args(["clear"])
+    rc = cmd_clear(ns)
+    assert rc == 0
+    # clear writes back an empty list.
+    assert json.loads((home / "tasks.json").read_text(encoding="utf-8")) == []
+
+
+# ---------------------------------------------------------------------------
+# executor.py — additional branches not exercised by the integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_run_once_parse_error_returns_failed(monkeypatch):
+    """[FR-03 unit] _run_once with shlex-parse-failing command returns failed.
+
+    Covers executor.py lines 102-113 (shlex.split ValueError → returns a
+    'failed' partial result with `_error='parse'`, NOT retried).
+    """
+    from taskq.executor import _run_once
+
+    # Unbalanced quote → shlex.split raises ValueError immediately.
+    bad_cmd = "echo 'unterminated"
+    result = _run_once(bad_cmd, timeout=5.0)
+    assert result["status"] == "failed"
+    assert result["_error"] == "parse"
+    assert "parse error" in result["stderr_tail"]
+    assert result["exit_code"] is None
+
+
+def test_fr03_run_once_timeout(monkeypatch):
+    """[FR-03 unit] _run_once honors subprocess.run's timeout → returns 'timeout'.
+
+    Covers executor.py lines 124-137 (subprocess.TimeoutExpired branch:
+    captures partial stdout/stderr tails, marks status='timeout', records
+    duration_ms). The existing integration tests reach this path
+    indirectly via cmd_run; this unit test pins the inner behavior.
+    """
+    from taskq.executor import _run_once
+
+    # `sleep 0.5` guarantees the subprocess is still running when the
+    # 0.05s timeout fires.
+    result = _run_once("sleep 0.5", timeout=0.05)
+    assert result["status"] == "timeout"
+    assert result["exit_code"] is None
+    assert result["duration_ms"] >= 0
+    assert result["finished_at"]
+
+
+def test_fr03_run_task_corrupt_store_re_raises(monkeypatch, tmp_path):
+    """[FR-03 unit] run_task surfaces StoreCorruptedError on a corrupt store.
+
+    Covers executor.py lines 187-188 (the `except StoreCorruptedError: raise`
+    branch — load failures propagate up to cmd_run which maps them to
+    CLI exit 1).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    with pytest.raises(StoreCorruptedError):
+        run_task("deadbeef")
+
+
+# ---------------------------------------------------------------------------
+# store.py — JSON-decode-error path (lines 49-51)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_store_load_json_decode_error_raises(monkeypatch, tmp_path):
+    """[FR-03 unit] load_tasks_or_die raises StoreCorruptedError on invalid JSON.
+
+    Covers store.py lines 49-51 (json.loads raising JSONDecodeError is
+    re-raised as StoreCorruptedError). The non-list-top-level case is
+    covered by test_fr03_store_load_non_list_top_level_raises.
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    # Trailing garbage that is not valid JSON but parses "as far as it
+    # can" with json.JSONDecodeError rather than silently succeeding.
+    (home / "tasks.json").write_text("[{]", encoding="utf-8")
+    with pytest.raises(StoreCorruptedError):
+        load_tasks_or_die()
+
+
+# ---------------------------------------------------------------------------
+# config.py — retry_limit default branch (line 71)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_config_retry_limit_default(monkeypatch):
+    """[FR-03 unit] retry_limit returns 2 when TASKQ_RETRY_LIMIT is unset."""
+    monkeypatch.delenv("TASKQ_RETRY_LIMIT", raising=False)
+    from taskq.config import retry_limit
+
+    assert retry_limit() == 2
+
+
+def test_fr03_config_retry_limit_empty_string_default(monkeypatch):
+    """[FR-03 unit] retry_limit returns 2 on empty-string env value (covers the
+    `raw == ""` branch at config.py line 70)."""
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "")
+    from taskq.config import retry_limit
+
+    assert retry_limit() == 2
+
+
+# ---------------------------------------------------------------------------
+# query.list_tasks — command-non-string defensive branch (covers lines 81-85)
+# This is reached when a persisted record has a non-string 'command' value
+# (e.g. None or an int). The codebase never produces such records, but the
+# defensive isinstance check must not crash if one slips through.
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_query_list_skips_non_dict_records(monkeypatch, tmp_path):
+    """[FR-03 unit] query.list_tasks handles non-dict records without crashing.
+
+    Covers query.py lines 78-80 (defensive `not isinstance(record, dict)`
+    branch — passes the record through unchanged) AND the subsequent
+    `isinstance(cmd_val, str)` check that skips the [:50] truncation when
+    the command value is not a string.
+    """
+    from taskq.query import list_tasks as _query_list
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    # A list mixing a normal record, a non-dict record, and a record whose
+    # `command` is not a string. All three paths must survive the projection
+    # without crashing.
+    records = [
+        {
+            "id": "abcd1234",
+            "command": "a" * 200,
+            "status": "pending",
+            "attempts": 0,
+            "created_at": "2026-01-01T00:00:00+00:00",
+        },
+        "string-record-not-dict",  # not isinstance(record, dict)
+        {
+            "id": "ef567890",
+            "command": None,  # isinstance(cmd_val, str) is False
+            "status": "pending",
+            "attempts": 0,
+            "created_at": "2026-01-01T00:00:00+00:00",
+        },
+    ]
+    (home / "tasks.json").write_text(
+        json.dumps(records), encoding="utf-8"
+    )
+    out = _query_list()
+    assert isinstance(out, list) and len(out) == 3
+    # First record truncated to 50 chars.
+    assert out[0]["command"] == "a" * 50
+    # Non-dict record passes through unchanged.
+    assert out[1] == "string-record-not-dict"
+    # Non-string command value preserved verbatim.
+    assert out[2]["command"] is None
+
+
+# ---------------------------------------------------------------------------
+# cli.py — backward-compat `_generate_task_id` alias (covers line 63-68)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_generate_task_id_alias(monkeypatch):
+    """[FR-03 unit] _generate_task_id is a thin alias to make_task_id (cli.py 63-68)."""
+    from taskq.cli import _generate_task_id
+
+    for _ in range(10):
+        tid = _generate_task_id()
+        assert len(tid) == 8
+        assert all(c in "0123456789abcdef" for c in tid)
+
+
+# ---------------------------------------------------------------------------
+# store.atomic_write_tasks — happy path direct coverage (covers lines 57-75)
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_atomic_write_tasks_creates_file(monkeypatch, tmp_path):
+    """[FR-03 unit] atomic_write_tasks writes tasks.json with the provided list.
+
+    Covers store.py lines 57-75 (tmp + os.replace path under a fresh
+    TASKQ_HOME with no pre-existing tasks.json).
+    """
+    from taskq.store import atomic_write_tasks as _atomic_write_direct
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    tasks = [
+        {
+            "id": "abcd1234",
+            "command": "echo hi",
+            "status": "pending",
+            "attempts": 0,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "exit_code": None,
+            "stdout_tail": "",
+            "stderr_tail": "",
+            "duration_ms": None,
+            "finished_at": None,
+        }
+    ]
+    _atomic_write_direct(tasks, "abcd1234")
+    on_disk = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    assert on_disk == tasks
+
+
+def test_fr03_atomic_write_tasks_overwrites_existing(
+    monkeypatch, tmp_path
+):
+    """[FR-03 unit] atomic_write_tasks replaces existing tasks.json atomically.
+
+    Covers store.py's tmp-then-os.replace path when the target file
+    already exists (lines 75 `os.replace` replaces in place).
+    """
+    from taskq.store import atomic_write_tasks as _atomic_write_direct
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    # Pre-populate the file.
+    (home / "tasks.json").write_text("[]", encoding="utf-8")
+    tasks = [
+        {
+            "id": "ef567890",
+            "command": "echo world",
+            "status": "pending",
+            "attempts": 0,
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+    ]
+    _atomic_write_direct(tasks, "ef567890")
+    on_disk = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    assert on_disk == tasks
+
+
+# ---------------------------------------------------------------------------
+# query.status / query.clear — explicit unit coverage
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_query_status_unknown_id(monkeypatch, tmp_path):
+    """[FR-03 unit] query.status raises UnknownTaskError for unknown ids."""
+    from taskq.executor import UnknownTaskError
+
+    from taskq.query import status as _query_status
+
+    _isolate_home(monkeypatch, tmp_path)
+    with pytest.raises(UnknownTaskError):
+        _query_status("deadbeef")
+
+
+def test_fr03_query_status_corrupt_store_raises(monkeypatch, tmp_path):
+    """[FR-03 unit] query.status raises QueryError on a corrupted store.
+
+    Covers the catch-and-rethrow branch in query.status (lines 53-56)
+    that maps StoreCorruptedError to QueryError.
+    """
+    from taskq.query import QueryError, status as _query_status
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("not-valid-json{", encoding="utf-8")
+    with pytest.raises(QueryError):
+        _query_status("deadbeef")
+
+
+def test_fr03_query_clear_creates_empty_file(monkeypatch, tmp_path):
+    """[FR-03 unit] query.clear writes [] to a fresh tasks.json."""
+    from taskq.query import clear as _query_clear
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    # Pre-populate with content so clear() has something to empty.
+    (home / "tasks.json").write_text(
+        json.dumps([{"id": "abcd1234"}]), encoding="utf-8"
+    )
+    _query_clear()
+    on_disk = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    assert on_disk == []
+
+
+# ---------------------------------------------------------------------------
+# cmd_list — happy path (covers lines 112-128) when the store is well-formed
+# but contains a 200-char command to exercise the truncation projection.
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_cmd_list_truncation_via_cli(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_list writes JSON with truncated commands on stdout.
+
+    Covers cli.py lines 127-128 (the JSON emit line + return).
+    """
+    from taskq.cli import cmd_list
+
+    home = _isolate_home(monkeypatch, tmp_path)
+    _seed_record(
+        home,
+        "abcd1234",
+        command="a" * 200,
+    )
+    ns = build_parser().parse_args(["list"])
+    rc = cmd_list(ns)
+    assert rc == 0
+    out = capsys.readouterr().out
+    items = json.loads(out)
+    assert isinstance(items, list) and len(items) == 1
+    assert len(items[0]["command"]) == 50
+
+
+# ---------------------------------------------------------------------------
+# cmd_submit happy path direct (covers lines 85-109) and missing-task branch
+# of store.update_task fallback (executor.ensure_task-loaded path).
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_cmd_submit_happy_path(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] cmd_submit happy path emits single-line JSON on stdout.
+
+    Covers cli.py lines 85-109 (record construction + atomic_write_tasks +
+    JSON-or-text emission).
+    """
+    from taskq.cli import cmd_submit
+
+    _isolate_home(monkeypatch, tmp_path)
+    ns = build_parser().parse_args(["submit", "--json", "echo hi"])
+    rc = cmd_submit(ns)
+    assert rc == 0
+    out = capsys.readouterr().out
+    # Single-line JSON, no trailing newline.
+    assert out.count("\n") == 0
+    rec = json.loads(out)
+    assert rec["status"] == "pending"
+    assert rec["command"] == "echo hi"
+
+
+# ---------------------------------------------------------------------------
+# load_tasks_or_die — also covers path-exists short-circuit when file is an
+# empty-but-non-json file (i.e. an empty tasks.json should return []).
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_store_load_empty_file_returns_empty(monkeypatch, tmp_path):
+    """[FR-03 unit] load_tasks_or_die returns [] when tasks.json is empty.
+
+    Covers store.py lines 46-47 (path.exists() short-circuit + return []).
+    """
+    home = _isolate_home(monkeypatch, tmp_path)
+    (home / "tasks.json").write_text("", encoding="utf-8")
+    assert load_tasks_or_die() == []
+
+
+# ---------------------------------------------------------------------------
+# main() — full happy-path through every subcommand (covers lines 279-294
+# where the dispatch `if/elif` chains fire).
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_main_dispatch_chain(monkeypatch, tmp_path, capsys):
+    """[FR-03 unit] main() routes every subcommand through its respective cmd_*."""
+    home = _isolate_home(monkeypatch, tmp_path)
+    _seed_record(home, "abcd1234", "echo hi", status="done", attempts=1)
+
+    # status (known id) → exit 0
+    assert main(["status", "abcd1234"]) == 0
+    # run (already-done record → re-runs) → exit 0
+    assert main(["run", "abcd1234"]) == 0
+    # submit
+    assert main(["submit", "echo hi"]) == 0
+    # list
+    assert main(["list"]) == 0
+    # clear
+    assert main(["clear"]) == 0
+
+
+def test_fr03_cmd_run_unhandled_queryerror_corrupt(
+    monkeypatch, tmp_path, capsys
+):
+    """[FR-03 unit] cmd_run with UnhandledExecutionError + corrupt store on reload.
+
+    Covers cli.py lines 168-172 (QueryError branch inside the
+    UnhandledExecutionError handler: 'store corrupted' stderr + exit 1).
+    """
+    import taskq.__main__ as _main_mod
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        _main_mod,
+        "run_task",
+        lambda task_id: (_ for _ in ()).throw(
+            UnhandledExecutionError("explode")
+        ),
+    )
+    # After UnhandledExecutionError, cmd_run reloads via query_status.
+    # Make query_status raise QueryError by corrupting the store then
+    # running cmd_run with the cached _cli_main_mod.run_task patch.
+    # Patch query_status to directly raise QueryError so the test stays
+    # hermetic (does not depend on disk ordering).
+    import taskq.cli as _cli_mod
+    from taskq.query import QueryError as _QueryError
+
+    monkeypatch.setattr(
+        _cli_mod,
+        "query_status",
+        lambda task_id: (_ for _ in ()).throw(_QueryError("store corrupted")),
+    )
+    ns = build_parser().parse_args(["run", "abcd1234"])
+    rc = cmd_run(ns)
+    assert rc == EXIT_CORRUPT
+    err = capsys.readouterr().err
+    assert "store corrupted" in err

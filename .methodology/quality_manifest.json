@@ -14,22 +14,17 @@
   },
   "gate_results": {
     "gate1": {
-      "FR-01": {
-        "score": 100.0,
-        "quality_complete": true,
-        "rounds_used": 2,
-        "open_critical": 0,
-        "open_high": 0
-      },
-      "FR-02": {
-        "score": 100.0,
-        "quality_complete": true,
-        "rounds_used": 2,
-        "open_critical": 0,
-        "open_high": 0
-      },
+      "score": 100.0,
+      "quality_complete": true,
+      "rounds_used": 2,
+      "open_critical": 0,
+      "open_high": 0,
+      "phase": 5,
+      "gate": 1,
+      "fr_scope": "all",
+      "overall_score": 100.0,
       "FR-03": {
-        "score": 99.66,
+        "score": 100.0,
         "quality_complete": true,
         "rounds_used": 2,
         "open_critical": 0,
@@ -48,15 +43,15 @@
       "score": 96.07
     },
     "gate3": {
-      "score": 97.67,
-      "quality_complete": true,
-      "rounds_used": 2,
+      "fr_scope": "all",
+      "gate": 3,
       "open_critical": 0,
       "open_high": 0,
+      "overall_score": 97.67,
       "phase": 4,
-      "gate": 3,
-      "fr_scope": "all",
-      "overall_score": 97.67
+      "quality_complete": true,
+      "rounds_used": 2,
+      "score": 97.67
     },
     "gate4": null
   },

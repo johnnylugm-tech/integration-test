@@ -45,8 +45,13 @@ def load_tasks_or_die() -> list[dict[str, Any]]:
     path = tasks_json_path()
     if not path.exists():
         return []
+    raw = path.read_text(encoding="utf-8")
+    # An empty tasks.json file is semantically equivalent to "no tasks" and
+    # is NOT corruption under FR-01 (corruption = unparseable JSON content).
+    if raw.strip() == "":
+        return []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise StoreCorruptedError(str(exc)) from exc
     if not isinstance(data, list):
