@@ -17,3 +17,4 @@ htmlcov/
 .mutmut-cache/
 .code-review-graph/
 .methodology/.state.lock
+.methodology/trace/attestation.latest.json
