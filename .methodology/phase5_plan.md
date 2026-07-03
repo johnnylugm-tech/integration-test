@@ -120,9 +120,10 @@ python3 harness_cli.py load-context --phase 5 --project . --json \
 
 ### P5 System Verification
 
-- **[BASELINE]** Generate `05-verification/VERIFICATION_REPORT.md` (system state snapshot):
+- **[BASELINE]** Generate `05-verification/BASELINE.md` (system state snapshot):
   - Document: current version, test results summary, coverage %, Gate 3 composite score
   - Reference: `04-testing/TEST_RESULTS.md` and `03-development/src/` module list
+  - Structure: 7 `##` sections per `harness/templates/BASELINE.md` (audit-phase C5 counts H2 headings)
 - **[VERIFY-REPORT]** Generate `05-verification/VERIFICATION_REPORT.md`:
   - For each FR: verification status, acceptance criteria result (PASS/FAIL), evidence
   - Include: test coverage %, mutation score, deferred issues from Gate 3
@@ -140,7 +141,7 @@ python3 harness_cli.py load-context --phase 5 --project . --json \
   > Writes HANDOVER.md + commits + pushes.
 
 ### Phase 5 Deliverables
-- `05-verification/VERIFICATION_REPORT.md` - System baseline
+- `05-verification/BASELINE.md` - System baseline
 - `05-verification/VERIFICATION_REPORT.md` - Verification report
 - [x] `.methodology/sessions_spawn.log` — auto-populated by AgentSpawner (non-blocking debug trail)
 - Gate 1 PASS for every FR

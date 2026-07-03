@@ -2,10 +2,12 @@
 //
 // Structure: FR-loop型, NO harness run-gate (P5 cleared by Gate 3 at P4 exit).
 // Per-FR GATE1-DELTA re-eval (auto-triggers full TDD on code change), then
-// generate VERIFICATION_REPORT.md (P5 no longer emits a separate BASELINE.md;
-// the BASELINE content was merged into VERIFICATION_REPORT.md per phase5_plan.md
-// v2.12.0), p5-baseline milestone push, advance (advance-phase still enforces
-// TDD-PRECHECK + D4 ≥80%, and Gate 4 next phase needs ≥90% so we warn-check here).
+// generate BASELINE.md + VERIFICATION_REPORT.md (BASELINE.md is a blocking
+// audit-phase C1 deliverable with a 7-H2-section depth check; the earlier
+// "merged into VERIFICATION_REPORT" note came from a generate_full_plan.py
+// copy-paste error, fixed harness-side), p5-baseline milestone push, advance
+// (advance-phase still enforces TDD-PRECHECK + D4 ≥80%, and Gate 4 next phase
+// needs ≥90% so we warn-check here).
 //
 // Playbook lessons: NO import/fs/process, Bash CLI, SCOPE RULES,
 // PY = .venv/bin/python, scriptPath launch.
@@ -239,17 +241,21 @@ const gate1Pass = []
 const gate1Fail = []
 // DELTA fast-path: probe every FR's GATE1-DELTA through the harness CLI in ONE
 // agent — unchanged-code FRs pass immediately inside the CLI, so N already-PASS
-// FRs cost 1 spawn instead of 2N (delta + verify). Verdict authority is the same
-// manifest qc read as gate1-verify below (NOT the agent's self-report). FRs not
-// immediately passing fall through to the full per-FR loop unchanged.
+// FRs cost 1 spawn instead of 2N (delta + verify). Verdict authority is manifest
+// qc AND a phase-scoped gate_timestamps.jsonl entry (NOT the agent's self-report).
+// The timestamp is required because manifest qc is not phase-scoped: a stale
+// `true` from an earlier phase would mask a timed-out/failed run-fr-step this
+// phase. run-fr-step writes the {phase, gate:1, fr_id} timestamp only on
+// successful completion (both the unchanged-skip and full-dispatch paths); a
+// killed dispatch writes nothing, so absence ⇒ fail ⇒ full per-FR loop.
 let deltaTodo = frIds
 const fastProbe = await agent(
   'YOU ARE THE GATE1-DELTA FAST-PATH PROBE. Classify each FR — fix NOTHING.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\nFRs: ' + JSON.stringify(frIds) + '\n\n'
   + 'For EACH FR in order, substituting <FR> with the FR id:\n'
   + '1. `timeout 180 ' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 5 --fr-id <FR> --step GATE1-DELTA --project ' + REPO + ' 2>&1 | tail -5`\n'
-  + '2. Authoritative verdict: `' + PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'<FR>\',{}) or {}; print(g.get(\'quality_complete\'))"`\n'
-  + '   stdout `True` → pass_fr_ids; anything else (False/None/timeout/error) → fail_fr_ids.\n\n'
+  + '2. Authoritative verdict (manifest qc AND a phase-5 gate-1 timestamp for <FR>): `' + PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'<FR>\',{}) or {}; ts=any(e.get(\'phase\')==5 and e.get(\'gate\')==1 and e.get(\'fr_id\')==\'<FR>\' for e in (json.loads(l) for l in open(\'' + REPO + '/.methodology/gate_timestamps.jsonl\') if l.strip())); print(bool(g.get(\'quality_complete\')) and ts)"`\n'
+  + '   stdout `True` → pass_fr_ids; anything else (False/None/timeout/error/missing file) → fail_fr_ids.\n\n'
   + 'HARD RULES:\n- DO NOT fix code, edit files, or run TDD steps.\n- DO NOT retry a failing FR — classify it and move on (the full loop handles it).\n- DO NOT run advance-phase / push-milestone / generate BASELINE docs.\n- DO NOT modify harness/.\n\n'
   + 'Report via the StructuredOutput tool: pass_fr_ids + fail_fr_ids (every FR in exactly one list).',
   { label: 'delta-fastpath', phase: 'Per-FR Delta', agentType: 'general-purpose', schema: DELTA_FAST_SCHEMA },
@@ -258,7 +264,7 @@ if (fastProbe && Array.isArray(fastProbe.pass_fr_ids)) {
   const fastPassed = fastProbe.pass_fr_ids.filter((f) => frIds.includes(f))
   for (const fr of fastPassed) {
     gate1Pass.push(fr)
-    log('  ' + fr + ' GATE1-DELTA fast-path PASS [manifest qc] — full DELTA skipped')
+    log('  ' + fr + ' GATE1-DELTA fast-path PASS [manifest qc + p5 timestamp] — full DELTA skipped')
   }
   deltaTodo = frIds.filter((f) => !fastPassed.includes(f))
 } else {
@@ -305,23 +311,25 @@ if (gate1Fail.length) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Phase: Verification Docs (VERIFICATION_REPORT.md + re-checks)
+// Phase: Verification Docs (BASELINE.md + VERIFICATION_REPORT.md + re-checks)
 // ════════════════════════════════════════════════════════════════════════
-// Per phase5_plan.md v2.12.0: P5 emits ONLY VERIFICATION_REPORT.md. BASELINE.md
-// was merged into VERIFICATION_REPORT.md; there is no separate BASELINE.md
-// artifact. Phase 6 entry-check (line 121 of phase6-quality.js) reflects this.
+// BASELINE.md is a blocking audit-phase C1 deliverable (advance-phase runs the
+// audit) and its depth check (C5) counts H2 sections — 7 required per
+// harness/templates/BASELINE.md. VERIFICATION_REPORT.md is asserted by
+// validate-handoff on the P5→P6 edge.
 phase('Verification Docs')
-log('Generate VERIFICATION_REPORT.md; re-run integration + security')
+log('Generate BASELINE.md + VERIFICATION_REPORT.md; re-run integration + security')
 const docsReport = await agent(
   'YOU ARE THE P5 VERIFICATION AUTHOR. Generate the verification deliverables.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Steps:\n'
-  + '1. VERIFICATION_REPORT: write ' + REPO + '/05-verification/VERIFICATION_REPORT.md. Include: current version, test results summary, coverage %, Gate 3 composite score, the 03-development/src/ module list (BASELINE content merged here per phase5_plan.md v2.12.0), AND for each FR in `' + ctxFile + '`: verification status, acceptance-criteria result (PASS/FAIL), evidence. Enumerate FRs with one Bash call: `' + PY + ' -c "import json,sys; d=json.load(open(\'' + ctxFile + '\')); [print(fr) for fr in d.get(\'fr_ids\',[])]"`. Include coverage %, mutation score, deferred Gate 3 issues. Certify all Gate 3 open issues addressed or deferred-with-justification. Must be NON-trivial (validate-handoff checks this). Reference 04-testing/TEST_RESULTS.md.\n'
-  + '2. Re-run integration tests: `' + PY + ' -m pytest ' + REPO + '/tests/integration/ -q` (skip gracefully if dir absent).\n'
-  + '3. Confirm performance NFRs: review benchmark entries in 04-testing/TEST_RESULTS.md.\n'
-  + '4. Security clean: `bandit -r ' + REPO + '/03-development/src/ -ll` + `gitleaks detect --source ' + REPO + '`.\n\n'
-  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if VERIFICATION_REPORT.md was written and all re-run checks succeeded; reason = one-line summary.\n\n'
-  + 'SCOPE RULES:\n- DO NOT run advance-phase / push-milestone.\n- DO NOT modify harness/.\n- DO NOT re-implement FRs (only document verification + re-run existing checks).\n- DO NOT write a separate BASELINE.md file — content goes into VERIFICATION_REPORT.md.\n- ONLY generate VERIFICATION_REPORT.md + re-run checks.',
+  + '1. BASELINE: write ' + REPO + '/05-verification/BASELINE.md (system state snapshot). Follow ' + REPO + '/harness/templates/BASELINE.md — EXACTLY 7 `## ` sections (Baseline Overview, Functional Baseline, Quality Baseline, Performance Baseline, Known Issues, Change Log, Acceptance Sign-off); audit-phase counts H2 headings and warns below 7. Fill with real data: current version, test results summary, coverage %, Gate 3 composite score, the 03-development/src/ module list; Change Log from `git -C ' + REPO + ' log --oneline -10`.\n'
+  + '2. VERIFICATION_REPORT: write ' + REPO + '/05-verification/VERIFICATION_REPORT.md. For each FR in `' + ctxFile + '`: verification status, acceptance-criteria result (PASS/FAIL), evidence. Enumerate FRs with one Bash call: `' + PY + ' -c "import json,sys; d=json.load(open(\'' + ctxFile + '\')); [print(fr) for fr in d.get(\'fr_ids\',[])]"`. Include coverage %, mutation score, deferred Gate 3 issues. Certify all Gate 3 open issues addressed or deferred-with-justification. Must be NON-trivial (validate-handoff checks this). Reference 04-testing/TEST_RESULTS.md.\n'
+  + '3. Re-run integration tests: `' + PY + ' -m pytest ' + REPO + '/tests/integration/ -q` (skip gracefully if dir absent).\n'
+  + '4. Confirm performance NFRs: review benchmark entries in 04-testing/TEST_RESULTS.md.\n'
+  + '5. Security clean: `bandit -r ' + REPO + '/03-development/src/ -ll` + `gitleaks detect --source ' + REPO + '`.\n\n'
+  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if BOTH BASELINE.md (7 H2 sections) and VERIFICATION_REPORT.md were written and all re-run checks succeeded; reason = one-line summary.\n\n'
+  + 'SCOPE RULES:\n- DO NOT run advance-phase / push-milestone.\n- DO NOT modify harness/.\n- DO NOT re-implement FRs (only document verification + re-run existing checks).\n- ONLY generate BASELINE.md + VERIFICATION_REPORT.md + re-run checks.',
   { label: 'verification-docs', phase: 'Verification Docs', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
 )
 if (!(docsReport && docsReport.pass === true)) {
@@ -411,6 +419,6 @@ return {
   fr_count: frIds.length,
   gate1_pass: gate1Pass,
   advance_status: 'PASS',
-  artifacts: ['05-verification/VERIFICATION_REPORT.md', 'HANDOVER.md'],
+  artifacts: ['05-verification/BASELINE.md', '05-verification/VERIFICATION_REPORT.md', 'HANDOVER.md'],
   notes: 'Phase 5 complete per phase5_plan.md v2.12.0. Phase 6 (Quality Assurance) ready. Reminder: Gate 4 needs spec-coverage ≥90%.',
 }
