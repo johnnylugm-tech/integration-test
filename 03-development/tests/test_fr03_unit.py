@@ -751,3 +751,115 @@ def test_unit_main_routes_run(monkeypatch, tmp_path, capsys):
     _seed_task(home, "abcd1234", "echo hi", status="done", attempts=1, exit_code=0)
     rc = main(["run", "abcd1234"])
     assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# executor._run_once + helper coverage (covers branches not exercised by
+# the live subprocess paths: shlex ValueError, TimeoutExpired, long-tail
+# truncation, parse-error retry-path).
+# ---------------------------------------------------------------------------
+
+from taskq.executor import _now_iso, _run_once, _truncate_tail  # noqa: E402
+
+
+def test_unit_truncate_tail_short_returns_input():
+    """[FR-03] _truncate_tail returns the input verbatim when len <= 2000."""
+    assert _truncate_tail("hello") == "hello"
+
+
+def test_unit_truncate_tail_none_returns_empty():
+    """[FR-03] _truncate_tail(None) returns '' (covers the if-not-text branch)."""
+    assert _truncate_tail(None) == ""
+
+
+def test_unit_truncate_tail_long_keeps_tail_2000():
+    """[FR-03] _truncate_tail keeps the LAST 2000 chars of overlong input."""
+    long_text = "a" * 5000
+    out = _truncate_tail(long_text)
+    assert len(out) == 2000
+    assert out == "a" * 2000
+
+
+def test_unit_now_iso_returns_iso8601_string():
+    """[FR-03] _now_iso returns a non-empty ISO-8601 string (offset present)."""
+    stamp = _now_iso()
+    assert isinstance(stamp, str) and stamp
+    # UTC offset must be present in ISO-8601: trailing '+00:00'.
+    assert stamp.endswith("+00:00")
+
+
+def test_unit_run_once_happy_path_emits_done():
+    """[FR-03] _run_once on a successful command returns status='done', exit 0."""
+    out = _run_once("echo hi", timeout=5.0)
+    assert out["status"] == "done"
+    assert out["exit_code"] == 0
+    assert "hi" in out["stdout_tail"]
+    assert out["duration_ms"] >= 0
+
+
+def test_unit_run_once_shlex_value_error_returns_parse_error():
+    """[FR-03] _run_once on malformed quotes (shlex ValueError) returns the parse-error dict.
+
+    Covers executor.py lines 102-113 (shlex ValueError branch).
+    """
+    # Unclosed double quote → shlex.split raises ValueError.
+    out = _run_once('echo "hello', timeout=5.0)
+    assert out["status"] == "failed"
+    assert out["exit_code"] is None
+    assert out["stdout_tail"] == ""
+    assert "command parse error" in out["stderr_tail"]
+    assert out["_error"] == "parse"
+
+
+def test_unit_run_once_timeout_returns_timeout_status():
+    """[FR-03] _run_once with a command that exceeds timeout returns status='timeout'.
+
+    Covers executor.py lines 124-137 (TimeoutExpired branch).
+    """
+    out = _run_once("sleep 5", timeout=0.1)
+    assert out["status"] == "timeout"
+    assert out["exit_code"] is None
+    assert out["duration_ms"] >= 0
+
+
+def test_unit_run_once_nonzero_exit_marks_failed():
+    """[FR-03] _run_once on a command that exits non-zero returns status='failed'.
+
+    Covers executor.py lines 145-150 (post-subprocess status assignment
+    when rc != 0).
+    """
+    out = _run_once("false", timeout=5.0)
+    assert out["status"] == "failed"
+    assert out["exit_code"] == 1
+
+
+# ---------------------------------------------------------------------------
+# store.append_task (covers store.py lines 78-84; FR-03 path uses
+# `atomic_write_tasks` directly via `cmd_clear` but `append_task` is also
+# the canonical append-on-persist helper exposed by store.py).
+# ---------------------------------------------------------------------------
+
+
+def test_unit_store_append_task_writes_record(monkeypatch, tmp_path):
+    """[FR-03] store.append_task persists the record and returns its id."""
+    from taskq.store import append_task as _append_direct
+
+    _seed_home(monkeypatch, tmp_path)
+    rec = {
+        "id": "abcd1234",
+        "command": "echo hi",
+        "status": "pending",
+        "attempts": 0,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "exit_code": None,
+        "stdout_tail": "",
+        "stderr_tail": "",
+        "duration_ms": None,
+        "finished_at": None,
+    }
+    returned = _append_direct(rec)
+    assert returned == "abcd1234"
+    import json as _json
+
+    on_disk = _json.loads((tmp_path / ".taskq" / "tasks.json").read_text(encoding="utf-8"))
+    assert any(t["id"] == "abcd1234" for t in on_disk)

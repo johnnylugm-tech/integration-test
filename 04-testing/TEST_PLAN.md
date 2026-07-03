@@ -69,31 +69,31 @@ Coverage verification rule: `sum(fr_count) + nfr_count == 33` and the tc_id sets
 
 | ID | Category | Description | Input | Expected Output | Priority |
 |----|----------|-------------|-------|-----------------|----------|
-| TC-FR01-01 | negative | Empty command → exit 2, no write | `python -m taskq submit ""` | exit_code=2; stderr non-empty; `tasks.json` byte-identical to pre-call | P0 |
-| TC-FR01-01b | negative | Whitespace-only command → exit 2, no write | `python -m taskq submit "   "` | exit_code=2; stderr non-empty; `tasks.json` unchanged | P0 |
-| TC-FR01-02b | boundary | Length boundary 1000/1001 chars | (a) `submit` 1000-char `a...a` → accept; (b) 1001-char → reject | (a) exit_code=0; (b) exit_code=2; on (b) `tasks.json` unchanged | P0 |
-| TC-FR01-03a | edge / security | Injection char `;` rejected | `submit "echo a;b"` | exit_code=2; `tasks.json` unchanged | P0 |
-| TC-FR01-03b | edge / security | Injection char `\|` rejected | `submit "echo a\|b"` | exit_code=2; `tasks.json` unchanged | P0 |
-| TC-FR01-03c | edge / security | Injection char `&` rejected | `submit "echo a&b"` | exit_code=2; `tasks.json` unchanged | P0 |
-| TC-FR01-03d | edge / security | Injection char `$` rejected | `submit "echo $HOME"` | exit_code=2; `tasks.json` unchanged | P0 |
-| TC-FR01-03e | edge / security | Injection char `>` rejected | `submit "echo a>file"` | exit_code=2; `tasks.json` unchanged | P0 |
-| TC-FR01-03f | edge / security | Injection char `<` rejected | `submit "echo a<file"` | exit_code=2; `tasks.json` unchanged | P0 |
-| TC-FR01-03g | edge / security | Injection char `` ` `` rejected | `submit "echo \`pwd\`"` | exit_code=2; `tasks.json` unchanged | P0 |
+| TC-FR01-01 | negative — AC-FR01-01 | Empty command → exit 2, no write | `python -m taskq submit ""` | exit_code=2; stderr non-empty; `tasks.json` byte-identical to pre-call | P0 |
+| TC-FR01-01b | negative — AC-FR01-01 | Whitespace-only command → exit 2, no write | `python -m taskq submit "   "` | exit_code=2; stderr non-empty; `tasks.json` unchanged | P0 |
+| TC-FR01-02b | boundary — AC-FR01-02 | Length boundary 1000/1001 chars | (a) `submit` 1000-char `a...a` → accept; (b) 1001-char → reject | (a) exit_code=0; (b) exit_code=2; on (b) `tasks.json` unchanged | P0 |
+| TC-FR01-03a | edge / security — AC-FR01-03 | Injection char `;` rejected | `submit "echo a;b"` | exit_code=2; `tasks.json` unchanged | P0 |
+| TC-FR01-03b | edge / security — AC-FR01-03 | Injection char `\|` rejected | `submit "echo a\|b"` | exit_code=2; `tasks.json` unchanged | P0 |
+| TC-FR01-03c | edge / security — AC-FR01-03 | Injection char `&` rejected | `submit "echo a&b"` | exit_code=2; `tasks.json` unchanged | P0 |
+| TC-FR01-03d | edge / security — AC-FR01-03 | Injection char `$` rejected | `submit "echo $HOME"` | exit_code=2; `tasks.json` unchanged | P0 |
+| TC-FR01-03e | edge / security — AC-FR01-03 | Injection char `>` rejected | `submit "echo a>file"` | exit_code=2; `tasks.json` unchanged | P0 |
+| TC-FR01-03f | edge / security — AC-FR01-03 | Injection char `<` rejected | `submit "echo a<file"` | exit_code=2; `tasks.json` unchanged | P0 |
+| TC-FR01-03g | edge / security — AC-FR01-03 | Injection char `` ` `` rejected | `submit "echo \`pwd\`"` | exit_code=2; `tasks.json` unchanged | P0 |
 
 ### 3.2 Positive — Submit success path
 
 | ID | Category | Description | Input | Expected Output | Priority |
 |----|----------|-------------|-------|-----------------|----------|
-| TC-FR01-04 | positive | Valid submit → write pending record | `submit "echo hi"` | exit_code=0; `tasks.json` parses; exactly 1 record; `task.id` matches `[0-9a-f]{8}`; `task.status == "pending"`; `task.command == "echo hi"`; `task.created_at` is ISO 8601 | P0 |
-| TC-FR01-05 | positive | Pending record carries exact field set | inspect `tasks.json` after submit | record fields = `{id, status="pending", command, attempts, created_at}`; field set verbatim from canonical | P0 |
+| TC-FR01-04 | positive — AC-FR01-04, AC-FR01-05, AC-FR01-06 | Valid submit → write pending record | `submit "echo hi"` | exit_code=0; `tasks.json` parses; exactly 1 record; `task.id` matches `[0-9a-f]{8}`; `task.status == "pending"`; `task.command == "echo hi"`; `task.created_at` is ISO 8601 | P0 |
+| TC-FR01-05 | positive — AC-FR01-05 | Pending record carries exact field set | inspect `tasks.json` after submit | record fields = `{id, status="pending", command, attempts, created_at}`; field set verbatim from canonical | P0 |
 
 ### 3.3 Reliability / boundary — atomic write + corruption + no-write-on-reject
 
 | ID | Category | Description | Input | Expected Output | Priority |
 |----|----------|-------------|-------|-----------------|----------|
-| TC-FR01-06 | boundary / reliability | Atomic write uses tmp + os.replace | inspect write path (monkey-patch `os.replace` to assert tmp-file pattern `tasks.json.tmp.<id>`); crash-inject mid-write | tmp path then `os.replace`; no partial writes observable after interruption | P0 |
-| TC-FR01-07 | edge / reliability | Corrupt `tasks.json` → exit 1 + stderr | write `"{not json"` to `tasks.json`; run `submit "echo x"` | exit_code=1; stderr contains literal `store corrupted`; `tasks.json` NOT silently rebuilt on disk | P0 |
-| TC-FR01-08 | negative / boundary | Reject path leaves storage byte-for-byte unchanged | capture `mtime`/`size` of `tasks.json`; submit rejected input | `tasks.json` byte-identical; `mtime`/`size` unchanged after rejection | P0 |
+| TC-FR01-06 | boundary / reliability — AC-FR01-06 | Atomic write uses tmp + os.replace | inspect write path (monkey-patch `os.replace` to assert tmp-file pattern `tasks.json.tmp.<id>`); crash-inject mid-write | tmp path then `os.replace`; no partial writes observable after interruption | P0 |
+| TC-FR01-07 | edge / reliability — AC-FR01-07 | Corrupt `tasks.json` → exit 1 + stderr | write `"{not json"` to `tasks.json`; run `submit "echo x"` | exit_code=1; stderr contains literal `store corrupted`; `tasks.json` NOT silently rebuilt on disk | P0 |
+| TC-FR01-08 | negative / boundary — AC-FR01-08 | Reject path leaves storage byte-for-byte unchanged | capture `mtime`/`size` of `tasks.json`; submit rejected input | `tasks.json` byte-identical; `mtime`/`size` unchanged after rejection | P0 |
 
 ---
 
@@ -104,12 +104,12 @@ Coverage verification rule: `sum(fr_count) + nfr_count == 33` and the tc_id sets
 
 | ID | Category | Description | Input | Expected Output | Priority |
 |----|----------|-------------|-------|-----------------|----------|
-| TC-FR02-01 | positive / security | Subprocess invocation form + no `shell=True` | submit `"echo hi"`, then `run <id>` | invocation uses `subprocess.run(shlex.split(cmd), capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT)`; repo-wide `shell=True` count = 0; success path → `status="done"`, `exit_code=0` | P0 |
-| TC-FR02-02 | positive | State-machine transitions | (a) exit-0 cmd; (b) exit-1 cmd; (c) `sleep 5` with `TASKQ_TASK_TIMEOUT=1` | (a) `pending → running → done`; (b) `… → failed`; (c) `… → timeout`; mapping verbatim from canonical | P0 |
-| TC-FR02-03 | positive / boundary | Result fields populated + 2000-char tail truncation | submit `"python -c 'print(\"x\"*5000)'"` (stdout > 2000 chars); run | record carries `exit_code`, `stdout_tail` (last 2000 chars), `stderr_tail` (last 2000 chars), `duration_ms` (int ≥ 0), `finished_at` (ISO 8601); tail length ≤ 2000 | P0 |
-| TC-FR02-04 | edge / boundary | Retry cap = `TASKQ_RETRY_LIMIT` (default 2) | submit `"false"` with default env; run; observe attempts | retries triggered on `failed`; total attempts ≤ `TASKQ_RETRY_LIMIT + 1` (1 initial + 2 retries = 3); exhaustion → final `status="failed"` | P0 |
-| TC-FR02-05 | boundary / timeout | Single-task-mode timeout → exit 4 | submit `"sleep 5"`; `TASKQ_TASK_TIMEOUT=0.5`; `run <id>` | process exit_code=4; persisted `status="timeout"`; `exit_code == 4` on record | P0 |
-| TC-FR02-06 | negative / edge | Unhandled exception → exit 1, no bare `except:` | inject `FileNotFoundError` (submit `"definitely-not-a-binary-xyz"`); run | process exit_code=1; persisted record has `status="failed"`, `stderr_tail` carries error; source has no bare `except:` (lint-enforced via `pylint/ruff`) | P0 |
+| TC-FR02-01 | positive / security — AC-FR02-01 | Subprocess invocation form + no `shell=True` | submit `"echo hi"`, then `run <id>` | invocation uses `subprocess.run(shlex.split(cmd), capture_output=True, text=True, timeout=TASKQ_TASK_TIMEOUT)`; repo-wide `shell=True` count = 0; success path → `status="done"`, `exit_code=0` | P0 |
+| TC-FR02-02 | positive — AC-FR02-02 | State-machine transitions | (a) exit-0 cmd; (b) exit-1 cmd; (c) `sleep 5` with `TASKQ_TASK_TIMEOUT=1` | (a) `pending → running → done`; (b) `… → failed`; (c) `… → timeout`; mapping verbatim from canonical | P0 |
+| TC-FR02-03 | positive / boundary — AC-FR02-03 | Result fields populated + 2000-char tail truncation | submit `"python -c 'print(\"x\"*5000)'"` (stdout > 2000 chars); run | record carries `exit_code`, `stdout_tail` (last 2000 chars), `stderr_tail` (last 2000 chars), `duration_ms` (int ≥ 0), `finished_at` (ISO 8601); tail length ≤ 2000 | P0 |
+| TC-FR02-04 | edge / boundary — AC-FR02-04 | Retry cap = `TASKQ_RETRY_LIMIT` (default 2) | submit `"false"` with default env; run; observe attempts | retries triggered on `failed`; total attempts ≤ `TASKQ_RETRY_LIMIT + 1` (1 initial + 2 retries = 3); exhaustion → final `status="failed"` | P0 |
+| TC-FR02-05 | boundary / timeout — AC-FR02-05 | Single-task-mode timeout → exit 4 | submit `"sleep 5"`; `TASKQ_TASK_TIMEOUT=0.5`; `run <id>` | process exit_code=4; persisted `status="timeout"`; `exit_code == 4` on record | P0 |
+| TC-FR02-06 | negative / edge — AC-FR02-06 | Unhandled exception → exit 1, no bare `except:` | inject `FileNotFoundError` (submit `"definitely-not-a-binary-xyz"`); run | process exit_code=1; persisted record has `status="failed"`, `stderr_tail` carries error; source has no bare `except:` (lint-enforced via `pylint/ruff`) | P0 |
 
 ---
 
@@ -119,13 +119,13 @@ Coverage verification rule: `sum(fr_count) + nfr_count == 33` and the tc_id sets
 
 | ID | Category | Description | Input | Expected Output | Priority |
 |----|----------|-------------|-------|-----------------|----------|
-| TC-FR03-01 | positive / routing | `submit "<cmd>"` → FR-01 | `submit "echo hi"` then inspect `tasks.json` | record present with FR-01 field set; delegation verbatim from canonical | P0 |
-| TC-FR03-02 | positive / routing | `run <id>` → FR-02 | submit `"echo hi"`; `run <id>` | record transitions; delegation verbatim from canonical | P0 |
-| TC-FR03-03 | negative | `status <unknown>` → exit 2 + stderr message | `status deadbeef` (no record) | exit_code=2; stderr contains `unknown task: deadbeef`; `status <existing>` returns all fields, exit_code=0 | P0 |
-| TC-FR03-04 | boundary | `list` truncates `command` to first 50 chars | submit a 60-char `"echo "` + 55-char tail; `list` | stdout JSON shows `command` truncated to first 50 chars; persisted record unchanged (truncation is display-only) | P0 |
-| TC-FR03-05 | positive / mutation | `clear` empties `tasks.json` | submit two tasks; `clear`; `list` | exit_code=0; `tasks.json` parses as `[]`; subsequent `list` shows empty array | P0 |
-| TC-FR03-06 | boundary / format | `--json` → single-line JSON, no trailing newline | `submit "echo hi" --json`; capture stdout | exactly one line; `json.loads` round-trips; no trailing `\n`; record field set matches FR-01 | P0 |
-| TC-FR03-07 | boundary / exit-matrix | Full exit-code table | (a) `submit "echo hi"` → 0; (b) `submit ""` → 2; (c) `submit "echo a;b"` → 2; (d) `status deadbeef` → 2; (e) `run <id-of-sleep5-with-tiny-timeout>` → 4; (f) corrupt store then `list` → 1 | exit codes = 0/2/2/2/4/1 respectively — verbatim from canonical exit-code matrix | P0 |
+| TC-FR03-01 | positive / routing — AC-FR03-01 | `submit "<cmd>"` → FR-01 | `submit "echo hi"` then inspect `tasks.json` | record present with FR-01 field set; delegation verbatim from canonical | P0 |
+| TC-FR03-02 | positive / routing — AC-FR03-02 | `run <id>` → FR-02 | submit `"echo hi"`; `run <id>` | record transitions; delegation verbatim from canonical | P0 |
+| TC-FR03-03 | negative — AC-FR03-03 | `status <unknown>` → exit 2 + stderr message | `status deadbeef` (no record) | exit_code=2; stderr contains `unknown task: deadbeef`; `status <existing>` returns all fields, exit_code=0 | P0 |
+| TC-FR03-04 | boundary — AC-FR03-04 | `list` truncates `command` to first 50 chars | submit a 60-char `"echo "` + 55-char tail; `list` | stdout JSON shows `command` truncated to first 50 chars; persisted record unchanged (truncation is display-only) | P0 |
+| TC-FR03-05 | positive / mutation — AC-FR03-05 | `clear` empties `tasks.json` | submit two tasks; `clear`; `list` | exit_code=0; `tasks.json` parses as `[]`; subsequent `list` shows empty array | P0 |
+| TC-FR03-06 | boundary / format — AC-FR03-06 | `--json` → single-line JSON, no trailing newline | `submit "echo hi" --json`; capture stdout | exactly one line; `json.loads` round-trips; no trailing `\n`; record field set matches FR-01 | P0 |
+| TC-FR03-07 | boundary / exit-matrix — AC-FR03-07 | Full exit-code table | (a) `submit "echo hi"` → 0; (b) `submit ""` → 2; (c) `submit "echo a;b"` → 2; (d) `status deadbeef` → 2; (e) `run <id-of-sleep5-with-tiny-timeout>` → 4; (f) corrupt store then `list` → 1 | exit codes = 0/2/2/2/4/1 respectively — verbatim from canonical exit-code matrix | P0 |
 
 ---
 
@@ -135,7 +135,7 @@ Coverage verification rule: `sum(fr_count) + nfr_count == 33` and the tc_id sets
 
 | ID | Category | Description | Input | Expected Output | Priority |
 |----|----------|-------------|-------|-----------------|----------|
-| TC-NFR01-01 | benchmark / boundary | p95 latency of 100× submit+status | 100-iter warm loop: each iter `submit "echo x"` then `status <new_id>` | measured p95 < 50ms; subprocess execution time explicitly excluded from measurement window | P0 |
+| TC-NFR01-01 | benchmark / boundary — AC-NFR01-01 | p95 latency of 100× submit+status | 100-iter warm loop: each iter `submit "echo x"` then `status <new_id>` | measured p95 < 50ms; subprocess execution time explicitly excluded from measurement window | P0 |
 
 ---
 
@@ -145,8 +145,8 @@ Coverage verification rule: `sum(fr_count) + nfr_count == 33` and the tc_id sets
 
 | ID | Category | Description | Input | Expected Output | Priority |
 |----|----------|-------------|-------|-----------------|----------|
-| TC-NFR02-01 | static-grep / invariant | No `shell=True` literal in `03-development/src/` | `grep -rn 'shell=True' 03-development/src/` | exit_code=1 (grep finds zero matches); zero occurrences | P0 |
-| TC-NFR02-02 | coverage-meta | All 7 injection chars have parametrized submit tests | inspect `tests/test_fr01_submit.py` | test functions `test_fr01_submit_injection_{semicolon,pipe,amp,dollar,gt,lt,backtick}` exist and each asserts exit_code=2 + storage unchanged | P0 |
+| TC-NFR02-01 | static-grep / invariant — AC-NFR02-01 | No `shell=True` literal in `03-development/src/` | `grep -rn 'shell=True' 03-development/src/` | exit_code=1 (grep finds zero matches); zero occurrences | P0 |
+| TC-NFR02-02 | coverage-meta — AC-NFR02-02 | All 7 injection chars have parametrized submit tests | inspect `tests/test_fr01_submit.py` | test functions `test_fr01_submit_injection_{semicolon,pipe,amp,dollar,gt,lt,backtick}` exist and each asserts exit_code=2 + storage unchanged | P0 |
 
 ---
 
@@ -156,8 +156,8 @@ Coverage verification rule: `sum(fr_count) + nfr_count == 33` and the tc_id sets
 
 | ID | Category | Description | Input | Expected Output | Priority |
 |----|----------|-------------|-------|-----------------|----------|
-| TC-NFR03-01 | crash-injection / reliability | Atomic write survives SIGKILL mid-write | `submit`; SIGKILL subprocess between `write(tmp)` and `os.replace` (use a patched `os.replace` that sleeps to widen window); on next CLI invocation | `tasks.json` either absent or fully-valid JSON; no truncated/half-written file observable | P0 |
-| TC-NFR03-02 | redaction / unit+integration | `(sk-[A-Za-z0-9_-]{8,}\|token=\S+)` lines replaced by `[REDACTED]` | (a) unit: `redact.redact("sk-abcdef12345\nhello\ntoken=abc\nbye\n")`; (b) integration: command emits such lines, run, inspect `tasks.json` | (a) → `"[REDACTED]\nhello\n[REDACTED]\nbye\n"` (line-wise); (b) `stdout_tail`/`stderr_tail` in persisted record has matching lines replaced verbatim with `[REDACTED]`; no secret substring persists | P0 |
+| TC-NFR03-01 | crash-injection / reliability — AC-NFR03-01 | Atomic write survives SIGKILL mid-write | `submit`; SIGKILL subprocess between `write(tmp)` and `os.replace` (use a patched `os.replace` that sleeps to widen window); on next CLI invocation | `tasks.json` either absent or fully-valid JSON; no truncated/half-written file observable | P0 |
+| TC-NFR03-02 | redaction / unit+integration — AC-NFR03-02 | `(sk-[A-Za-z0-9_-]{8,}\|token=\S+)` lines replaced by `[REDACTED]` | (a) unit: `redact.redact("sk-abcdef12345\nhello\ntoken=abc\nbye\n")`; (b) integration: command emits such lines, run, inspect `tasks.json` | (a) → `"[REDACTED]\nhello\n[REDACTED]\nbye\n"` (line-wise); (b) `stdout_tail`/`stderr_tail` in persisted record has matching lines replaced verbatim with `[REDACTED]`; no secret substring persists | P0 |
 
 ---
 
