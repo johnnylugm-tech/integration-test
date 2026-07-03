@@ -242,10 +242,10 @@
   "passed": true,
   "crg_review_context": {
     "status": "ok",
-    "summary": "Review context for 18 changed file(s):\n  - Risk: high\n  - 152 impacted nodes in 21 files",
+    "summary": "Review context for 24 changed file(s):\n  - Risk: high\n  - 160 impacted nodes in 25 files",
     "risk": "high",
-    "changed_file_count": 18,
-    "impacted_file_count": 21,
+    "changed_file_count": 24,
+    "impacted_file_count": 25,
     "key_entities": [
       "/Users/johnny/projects/integration-test/03-development/src/taskq/models.py",
       "Task",
@@ -253,7 +253,7 @@
       "to_dict",
       "make_task_id"
     ],
-    "test_gaps": 10,
+    "test_gaps": 6,
     "next_tool_suggestions": [
       "detect_changes",
       "get_affected_flows",
@@ -261,15 +261,15 @@
     ],
     "context_savings": {
       "estimated": true,
-      "saved_tokens": 42182,
+      "saved_tokens": 63258,
       "saved_percent": 100
     }
   },
   "crg_impact_radius": {
     "status": "ok",
-    "summary": "Blast radius for 18 changed file(s):\n  - 115 nodes directly changed\n  - 152 nodes impacted (within 2 hops)\n  - 21 additional files affected",
+    "summary": "Blast radius for 24 changed file(s):\n  - 101 nodes directly changed\n  - 160 nodes impacted (within 2 hops)\n  - 25 additional files affected",
     "risk": "high",
-    "impacted_file_count": 21,
+    "impacted_file_count": 25,
     "key_entities": [
       "/Users/johnny/projects/integration-test/.claude/workflows/phase3-implementation.js",
       "/Users/johnny/projects/integration-test/.claude/workflows/phase4-testing.js",
@@ -280,7 +280,7 @@
     "truncated": false,
     "context_savings": {
       "estimated": true,
-      "saved_tokens": 42126,
+      "saved_tokens": 63202,
       "saved_percent": 100
     }
   },

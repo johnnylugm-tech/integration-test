@@ -81,7 +81,7 @@
 | C-01 | CLI via argparse subcommands | AC-FR03-01..07 | — |
 | C-02 | `subprocess` + `shlex.split`; `shell=True` forbidden everywhere | AC-FR02-01, AC-NFR02-01 | R2 |
 | C-03 | JSON atomic write (`tmp + os.replace`) | AC-FR01-06, AC-NFR03-01 | R1 |
-| C-04 | `TASKQ_*` env-vars read via `config.py` | (cross-cutting; verified in P3/P4; no AC) | — |
+| C-04 | `TASKQ_*` env-vars read via `config.py` ✅ | (cross-cutting; verified in P3/P4; no AC) | — |
 | C-05 | Python 3.11 stdlib only; entry `python -m taskq` | (cross-cutting; verified in P6; no AC) | — |
 | C-06 | Injection blacklist `; \| & $ > < \`` on `submit` | AC-FR01-03, AC-NFR02-02 | — |
 | C-07 | Atomic-write crash safety + secret-line redaction | AC-FR01-06, AC-NFR03-01, AC-NFR03-02 | R1, R3 |
@@ -153,7 +153,7 @@
 | Constraints (C-01..C-08) | 8 | 6 mapped + 2 cross-cutting (C-04, C-05) | 6/8 AC-mapped, 2/8 cross-cutting |
 | Risks (R1..R3) | 3 | 3/3 mapped | 3/3 (100%) |
 
-> **Cross-cutting constraints (C-04, C-05)** are intentionally not assigned per-AC rows because they are environmental/runtime invariants verified at P3 (config.py wiring) and P6 (stdlib-only dependency audit) rather than at single-AC granularity. This matches `SPEC_TRACKING.md` §5.
+> **Cross-cutting constraints (C-04, C-05)** are intentionally not assigned per-AC rows because they are environmental/runtime invariants verified at P3 (config.py wiring) and P6 (stdlib-only dependency audit) rather than at single-AC granularity. This matches `SPEC_TRACKING.md` §5. ✅
 
 ### 4.3 Orphan / unparented check
 
@@ -182,9 +182,9 @@
 
 | FR | Phase 2 deliverable | Phase 3 deliverable | Phase 4 deliverable | Phase 6 deliverable |
 |----|----------------------|----------------------|----------------------|----------------------|
-| FR-01 | SAD §storage + ADR (atomic-write choice) + TEST_SPEC for 8 ACs | 8 RED/GREEN tests under `tests/test_fr01_*.py` | Gate-3 manifest qc on all 8 ACs | Gate-4 14-dim re-verification |
-| FR-02 | SAD §executor + ADR (no shell=True + timeout) + TEST_SPEC for 6 ACs | 6 RED/GREEN tests under `tests/test_fr02_*.py` | Gate-3 manifest qc on all 6 ACs | Gate-4 14-dim re-verification |
-| FR-03 | SAD §cli + ADR (--json + exit-code matrix) + TEST_SPEC for 7 ACs | 7 RED/GREEN tests under `tests/test_fr03_*.py` | Gate-3 manifest qc on all 7 ACs | Gate-4 14-dim re-verification |
+| FR-01 | SAD §storage + ADR (atomic-write choice) + TEST_SPEC for 8 ACs | 8 RED/GREEN tests under `tests/test_fr01_*.py` ✅ | Gate-3 manifest qc on all 8 ACs ✅ | Gate-4 14-dim re-verification |
+| FR-02 | SAD §executor + ADR (no shell=True + timeout) + TEST_SPEC for 6 ACs | 6 RED/GREEN tests under `tests/test_fr02_*.py` ✅ | Gate-3 manifest qc on all 6 ACs ✅ | Gate-4 14-dim re-verification |
+| FR-03 | SAD §cli + ADR (--json + exit-code matrix) + TEST_SPEC for 7 ACs | 7 RED/GREEN tests under `tests/test_fr03_*.py` ✅ | Gate-3 manifest qc on all 7 ACs ✅ | Gate-4 14-dim re-verification |
 | NFR-01 | SAD §perf (p95 budget) + ADR (iteration count) + TEST_SPEC | 1 RED/GREEN test (perf micro-bench) | Gate-3 p95 measurement | Gate-4 latency re-check |
 | NFR-02 | ADR (blacklist + grep gate) + TEST_SPEC | 2 RED/GREEN tests (grep + blacklist) | Gate-3 grep + coverage | Gate-4 security re-check |
 | NFR-03 | ADR (atomic-write + redaction regex verbatim) + TEST_SPEC | 2 RED/GREEN tests (SIGKILL + regex) | Gate-3 crash + leak | Gate-4 reliability re-check |
