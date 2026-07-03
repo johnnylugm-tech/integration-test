@@ -1,7 +1,7 @@
 {
   "gate": 1,
   "phase": 5,
-  "fr_id": "FR-01",
+  "fr_id": "FR-02",
   "overall_score": 100.0,
   "quality_complete": true,
   "rounds_used": 1,
@@ -14,15 +14,15 @@
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1783074816739\",\n    \"generalDiagnostics\": [\n        {\n            \"file\": \"/Users/johnny/projects/integration-test/03-development/src/taskq/redact.py\",\n            \"severity\": \"warning\",\n            \"message\": \"Unsupported escape sequence in string literal\",\n            \"range\": {\n                \"start\": {\n                    \"line\": 4,\n                    \"character\": 30\n                },\n            "
+      "tool_evidence": "{\"version\":\"1.1.409\",\"summary\":{\"filesAnalyzed\":10,\"errorCount\":0,\"warningCount\":2,\"informationCount\":0,\"timeInSec\":0.285}}"
     },
     "test_coverage": {
       "score": 100,
       "threshold": 80,
-      "tests_passed": 58,
+      "tests_passed": 30,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-8.4.2, pluggy-1.6.0\nbenchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)\nrootdir: /Users/johnny/projects/integration-test\nconfigfile: setup.cfg\nplugins: benchmark-7.1.0, anyio-4.14.1\ncollected 58 items\n\n03-development/tests/test_fr01.py ....\n============================== 58 passed in 0.87s ==============================\nName                  Stmts   Miss  Cover\n-----------------------------------------\nsrc/taskq/models.py      30      0   100%\n-----------------------------------------\nTOTAL                    30      0   100%\n"
+      "tool_evidence": "30 passed in 1.02s\nName                                   Stmts   Miss  Cover\n03-development/src/taskq/executor.py      99      0   100%\nTOTAL                                     99      0   100%"
     }
   },
   "composite_score": 100.0,
