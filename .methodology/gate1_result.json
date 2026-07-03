@@ -1,31 +1,31 @@
 {
   "gate": 1,
-  "phase": 4,
-  "fr_id": "FR-03",
-  "overall_score": 99.66,
+  "phase": 5,
+  "fr_id": "FR-01",
+  "overall_score": 100.0,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "ruff check 03-development/src/ --extend-ignore RUF001,RUF002,RUF003 -> All checks passed! (exit 0, 0 violations)"
+      "tool_evidence": "All checks passed!\n"
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "pyright 03-development/src/ --outputjson: summary.errorCount=0, warningCount=2, informationCount=0, filesAnalyzed=8. Two warnings only (reportInvalidStringEscapeSequence in redact.py L4/L27), zero errors -> max(0, 100 - 0*5) = 100"
+      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1783074816739\",\n    \"generalDiagnostics\": [\n        {\n            \"file\": \"/Users/johnny/projects/integration-test/03-development/src/taskq/redact.py\",\n            \"severity\": \"warning\",\n            \"message\": \"Unsupported escape sequence in string literal\",\n            \"range\": {\n                \"start\": {\n                    \"line\": 4,\n                    \"character\": 30\n                },\n            "
     },
     "test_coverage": {
-      "score": 99,
+      "score": 100,
       "threshold": 80,
-      "tests_passed": 96,
+      "tests_passed": 58,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "PYTHONPATH=. coverage run -m pytest 03-development/tests/test_fr03.py 03-development/tests/test_fr03_unit.py -> 96 passed in 1.05s, 0 failed, 0 skipped. coverage report --include=03-development/src/taskq/__main__.py,03-development/src/taskq/config.py,03-development/src/taskq/executor.py,03-development/src/taskq/store.py -> TOTAL 286 stmts, 1 miss, 99%. spec_cov_pct=100% (7/7 required: test_fr03_submit_routes_to_fr01, test_fr03_run_routes_to_fr02, test_fr03_status_unknown_id, test_fr03_list_truncation_50, test_fr03_clear, test_fr03_json_flag, test_fr03_exit_code_matrix). score = min(99, 100) = 99."
+      "tool_evidence": "============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-8.4.2, pluggy-1.6.0\nbenchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)\nrootdir: /Users/johnny/projects/integration-test\nconfigfile: setup.cfg\nplugins: benchmark-7.1.0, anyio-4.14.1\ncollected 58 items\n\n03-development/tests/test_fr01.py ....\n============================== 58 passed in 0.87s ==============================\nName                  Stmts   Miss  Cover\n-----------------------------------------\nsrc/taskq/models.py      30      0   100%\n-----------------------------------------\nTOTAL                    30      0   100%\n"
     }
   },
-  "composite_score": 99.66,
+  "composite_score": 100.0,
   "verdict": "PASS",
   "passed": true
 }

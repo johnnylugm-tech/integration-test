@@ -15,11 +15,11 @@
   "gate_results": {
     "gate1": {
       "FR-01": {
-        "open_critical": 0,
-        "open_high": 0,
+        "score": 100.0,
         "quality_complete": true,
         "rounds_used": 2,
-        "score": 100.0
+        "open_critical": 0,
+        "open_high": 0
       },
       "FR-02": {
         "open_critical": 0,
