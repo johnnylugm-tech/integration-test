@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-02
+> **Date**: 2026-07-03
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 8 - Configuration Management
 > **Status**: Full version (including Phase 8 detailed tasks)
@@ -157,21 +157,21 @@ python3 harness_cli.py load-context --phase 8 --project . --json \
   > Must run BEFORE `push-milestone --type p8`; `_validate_p8_completion()` in push-milestone auto-verifies.
   > CI job `p8-archive-check` also validates this directory on push to main.
 
-- **[P8-HANDOVER-CHECK]** Verify `HANDOVER.md` has no Phase 9 references (validated by CI `p8-archive-check`):
-  ```bash
-  grep -qi "phase 9\|phase9\|phase9_plan" HANDOVER.md \
-    && echo "ERROR: Phase 9 refs found — remove them" \
-    || echo "OK: no Phase 9 refs"
-  ```
-  Phase 8 is the final phase. Any Phase 9 references must be removed.
-
 ### P8 Milestone Push (10-Push Strategy ⑩)
 
 - **PUSH ⑩ — P8 exit** (after config records are complete):
   ```bash
   python3 harness_cli.py push-milestone --type p8 --project .
   ```
-  > Writes HANDOVER.md + commits + pushes. Pipeline complete.
+  > Writes HANDOVER.md + commits + pushes. Development pipeline complete.
+
+- **[P8→P9]** Enter maintenance mode (steady state — bug fixes and
+  feature changes continue as Change Requests):
+  ```bash
+  python3 harness_cli.py advance-phase --completed 8 --project .
+  ```
+  > Phase 9 is re-entrant and never exits; work is ticket-driven
+  > (`cr-open` / `cr-close`, see phase9_plan.md).
 
 ### Phase 8 Deliverables
 - `CONFIG_RECORDS.md` - Configuration records

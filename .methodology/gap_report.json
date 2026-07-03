@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 27,
+    "total": 31,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 27,
+    "orphaned": 31,
     "critical": 0,
     "major": 0,
-    "minor": 27
+    "minor": 31
   },
   "gaps": [
     {
@@ -128,6 +128,30 @@
       "severity": "minor",
       "reason": "'from_dict' has no corresponding specification in SPEC.md",
       "action": "Add spec for from_dict or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'QueryError' has no corresponding specification in SPEC.md",
+      "action": "Add spec for QueryError or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'status' has no corresponding specification in SPEC.md",
+      "action": "Add spec for status or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'list_tasks' has no corresponding specification in SPEC.md",
+      "action": "Add spec for list_tasks or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'clear' has no corresponding specification in SPEC.md",
+      "action": "Add spec for clear or remove if unnecessary"
     },
     {
       "type": "ORPHANED",
