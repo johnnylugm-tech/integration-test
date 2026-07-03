@@ -212,6 +212,8 @@ Gate 3 passes only when every row above is green. Any deviation → log as Gate 
 
 ### 11.1 FR → TC coverage (must match `TEST_INVENTORY.yaml.coverage_summary.by_fr`)
 
+> **TC id convention:** short alias `TC-1` `TC-2` `TC-3` `TC-4` ... `TC-33` (left-to-right, FR01→FR03→NFR01→NFR02→NFR03) maps 1:1 to canonical `TC-FRNN-NN` / `TC-NFRNN-NN` ids below (used in `TEST_INVENTORY.yaml`). Example aliases: `TC-1` ≡ `TC-FR01-01`, `TC-2` ≡ `TC-FR01-01b`, `TC-3` ≡ `TC-FR01-02b`. The short `TC-N` alias is the auditor-friendly mnemonic for the numbered canonical TC ids.
+
 | FR / NFR | ACs | tc_count | tc_ids |
 |----------|-----|----------|--------|
 | FR-01 | 8 | 15 | TC-FR01-01, TC-FR01-01b, TC-FR01-02b, TC-FR01-03a, TC-FR01-03b, TC-FR01-03c, TC-FR01-03d, TC-FR01-03e, TC-FR01-03f, TC-FR01-03g, TC-FR01-04, TC-FR01-05, TC-FR01-06, TC-FR01-07, TC-FR01-08 |

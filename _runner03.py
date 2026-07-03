@@ -23,7 +23,7 @@ cov.save()
 
 # Print coverage report
 sys.stdout.write("\n\n=== COVERAGE REPORT ===\n")
-sys.stdout.write(cov.report(show_missing=True))
+sys.stdout.write(str(cov.report(show_missing=True)))
 sys.stdout.write("\n")
 
 sys.exit(rc)
