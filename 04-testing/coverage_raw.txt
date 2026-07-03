@@ -1,0 +1,70 @@
+........................................................................ [ 18%]
+..............F......................................................... [ 36%]
+........................................................................ [ 55%]
+........................................................................ [ 73%]
+........................................................................ [ 92%]
+..............................<unknown>:1: DeprecationWarning: invalid escape sequence '\S'
+<unknown>:25: DeprecationWarning: invalid escape sequence '\S'
+/Users/johnny/projects/integration-test/03-development/src/taskq/redact.py:1: DeprecationWarning: invalid escape sequence '\S'
+  """Secret-line redaction for stdout/stderr tails.
+/Users/johnny/projects/integration-test/03-development/src/taskq/redact.py:25: DeprecationWarning: invalid escape sequence '\S'
+  """Return `text` with secret-bearing lines replaced by `[REDACTED]`.
+<unknown>:1: DeprecationWarning: invalid escape sequence '\S'
+<unknown>:25: DeprecationWarning: invalid escape sequence '\S'
+/Users/johnny/projects/integration-test/03-development/src/taskq/redact.py:1: DeprecationWarning: invalid escape sequence '\S'
+  """Secret-line redaction for stdout/stderr tails.
+/Users/johnny/projects/integration-test/03-development/src/taskq/redact.py:25: DeprecationWarning: invalid escape sequence '\S'
+  """Return `text` with secret-bearing lines replaced by `[REDACTED]`.
+                                           [100%]
+=================================== FAILURES ===================================
+____________ test_fr02_unit_executor_source_does_not_use_shell_true ____________
+
+    def test_fr02_unit_executor_source_does_not_use_shell_true():
+        """[FR-02] NFR-02: `shell=True` MUST NOT appear as a kwarg in executor.py."""
+        import re
+        from pathlib import Path
+        executor_src = Path(__file__).parent.parent / "src" / "taskq" / "executor.py"
+>       text = executor_src.read_text(encoding="utf-8")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+03-development/tests/integration/test_fr02.py:696: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/Users/johnny/projects/integration-test/03-development/tests/src/taskq/executor.py')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/Users/johnny/projects/integration-test/03-development/tests/src/taskq/executor.py'
+
+../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/pathlib.py:1044: FileNotFoundError
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.11.15-final-0 _______________
+
+Name                                     Stmts   Miss  Cover   Missing
+----------------------------------------------------------------------
+03-development/src/taskq/__init__.py         8      0   100%
+03-development/src/taskq/__main__.py       124      0   100%
+03-development/src/taskq/config.py          26      0   100%
+03-development/src/taskq/executor.py        99      0   100%
+03-development/src/taskq/models.py          30      0   100%
+03-development/src/taskq/redact.py          14      0   100%
+03-development/src/taskq/store.py           37      0   100%
+03-development/src/taskq/validation.py      11      0   100%
+----------------------------------------------------------------------
+TOTAL                                      349      0   100%
+=========================== short test summary info ============================
+FAILED 03-development/tests/integration/test_fr02.py::test_fr02_unit_executor_source_does_not_use_shell_true
+1 failed, 389 passed in 9.08s

@@ -118,14 +118,19 @@ def test_cmd_run_unknown_task_returns_2(tmp_path, monkeypatch):
 def test_build_parser_registers_all_subcommands():
     """Cover __main__.build_parser (lines 275-304)."""
     parser = build_parser()
-    # Smoke test: each subcommand should parse without error.
+    # Smoke test: each subcommand must register and produce a populated
+    # Namespace with the subcommand name preserved on `command_name`.
+    EXPECTED = {"submit", "list", "status", "clear"}
+    seen = set()
     for argv in (
         ["submit", "echo hi"],
         ["list"],
         ["status", "abc"],
         ["clear"],
     ):
-        parser.parse_args(argv)
+        ns = parser.parse_args(argv)
+        seen.add(getattr(ns, "command_name", None))
+    assert seen == EXPECTED, f"subcommand registration gap: expected {EXPECTED}, saw {seen}"
 
 
 def test_main_dispatches_to_clear(tmp_path, monkeypatch):

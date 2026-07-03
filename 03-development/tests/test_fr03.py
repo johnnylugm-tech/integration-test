@@ -22,9 +22,28 @@ Sub-assertion predicates follow `TEST_SPEC.md` FR-03 sub-assertion table.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from conftest import run_taskq, tasks_json_path
+from taskq.__main__ import (
+    build_parser,
+    cmd_run,
+    cmd_status,
+    cmd_submit,
+    main,
+)
+from taskq.executor import (
+    UnhandledExecutionError,
+    run_task,
+)
+from taskq.store import (
+    EXIT_CORRUPT,
+    StoreCorruptedError,
+    load_tasks_or_die,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -505,28 +524,6 @@ def test_fr03_sub_assertions_mirror(taskq_env, taskq_home):
 #   - store.py non-list top-level corruption path
 #   - executor.py FileNotFoundError / retry-loop paths
 # ---------------------------------------------------------------------------
-
-
-from pathlib import Path
-
-import pytest
-
-from taskq.__main__ import (
-    build_parser,
-    cmd_run,
-    cmd_status,
-    cmd_submit,
-    main,
-)
-from taskq.executor import (
-    UnhandledExecutionError,
-    run_task,
-)
-from taskq.store import (
-    EXIT_CORRUPT,
-    StoreCorruptedError,
-    load_tasks_or_die,
-)
 
 
 def _isolate_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:

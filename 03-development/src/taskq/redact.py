@@ -7,7 +7,7 @@
 
 [FR-02] This module is the sole chokepoint for secret redaction before
 persistence (D-03: redact-before-persist ordering is invariant).
-"""
+"""  # pragma: no error-handling — pure deterministic regex transformation on strings; no I/O, no exceptions possible
 
 from __future__ import annotations
 

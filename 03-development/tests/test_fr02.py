@@ -37,8 +37,6 @@ import pytest
 from conftest import run_taskq
 from taskq.executor import (
     EXIT_INTERNAL,
-    EXIT_OK,
-    EXIT_TIMEOUT,
     UnhandledExecutionError,
     UnknownTaskError,
     _now_iso,
@@ -692,7 +690,9 @@ def test_fr02_unit_executor_source_does_not_use_shell_true():
     """[FR-02] NFR-02: `shell=True` MUST NOT appear as a kwarg in executor.py."""
     import re
     from pathlib import Path
-    executor_src = Path(__file__).parent.parent / "src" / "taskq" / "executor.py"
+    # Resolve symlinks so .parent walks from the real location, not the
+    # symlink dir (this file is also reached via integration/test_fr02.py).
+    executor_src = Path(__file__).resolve().parent.parent / "src" / "taskq" / "executor.py"
     text = executor_src.read_text(encoding="utf-8")
     code_only = re.sub(r'""".*?"""', "", text, flags=re.DOTALL)
     code_only = re.sub(r"#.*", "", code_only)

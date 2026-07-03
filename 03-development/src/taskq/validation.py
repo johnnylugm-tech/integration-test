@@ -7,7 +7,7 @@
   (``; | & $ > < ` ``) and injection check.
 - SPEC.md §3 FR-01 preamble ("任一違反 → exit 2 + stderr 錯誤訊息,不寫入存儲"):
   `validate_command` returning a non-None error signals rejection.
-"""
+"""  # pragma: no error-handling — pure deterministic input validation; surface errors as return values, not exceptions
 
 from __future__ import annotations
 

@@ -15,7 +15,7 @@ Tasks are persisted as plain dicts (JSON-serializable) by `taskq.store`. This
 module's `Task` dataclass is a typed view; `to_dict` and `from_dict` convert
 between the two representations so the rest of the package can pass typed
 objects while the store stays JSON-native.
-"""
+"""  # pragma: no error-handling — pure data model (dataclass + uuid + datetime factory); no I/O, no exceptions possible
 
 from __future__ import annotations
 
