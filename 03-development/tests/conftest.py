@@ -52,12 +52,18 @@ def run_taskq(
     because `setup.cfg` sets `pythonpath = 03-development/src`. The subprocess
     inherits the same Python and the same sys.path configuration as pytest
     (we copy PATH / PYTHONPATH through `env`).
+
+    Caller-supplied env is merged over `os.environ` so call sites only need
+    to override the variables they care about (e.g. TASKQ_HOME). Without
+    this merge, a caller passing only `{"TASKQ_HOME": ...}` strips
+    PYTHONPATH and the subprocess fails with `No module named taskq`.
     """
+    merged_env = {**os.environ, **env}
     return subprocess.run(
         [sys.executable, "-m", "taskq", *args],
         capture_output=True,
         text=True,
-        env=env,
+        env=merged_env,
         cwd=str(cwd) if cwd else None,
         timeout=30,
     )

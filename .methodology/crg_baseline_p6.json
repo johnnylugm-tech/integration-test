@@ -1,0 +1,44 @@
+{
+  "community_cohesion": {
+    "score": 83.3,
+    "healthy": 15,
+    "total": 18,
+    "total_all": 29,
+    "excluded_test_communities": 11,
+    "unhealthy": [
+      {
+        "name": "taskq-task",
+        "cohesion": 0.2284,
+        "size": 21,
+        "issues": [
+          "low_cohesion(0.23)"
+        ]
+      },
+      {
+        "name": "workflows-json",
+        "cohesion": 0.1481,
+        "size": 7,
+        "issues": [
+          "low_cohesion(0.15)"
+        ]
+      },
+      {
+        "name": "integration-test-verify",
+        "cohesion": 0.1207,
+        "size": 6,
+        "issues": [
+          "low_cohesion(0.12)"
+        ]
+      }
+    ],
+    "_cohesion_threshold": 0.3,
+    "_community_oversized": 50,
+    "_community_min_size": 5
+  },
+  "large_functions_critical": [],
+  "large_functions_penalty": 0,
+  "architecture_score": 83.3,
+  "_source": "framework-independent",
+  "_baseline_sha": "8d423fa4d0abf166fdb068a2b5c96d608a7ae90a",
+  "_baseline_phase": 6
+}
