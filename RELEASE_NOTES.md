@@ -1,149 +1,28 @@
-# Release Notes — integration-test
+# Release Notes
 
-> **Author**: Phase 6 Release Author (P6 G4e)
-> **Generated**: 2026-07-03
-> **Version**: `0.1.0` (`03-development/src/pyproject.toml`)
-> **Git describe**: `baseline-v6-90-g7d66d0d`
-> **HEAD**: `7d66d0d2daeec9aa9b2f838e938a1b7cfcbb441c`
-> **Framework**: harness-methodology v2.12.0
-> **Package**: `taskq`
+> **Generated**: 2026-07-04 00:06:28
+> **Version**: gate4-20260703-score96
 
 ---
 
-## Gate 4 Composite Score
-
-| Gate | Score | Status |
-|------|------:|--------|
-| Gate 1 (per-FR) | 100.0 / 100.0 / 100.0 (FR-01 / FR-02 / FR-03) | ✅ PASS |
-| Gate 2 (P3 exit, architecture + implementation) | 96.07 | ✅ PASS |
-| Gate 3 (P4 exit, testing + verification) | 97.67 | ✅ PASS |
-| **Gate 4 (P6 final, full 14-dim QA)** | **96.41** | ✅ **PASS** |
-
-Gate 4 composite score is the authoritative number from `.methodology/quality_manifest.json`
-→ `gate_results.gate4.overall_score` (the persistent Source of Truth per `phase6_plan.md`
-v2.12.0). Decomposition from `gate4_result.json.composite_score = 96.4087` rounds to
-**96.41**. The composite clears the Gate 4 floor (≥85) and every individual dimension
-clears its own threshold.
-
-## Functional Requirements (FR list)
-
-All 3 FRs enumerated from `.methodology/quality_manifest.json` → `fr_ids`:
-
-| FR ID | Feature | Module | Gate 1 Score | Status |
-|-------|---------|--------|-------------:|--------|
-| FR-01 | 任務模型與持久化 (Task Model & Persistence) | `taskq.models` + `taskq.store` | 100.0 | ✅ COMPLETE |
-| FR-02 | 任務執行與重試 (Task Execution & Retry) | `taskq.executor` | 100.0 | ✅ COMPLETE |
-| FR-03 | CLI 整合與查詢 (CLI Integration & Query) | `taskq.cli` + `taskq.query` | 100.0 | ✅ COMPLETE |
-
-FR module traceability and NFR → dimension mapping (NFR-01 → performance,
-NFR-02 → security, NFR-03 → error_handling) are recorded in
-`.methodology/quality_manifest.json`.
-
-## Changes since Gate 3
-
-Material changes between Gate 3 PASS (P4 exit, score 97.67) and the Gate 4 release:
-
-### Source decomposition
-
-- **`refactor(taskq): split __main__.py into cli.py + query.py per SAD §2.1 module decomposition`** — commit `3099f95`
-  Decomposed the P3-era `__main__.py` monolith into `cli.py` (121 stmts) and `query.py` (32 stmts)
-  per the SAD §2.1 module decomposition. The previously-uncovered defensive re-raise branch
-  (`__main__.py:318`, P4 coverage miss) moved to `cli.py` and is now exercised by the expanded
-  P5 test set; full coverage is now 100% across all 10 source modules.
-
-### Traceability + baseline artifacts
-
-- **`chore(trace): regen attestation after SAD-aligned source split`** — commit `f834c3f`
-  Regenerated `.methodology/trace/attestation.json` after the `__main__.py` decomposition so
-  FR module traceability points at the actual current modules.
-- **`docs(P5): BASELINE.md — review baseline checkpoint`** — commit `34e5158`
-  Establishes `05-verification/BASELINE.md` with performance + quality baseline numbers
-  (NFR-01 p95 well below 50 ms; 100% line coverage; 461/461 tests passing).
-
-### Workflow tooling (framework-side, not product code)
-
-- **`feat(workflows): GATE1-DELTA fast-path`** — commit `04dbb9b`
-  Batch CLI probe skips full per-FR loop for immediately-passing FRs across phase4/5/7/8
-  workflow JS files. (Workflow JS only — no product-surface impact.)
-- **`fix(workflows): DELTA fast-path phase-scoped verdict + restore P5 BASELINE.md generation`** — commit `856f0b1`
-  Phase-scoped verdict logic; restores P5 BASELINE.md emission. (Workflow JS only.)
-
-### Gate 4 evaluation pass
-
-- Gate 4 evaluation (`finalize-gate --gate 4 --phase 6`, P6 G4a–G4d) executed successfully.
-- Devil's-advocate (A3) challenges recorded for all Tier 3 dims (architecture, readability,
-  error_handling, documentation, performance) — see `.methodology/gate4_result.json`
-  → `devil_advocate_evidence`. Architecture dim received a `da_waiver` for the documented
-  Orchestrator hub-and-spoke false-positive pattern (`taskq.__main__` imports 6 sub-modules
-  → star topology; not architectural debt).
-- HANDOVER.md written at P6 checkpoint `P6-gate4-20260703`; `commit_and_push_gate` pushed
-  Gate 4 to `main`.
-
-## Quality dimensions (Gate 4)
-
-| Dimension | Score | Threshold | Status |
-|-----------|------:|----------:|--------|
-| linting | 100 | 90 | ✅ PASS |
-| type_safety | 100 | 85 | ✅ PASS |
-| test_coverage | 100 | 80 | ✅ PASS |
-| security | 98 | 80 | ✅ PASS |
-| secrets_scanning | 100 | 100 | ✅ PASS |
-| license_compliance | 100 | 100 | ✅ PASS |
-| architecture | 0 (da_waiver applied, Orchestrator pattern) | 80 | ✅ WAIVED |
-| readability | 82.2 | 80 | ✅ PASS |
-| error_handling | 100 | 80 | ✅ PASS |
-| documentation | 100 | 75 | ✅ PASS |
-| performance | 100 | 75 | ✅ PASS |
-| integration_coverage | 99 | 75 | ✅ PASS |
-| test_assertion_quality | 99.7 | 70 | ✅ PASS |
-| traceability | 100 (framework-owned) | 100 | ✅ PASS |
-
-Source: `06-quality/QUALITY_REPORT.md` (auto-generated by G4c `finalize-gate`).
-
-## Test results
-
-- **Full suite**: 461 passed / 0 failed / 0 errors / 0 skipped in 24.12 s
-- **Integration suite**: 169 passed / 0 failed in 2.73 s
-- **Coverage**: 100% across all 10 source modules (385/385 stmts, 0 miss)
-
-## NFR status
-
-| NFR | Target | Result | Evidence |
-|-----|--------|--------|----------|
-| NFR-01 performance | p95 submit+status < 50 ms (warm, 100 iter, no subprocess) | ✅ MET | `test_nfr01_p95_latency` PASS; `submit_status_round_trip` median 3.41 ms |
-| NFR-02 security | `shell=True` forbidden codebase-wide; 7/7 injection chars covered | ✅ MET | `test_nfr02_no_shell_true_repo_grep` + `test_nfr02_blacklist_test_coverage` PASS; bandit `-ll` reports 0 high / 0 medium |
-| NFR-03 reliability | atomic `tasks.json` write via tmp + `os.replace`; stdout/stderr redaction | ✅ MET | `test_nfr03_atomic_write_crash_safety` + `test_nfr03_redact_secret_lines` PASS |
-
-## Known limitations
-
-1. **Architecture dim = 0 (framework-owned)** — Orchestrator hub-and-spoke pattern from
-   `__main__.py` → 6 sub-modules depresses `community_cohesion` below threshold. Devil's-advocate
-   challenge + response + `da_waiver.architecture = true` recorded in
-   `.methodology/gate4_result.json` (the design is intentional dispatch surface, not
-   architectural debt).
-2. **Information-level type-safety warnings** (2) — `03-development/src/taskq/redact.py`
-   lines 4 and 27, `reportInvalidStringEscapeSequence` on regex-style docstring hints.
-   Regex patterns are correct; cleanup candidate is a raw-string docstring. Zero behavioural
-   impact; non-blocking.
-3. **Integration coverage 99% on `taskq/cli.py`** — 1 line missing (one exit-code branch not
-   exercised by the integration suite). Full-suite coverage remains 100%.
-4. **One zero-assert test** — `test_bench_atomic_write_tasks` uses `pytest-benchmark` and
-   validates via benchmark fixture stats rather than raw `assert` statements. Scored as
-   99.7 on `test_assertion_quality` (293/294 asserted).
-5. **Bandit LOW findings (2)** — B404 `subprocess` import (`executor.py:23`) and B603
-   subprocess call (`executor.py:122`); both below `-ll` reporting threshold and are
-   intentional NFR-02 chokepoints (`shell=False` enforcement).
-6. **gitleaks**: 366–369 commits scanned, 0 leaks across all rounds.
-
-## References
-
-- **Gate 4 quality report** (auto-generated by G4c): `06-quality/QUALITY_REPORT.md`
-- **Gate 4 result JSON** (per-dimension tool evidence): `.methodology/gate4_result.json`
-- **Persistent Source of Truth** (composite score, FR + NFR mapping): `.methodology/quality_manifest.json`
-- **Phase 5 verification provenance**: `05-verification/VERIFICATION_REPORT.md`
-- **Phase 5 system baseline**: `05-verification/BASELINE.md`
+## Quality Score
+- **Gate 4**: 96.41/100
 
 ---
 
-*This document is the G4e deliverable per `phase6_plan.md` v2.12.0 — generated
-post-Gate-4 PASS as the project release summary.*
+## Features
+
+- feat(FR-03): Gate1 PASS — score=100.0 [phase=6]
+- feat(FR-02): Gate1 PASS — score=100.0 [phase=6]
+- feat(FR-01): Gate1 PASS — score=100.0 [phase=6]
+
+---
+
+## Known Issues
+
+> See `06-quality/QUALITY_REPORT.md` for detailed defect tracking.
+> See `07-risk/RISK_REGISTER.md` for risk-mitigation status.
+
+---
+
+_Report auto-generated by harness-methodology/scripts/generate_release_notes.py_

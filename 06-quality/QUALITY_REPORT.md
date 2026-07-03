@@ -1,6 +1,6 @@
 # Quality Report
 
-> **Generated**: 2026-07-03 22:22:06
+> **Generated**: 2026-07-04 00:06:28
 > **Gate**: 4
 > **Overall Score**: 0/100
 
@@ -41,6 +41,8 @@
 | fr_scope | N/A | — |
 | overall_score | N/A | — |
 | FR-03 | 100.0 | ✓ PASS |
+| FR-01 | 100.0 | ✓ PASS |
+| FR-02 | 100.0 | ✓ PASS |
 
 ---
 
