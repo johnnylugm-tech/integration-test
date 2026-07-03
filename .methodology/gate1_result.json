@@ -1,7 +1,7 @@
 {
   "gate": 1,
   "phase": 6,
-  "fr_id": "FR-02",
+  "fr_id": "FR-03",
   "overall_score": 100.0,
   "quality_complete": true,
   "rounds_used": 1,
@@ -19,10 +19,10 @@
     "test_coverage": {
       "score": 100,
       "threshold": 80,
-      "tests_passed": 64,
+      "tests_passed": 130,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "PYTHONPATH=03-development/src pytest 03-development/tests/test_fr02.py 03-development/tests/test_fr02_unit.py --cov=taskq.executor --cov-report=term-missing -q --tb=no --no-header\n64 passed in 1.32s, 0 failed, 0 skipped\ncoverage executor.py: covered_lines=99 / num_statements=99 = 100.0% (missing_lines=none)\nTASKQ_HOME isolated per test via monkeypatch+tmp_path; unit tests import executor.py in-process so coverage tracks the FR-02 module directly.\nscope: FR-02 owns taskq/executor (per fr_module_traceability).\nspec coverage: required tests present (100%)\nscore = min(100.0, 100) = 100.0\n"
+      "tool_evidence": "PYTHONPATH=03-development/src pytest 03-development/tests/test_fr03.py 03-development/tests/test_fr03_unit.py --cov=taskq.cli --cov-report=term-missing -q --tb=no --no-header\n130 passed in 1.16s, 0 failed, 0 skipped\ncoverage cli.py: covered_lines=121 / num_statements=121 = 100.0% (missing_lines=none)\nTASKQ_HOME isolated per test via monkeypatch+tmp_path; unit tests import cli.py in-process so coverage tracks the FR-03 module directly.\nscope: FR-03 owns taskq/cli (per fr_module_traceability).\nspec coverage: required tests present (100%)\nscore = min(100.0, 100) = 100.0\n"
     }
   },
   "composite_score": 100.0,
