@@ -1,0 +1,305 @@
+{
+  "gate": 3,
+  "phase": 4,
+  "round": 1,
+  "project": "/Users/johnny/projects/integration-test",
+  "generated_at": "2026-07-03T09:58:00+00:00",
+  "breakdown": {
+    "linting": {
+      "tool": "ruff check . --output-format json --exit-zero",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/linting.json",
+      "tool_score": 100,
+      "score": 100,
+      "threshold": 90,
+      "formula": "max(0, 100 - violations * 2)",
+      "violations": 0,
+      "findings": [],
+      "notes": "E401/E402/F401/F811 fixed in test_fr02.py, test_fr03.py, _fr02_cov_runner.py, _fr03_cov.py, _fr03_cov_runner.py, _runner03.py, _task_cov.py, aa03.py via # noqa: E402 in 3 remaining intentional side-effect-after-import scripts."
+    },
+    "type_safety": {
+      "tool": "pyright 03-development/src/ --outputjson",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/type_safety.json",
+      "tool_score": 100,
+      "score": 100,
+      "threshold": 85,
+      "formula": "max(0, 100 - errors * 5)",
+      "errors": 0,
+      "warnings": 2,
+      "findings": [
+        {
+          "file": "03-development/src/taskq/redact.py",
+          "line": 4,
+          "severity": "info",
+          "message": "Unsupported escape sequence in string literal (reportInvalidStringEscapeSequence)",
+          "evidence": "pyright: reportInvalidStringEscapeSequence at column 30; advisory only — raw string would silence it, no functional impact.",
+          "score_impact": "non-blocking"
+        },
+        {
+          "file": "03-development/src/taskq/redact.py",
+          "line": 27,
+          "severity": "info",
+          "message": "Unsupported escape sequence in string literal (reportInvalidStringEscapeSequence)",
+          "evidence": "pyright: reportInvalidStringEscapeSequence at column 34; same as above — informational warning only.",
+          "score_impact": "non-blocking"
+        }
+      ],
+      "notes": "0 errors; 2 warnings are non-blocking."
+    },
+    "test_coverage": {
+      "tool": "coverage run -m pytest + coverage report",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/test_coverage.json",
+      "tool_score": 100,
+      "score": 100,
+      "threshold": 80,
+      "tests_passed": 390,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "percent_covered": 97.92,
+      "findings": [
+        {
+          "file": "03-development/src/taskq/__main__.py",
+          "line": 318,
+          "severity": "info",
+          "message": "1 line missing in __main__.py (cmd_run exit path: traceback-protected re-raise branch on store IO error).",
+          "evidence": "coverage report: __main__.py Stmts=124 Miss=1 (line 318).",
+          "score_impact": "non-blocking"
+        }
+      ],
+      "notes": "97.92% raw — tool_score capped at 100."
+    },
+    "security": {
+      "tool": "bandit -r 03-development/src/ -f json --exit-zero",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/security.json",
+      "tool_score": 98,
+      "score": 98,
+      "threshold": 80,
+      "formula": "100 - HIGH*10 - MEDIUM*3 - LOW*1",
+      "high": 0,
+      "medium": 0,
+      "low": 2,
+      "findings": [
+        {
+          "file": "03-development/src/taskq/executor.py",
+          "line": 23,
+          "severity": "low",
+          "message": "B404: subprocess module imported",
+          "evidence": "bandit: B404 LOW at executor.py:23; intentional chokepoint per NFR-02 (subprocess is the only required runtime dep).",
+          "score_impact": "-1"
+        },
+        {
+          "file": "03-development/src/taskq/executor.py",
+          "line": 122,
+          "severity": "low",
+          "message": "B603: subprocess call",
+          "evidence": "bandit: B603 LOW at executor.py:122; explicit shell=False per NFR-02.",
+          "score_impact": "-1"
+        }
+      ]
+    },
+    "secrets_scanning": {
+      "tool": "gitleaks detect --source . --report-format json",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/secrets.json",
+      "tool_score": 100,
+      "score": 100,
+      "threshold": 100,
+      "findings": []
+    },
+    "license_compliance": {
+      "tool": "scancode --license --json-pp - 03-development/src/",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/license.json",
+      "tool_score": 100,
+      "score": 100,
+      "threshold": 100,
+      "files_total": 33,
+      "files_with_third_party_licenses": 0,
+      "findings": []
+    },
+    "integration_coverage": {
+      "tool": "pytest 03-development/tests/integration --cov=03-development/src",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/integration_coverage.json",
+      "tool_score": 99.71,
+      "score": 99.71,
+      "threshold": 60,
+      "tests_passed": 135,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "percent_covered": 99.71,
+      "findings": [
+        {
+          "file": "03-development/src/taskq/__main__.py",
+          "line": 318,
+          "severity": "info",
+          "message": "Same single uncovered line (cmd_run store-IO traceback path); non-blocking above threshold.",
+          "evidence": "integration coverage json: miss=1.",
+          "score_impact": "non-blocking"
+        }
+      ]
+    },
+    "architecture": {
+      "tool": "code-review-graph (framework-owned)",
+      "tool_outputs": "framework: harness/crg_independent.py at finalize-gate",
+      "tool_score": null,
+      "score": null,
+      "threshold": 80,
+      "framework_override": true,
+      "findings": [],
+      "notes": "Score set by framework's independent CRG run (community_cohesion.score) at finalize-gate. Pre-check: 32 files with no large hub/spoke pattern observed; 8-file taskq package is a flat layered module graph."
+    },
+    "readability": {
+      "tool": "python3 harness/toolchains/readability_v2.py (per phase3/4/6_plan.md v2.12.0)",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/readability.json",
+      "tool_score": 86.9,
+      "score": 86.9,
+      "threshold": 80,
+      "project_avg_cc": 3.48,
+      "total_lloc": 427,
+      "findings": []
+    },
+    "error_handling": {
+      "tool": "ast-error-handling (Python AST)",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/error_handling.json",
+      "tool_score": 100.0,
+      "score": 100.0,
+      "threshold": 80,
+      "files_with_handler": 4,
+      "total_files": 4,
+      "anti_patterns": 0,
+      "findings": []
+    },
+    "documentation": {
+      "tool": "ast-docstrings (Python AST)",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/documentation.json",
+      "tool_score": 100.0,
+      "score": 100.0,
+      "threshold": 75,
+      "with_docstring": 27,
+      "total_public": 27,
+      "findings": []
+    },
+    "test_assertion_quality": {
+      "tool": "ast-assertions (Python AST)",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/test_assertion_quality.json",
+      "tool_score": 100,
+      "score": 100,
+      "threshold": 60,
+      "assertion_density": 2.45,
+      "zero_assert_ratio": 0.059,
+      "total_funcs": 375,
+      "total_asserts": 919,
+      "zero_assert_count": 22,
+      "findings": []
+    },
+    "performance": {
+      "tool": "pytest-benchmark",
+      "tool_outputs": ".sessi-work/g3_round_1/tools/performance.json",
+      "tool_score": 100,
+      "score": 100,
+      "threshold": 75,
+      "tests": [
+        {
+          "name": "test_bench_load_tasks_or_die",
+          "mean_ms": 0.0199
+        },
+        {
+          "name": "test_bench_atomic_write_tasks",
+          "mean_ms": 0.172
+        },
+        {
+          "name": "test_bench_submit_status_round_trip",
+          "mean_ms": 3.427
+        }
+      ],
+      "formula": "100 - sum(>3000ms*50 + >1000ms*25)",
+      "findings": [],
+      "notes": "Added test_benchmark.py with 3 micro-benchmarks; all mean latencies well under 1000ms threshold (max 3.4ms). NFR-01 p95 < 50ms satisfied."
+    },
+    "traceability": {
+      "score": 100.0,
+      "tool_evidence": "framework: compute_trace_dimension(gate=3) → 4a=100.0% 4b=100.0% 4c=100.0% merged=100.0%",
+      "threshold": 100.0,
+      "framework_override": true
+    }
+  },
+  "framework_owned": {
+    "traceability": {
+      "framework_override": true,
+      "expected_score": 100,
+      "notes": "Computed by compute_trace_dimension at finalize-gate."
+    },
+    "adversarial_review": {
+      "framework_override": true,
+      "bug_hunt_report": ".methodology/bug_hunt_report.json",
+      "open_critical": 0,
+      "open_high": 0,
+      "open_medium": 1,
+      "open_low": 1,
+      "refuted": 2,
+      "notes": "taskq#1 (medium, resilience) and taskq#2 (low, dead field) are confirmed but medium/low — non-blocking per protocol. taskq#3 (medium concurrency) and taskq#4 (low IO) are refuted with SPEC-scope evidence."
+    }
+  },
+  "composite_score": 97.6672,
+  "verdict": "PASS",
+  "passed": true,
+  "crg_review_context": {
+    "status": "ok",
+    "summary": "Review context for 18 changed file(s):\n  - Risk: high\n  - 152 impacted nodes in 21 files",
+    "risk": "high",
+    "changed_file_count": 18,
+    "impacted_file_count": 21,
+    "key_entities": [
+      "/Users/johnny/projects/integration-test/03-development/src/taskq/models.py",
+      "Task",
+      "from_dict",
+      "to_dict",
+      "make_task_id"
+    ],
+    "test_gaps": 10,
+    "next_tool_suggestions": [
+      "detect_changes",
+      "get_affected_flows",
+      "get_impact_radius"
+    ],
+    "context_savings": {
+      "estimated": true,
+      "saved_tokens": 42182,
+      "saved_percent": 100
+    }
+  },
+  "crg_impact_radius": {
+    "status": "ok",
+    "summary": "Blast radius for 18 changed file(s):\n  - 115 nodes directly changed\n  - 152 nodes impacted (within 2 hops)\n  - 21 additional files affected",
+    "risk": "high",
+    "impacted_file_count": 21,
+    "key_entities": [
+      "/Users/johnny/projects/integration-test/.claude/workflows/phase3-implementation.js",
+      "/Users/johnny/projects/integration-test/.claude/workflows/phase4-testing.js",
+      "/Users/johnny/projects/integration-test/.claude/workflows/phase5-verification.js",
+      "/Users/johnny/projects/integration-test/.claude/workflows/phase7-risk.js",
+      "/Users/johnny/projects/integration-test/.claude/workflows/phase8-config.js"
+    ],
+    "truncated": false,
+    "context_savings": {
+      "estimated": true,
+      "saved_tokens": 42126,
+      "saved_percent": 100
+    }
+  },
+  "crg_affected_flows": {
+    "total": 3,
+    "flows": [
+      {
+        "name": "main",
+        "criticality": 0.6932
+      },
+      {
+        "name": "from_dict",
+        "criticality": 0.36
+      },
+      {
+        "name": "_generate_task_id",
+        "criticality": 0.275
+      }
+    ]
+  },
+  "quality_complete": true
+}
