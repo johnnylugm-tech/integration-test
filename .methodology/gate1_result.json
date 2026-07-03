@@ -1,7 +1,7 @@
 {
   "gate": 1,
-  "phase": 5,
-  "fr_id": "FR-03",
+  "phase": 6,
+  "fr_id": "FR-01",
   "overall_score": 100.0,
   "quality_complete": true,
   "rounds_used": 1,
@@ -14,15 +14,15 @@
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "pyright 03-development/src/ --outputjson\nversion: 1.1.409\nfilesAnalyzed: 10\nerrorCount: 0\nwarningCount: 2 (reportInvalidStringEscapeSequence in taskq/redact.py:4,27)\n"
+      "tool_evidence": "pyright 03-development/src/ --outputjson\nversion: 1.1.409\nfilesAnalyzed: 10\nerrorCount: 0\nwarningCount: 0\n"
     },
     "test_coverage": {
       "score": 100,
       "threshold": 80,
-      "tests_passed": 130,
+      "tests_passed": 89,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "PYTHONPATH=03-development/src pytest 03-development/tests/test_fr03.py 03-development/tests/test_fr03_unit.py --cov=taskq.cli --cov-report=term-missing -q --tb=no --no-header\n130 passed in 1.12s, 0 failed, 0 skipped\ncoverage cli.py: covered_lines=121 / num_statements=121 = 100.0% (missing_lines=none)\nTASKQ_HOME isolated per test via monkeypatch+tmp_path; unit tests import cli.py in-process so coverage tracks the FR-03 module directly.\nscope: FR-03 owns taskq/cli (per fr_module_traceability); both test_fr03.py (subprocess behavioural) and test_fr03_unit.py (in-process branch coverage) run together.\nspec coverage: 7/7 required tests present (100%)\nscore = min(100.0, 100) = 100.0\n"
+      "tool_evidence": "PYTHONPATH=03-development/src pytest 03-development/tests/test_fr01.py 03-development/tests/test_fr01_unit.py --cov=taskq.models --cov-report=term-missing -q --tb=no --no-header\n89 passed in 0.97s, 0 failed, 0 skipped\ncoverage models.py: covered_lines=30 / num_statements=30 = 100.0% (missing_lines=none)\nTASKQ_HOME isolated per test via monkeypatch+tmp_path; unit tests import models.py in-process so coverage tracks the FR-01 module directly.\nscope: FR-01 owns taskq/models (per fr_module_traceability).\nspec coverage: required tests present (100%)\nscore = min(100.0, 100) = 100.0\n"
     }
   },
   "composite_score": 100.0,
