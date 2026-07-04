@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-03
+> **Date**: 2026-07-04
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 5 - Verification & Delivery
 > **Status**: Full version (including Phase 5 detailed tasks)
@@ -123,7 +123,9 @@ python3 harness_cli.py load-context --phase 5 --project . --json \
 - **[BASELINE]** Generate `05-verification/BASELINE.md` (system state snapshot):
   - Document: current version, test results summary, coverage %, Gate 3 composite score
   - Reference: `04-testing/TEST_RESULTS.md` and `03-development/src/` module list
-  - Structure: 7 `##` sections per `harness/templates/BASELINE.md` (audit-phase C5 counts H2 headings)
+  - Structure: 7 `##` sections per `templates/BASELINE.md` (Overview, Functional,
+    Quality, Performance, Issue Log, Change Log, Acceptance Sign-off) — audit-phase
+    C5 counts H2 headings and warns below 7
 - **[VERIFY-REPORT]** Generate `05-verification/VERIFICATION_REPORT.md`:
   - For each FR: verification status, acceptance criteria result (PASS/FAIL), evidence
   - Include: test coverage %, mutation score, deferred issues from Gate 3
@@ -160,6 +162,7 @@ python3 harness_cli.py load-context --phase 5 --project . --json \
   > If below 90%: add missing test implementations before advancing to Phase 6.
 
 - **[TDD-PRECHECK]** Verify TDD checks pass — advance-phase enforces:
+  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 17)
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)

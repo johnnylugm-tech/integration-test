@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-03
+> **Date**: 2026-07-04
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 7 - Risk Management
 > **Status**: Full version (including Phase 7 detailed tasks)
@@ -154,6 +154,7 @@ python3 harness_cli.py load-context --phase 7 --project . --json \
   >   → If 3 consecutive failures: escalate to human with `phase_truth_verifier` log
 
 - **[TDD-PRECHECK]** Verify TDD checks pass — advance-phase enforces:
+  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 17)
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)

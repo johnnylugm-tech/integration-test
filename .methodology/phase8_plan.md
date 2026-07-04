@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-03
+> **Date**: 2026-07-04
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 8 - Configuration Management
 > **Status**: Full version (including Phase 8 detailed tasks)
@@ -182,6 +182,7 @@ python3 harness_cli.py load-context --phase 8 --project . --json \
 - **[PHASE-TRUTH]** Phase Truth ≥ 90% (HR-11) — verified by advance-phase
 
 - **[TDD-PRECHECK]** P8 completion checklist (final quality gate before archive):
+  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 17)
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)

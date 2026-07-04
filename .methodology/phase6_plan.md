@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-03
+> **Date**: 2026-07-04
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 6 - Quality Assurance
 > **Status**: Full version (including Phase 6 detailed tasks)
@@ -162,6 +162,7 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
   ```bash
   python3 harness_cli.py finalize-gate --gate 4 --phase 6 --project .
   ```
+  > **Note**: A `[WARN] post-push dirty tree` message may appear after finalizing. This is non-blocking; do NOT attempt to self-correct.
   > **PUSH ⑧ in the 10-Push Strategy**: `finalize-gate --gate 4` writes HANDOVER.md + commits + pushes.
 - **[D4]** D4 spec-coverage-check — unified v2.6 (Gate 4 threshold 90%):
   ```bash
@@ -207,6 +208,7 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
 5. Re-run: `python3 harness_cli.py finalize-gate --gate 4 --phase 6 --project .`
 6. Repeat until CASE 1 PASS or 14 fix rounds exhausted
 7. If stuck after 3 rounds: write `.methodology/deferred_fixes.md` with each remaining dim as a checkbox item ('- [ ] <dim>: <reason>'); every item MUST be resolved and marked '- [x]' before advance-phase (hard-blocked, exit 17, otherwise), then escalate
+8. **Scope Violations (Exit 21)**: If `advance-phase` blocks you with Exit 21 for modifying files outside the current phase scope, and the changes are necessary, request a `da_waiver` from the Human Developer. Do NOT try to bypass the scanner.
 
 
 - **G4d** ✅ Verify checkpoint saved (finalize-gate above already pushed + wrote HANDOVER.md):
@@ -273,6 +275,7 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
   ```
 
 - **[TDD-PRECHECK]** Verify TDD checks pass — advance-phase enforces:
+  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 17)
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)

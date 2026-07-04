@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-03
+> **Date**: 2026-07-04
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 4 - Testing
 > **Status**: Full version (including Phase 4 detailed tasks)
@@ -129,6 +129,7 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
 
 > Per-FR steps push automatically via `run-fr-step`. The milestone pushes below
 > also write `HANDOVER.md` with phase/FR/status summary and push to origin.
+> **Note**: A `[WARN] post-push dirty tree` message may appear if local files were updated. This is non-blocking; do NOT attempt to self-correct.
 > All FR IDs in this project: <FR-01,FR-02,…>
 
 - **PUSH ⑤ — P4-mid** (trigger when ≥<N//2>/N FRs have Gate 1 PASS):
@@ -226,6 +227,7 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
   ```bash
   python3 harness_cli.py finalize-gate --gate 3 --phase 4 --project .
   ```
+  > **Note**: A `[WARN] post-push dirty tree` message may appear after finalizing. This is non-blocking; do NOT attempt to self-correct.
 - **[D4]** D4 spec-coverage-check — unified v2.6 (Gate 3 threshold 80%):
   ```bash
   python3 harness_cli.py spec-coverage-check --project . --threshold 80.0
@@ -271,6 +273,7 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
 5. Re-run: `python3 harness_cli.py finalize-gate --gate 3 --phase 4 --project .`
 6. Repeat until CASE 1 PASS or 15 fix rounds exhausted
 7. If stuck after 3 rounds: write `.methodology/deferred_fixes.md` with each remaining dim as a checkbox item ('- [ ] <dim>: <reason>'); every item MUST be resolved and marked '- [x]' before advance-phase (hard-blocked, exit 17, otherwise), then escalate
+8. **Scope Violations (Exit 21)**: If `advance-phase` blocks you with Exit 21 for modifying files outside the current phase scope, and the changes are necessary, request a `da_waiver` from the Human Developer. Do NOT try to bypass the scanner.
 
 
 - **G3d** ✅ Verify checkpoint saved (finalize-gate above already pushed + wrote HANDOVER.md):
@@ -300,6 +303,7 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
 ### Phase 4 → Phase 5: Verification & Delivery
 
 - **[TDD-PRECHECK]** Verify TDD checks pass — advance-phase enforces:
+  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 17)
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)

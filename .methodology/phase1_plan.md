@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-03
+> **Date**: 2026-07-04
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 1 - Requirements Specification
 > **Status**: Full version (including Phase 1 detailed tasks)
@@ -484,6 +484,7 @@ are not re-opened. This bounds backtracking to a single step.
   ```bash
   python3 harness_cli.py push-checkpoint --phase 1 --project .
   ```
+  > **Note**: A `[WARN] post-push dirty tree` message may appear if local files were updated. This is non-blocking; do NOT attempt to self-correct.
   > This writes `HANDOVER.md` (crash-recovery checkpoint) to project root,
   > then commits + pushes all changes to origin.
   > After a crash, read HANDOVER.md first — it tells you where you were.

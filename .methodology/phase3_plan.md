@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-03
+> **Date**: 2026-07-04
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 3 - Implementation
 > **Status**: Full version (including Phase 3 detailed tasks)
@@ -98,7 +98,7 @@ python3 harness_cli.py load-context --phase 3 --project . --json \
 **{FR-ID} — {FR-TITLE from fr_details}**
 
 - **[ORCH-RED]**     `run-fr-step --phase 3 --fr-id {FR-ID} --step TDD-RED --project . --srs 01-requirements/SRS.md`
-- **[P3-MIRROR]**    `python3 harness_cli.py check-test-mirrors-spec --phase 3 --fr-id {FR-ID} --test-file 03-development/tests/test_*.py --project .`
+- **[P3-MIRROR]**    `python3 harness_cli.py check-test-mirrors-spec --phase 3 --fr-id {FR-ID} --test-file tests/test_*.py --project .`
 - **[ORCH-GREEN]**   `run-fr-step --phase 3 --fr-id {FR-ID} --step TDD-GREEN --project . --srs 01-requirements/SRS.md`
 - **[ORCH-IMPROVE]** `run-fr-step --phase 3 --fr-id {FR-ID} --step TDD-IMPROVE --project .`
 - **[ORCH-GATE1]**   `run-fr-step --phase 3 --fr-id {FR-ID} --step GATE1 --project .`
@@ -118,6 +118,7 @@ python3 harness_cli.py load-context --phase 3 --project . --json \
 
 > Per-FR steps push automatically via `run-fr-step`. The milestone pushes below
 > also write `HANDOVER.md` with phase/FR/status summary and push to origin.
+> **Note**: A `[WARN] post-push dirty tree` message may appear if local files were updated. This is non-blocking; do NOT attempt to self-correct.
 > All FR IDs in this project: <FR-01,FR-02,…>
 
 - **PUSH ③ — P3-mid** (trigger when ≥<N//2>/N FRs have Gate 1 PASS):
@@ -175,6 +176,7 @@ python3 harness_cli.py load-context --phase 3 --project . --json \
   ```bash
   python3 harness_cli.py finalize-gate --gate 2 --phase 3 --project .
   ```
+  > **Note**: A `[WARN] post-push dirty tree` message may appear after finalizing. This is non-blocking; do NOT attempt to self-correct.
 - **[D4]** D4 spec-coverage-check — unified v2.6 (Gate 2 threshold 60%):
   ```bash
   python3 harness_cli.py spec-coverage-check --project . --threshold 60.0
@@ -219,6 +221,7 @@ python3 harness_cli.py load-context --phase 3 --project . --json \
 5. Re-run: `python3 harness_cli.py finalize-gate --gate 2 --phase 3 --project .`
 6. Repeat until CASE 1 PASS or 9 fix rounds exhausted
 7. If stuck after 3 rounds: write `.methodology/deferred_fixes.md` with each remaining dim as a checkbox item ('- [ ] <dim>: <reason>'); every item MUST be resolved and marked '- [x]' before advance-phase (hard-blocked, exit 17, otherwise), then escalate
+8. **Scope Violations (Exit 21)**: If `advance-phase` blocks you with Exit 21 for modifying files outside the current phase scope, and the changes are necessary, request a `da_waiver` from the Human Developer. Do NOT try to bypass the scanner.
 
 
 - **G2d** ✅ Verify checkpoint saved (finalize-gate above already pushed + wrote HANDOVER.md):
@@ -247,6 +250,7 @@ python3 harness_cli.py load-context --phase 3 --project . --json \
 ### Phase 3 → Phase 4: Testing
 
 - **[TDD-PRECHECK]** Verify TDD checks pass — advance-phase enforces:
+  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 17)
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)
