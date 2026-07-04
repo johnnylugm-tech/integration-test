@@ -9,6 +9,7 @@
 .venv/
 venv/
 ENV/
+.taskq/        # taskq runtime data dir (SPEC §5.1 TASKQ_HOME; tasks/breaker/cache .json)
 __pycache__/
 *.py[cod]
 .pytest_cache/
