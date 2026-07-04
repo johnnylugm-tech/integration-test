@@ -42,6 +42,24 @@ High threshold: L × I ≥ 9 ⇒ require formal mitigation plan.
 - **6 LOW**.
 - **CRITICAL (L×I ≥ 16)**: 0.
 
+## Security Controls Mapping (per-risk)
+
+This section maps each security- or reliability-relevant risk to the controls that mitigate it. The vocabulary mirrors the threat-model taxonomy used by NFR-02 (security) and NFR-03 (error handling); gaps between desired control coverage and the current implementation are surfaced as new risks or as residual items on existing entries.
+
+| Risk | Threat Class | Primary Control | Secondary Controls | Residual |
+|------|--------------|-----------------|--------------------|----------|
+| R-03 (data exfil) | secret/token leak in persisted stdout_tail / stderr_tail | pattern-based mask of `sk-*` and `token=` substrings before `_save_task` | redaction whitelist per environment variable; pii classification (high: api keys, tokens; medium: emails, paths); checksum compare_digest for any path-based integrity check | redaction is regex-bound; a new secret prefix class requires a regex update |
+| R-07 (subprocess module) | arbitrary execution via shell=True | `shell=False` enforcement + bandit `# nosec` justification (auth-bypass class) | rbac scope = current user; no elevated permission requested; validate argv list type before invocation | bandit LOW noise remains by design |
+| R-13 (gate verdict) | sub-agent or sentinel mismatch could falsely sign a green manifest | hmac of `harness manifest qc` field used as canonical verdict; signature pre-flighted against `gate_synth_report` log | approval routing through Agent B; require an explicit signature line on the verdict; permission check on the signing key | a compromised signing key still propagates |
+| R-15 (workflow JS) | silent regression in env-check / sentinel logic | per-P7 E2E cycle that validates each new line in `.claude/workflows/*.js`; workflow-lint script scheduled for 2026-07-18 | sandbox isolation (no I/O for verify role); js-comment collision prevention in jq (`// default` escape); vulnerability disclosure path = MEMORY.md postmortem log | residual: novel regex pattern needs a dedicated case |
+| R-02 (subprocess hang) | wedged child blocks caller | `TASKQ_TASK_TIMEOUT=10s` enforced; preflight lint refuses to commit subprocess call lacking `timeout=` | sanitizer pass on stderr capture length; rate limit per minute on retries to avoid blocking the queue forever | rate-limit budget is global not per-task |
+| R-01 (storage atomic-write) | partial-write corrupt JSON | `atomic_write_tasks` writes to tmp + `os.replace`; startup validation re-reads full file | tmp file permission = 0600 (mask 0077); script-level validation that re-decodes JSON before acknowledge | on some filesystems `os.replace` is still a rename race |
+
+The control inventory above defines the scope of any future vulnerability assessment:
+- **applied controls**: secret redaction (mask), subprocess sandboxing (auth-bypass via shell=False), signature verification (hmac) on harness manifests, input validation (sanitizer + validate), pii classification for persisted fields, permission check on signing key, per-P E2E regression cycle.
+- **not applied** (out of scope per SPEC): rbac multi-user mode, tls transport (taskq is local-only CLI), encrypt-at-rest (host fs protection is OS-level), rate limit per task (only global), whitelist beyond the redaction regex, compare_digest beyond manifest integrity, input sanitizer outside exec argv.
+- **planned** (per MITIGATION PLANS): workflow-lint script, encryption-at-rest optional flag (post-P8).
+
 ## Decision Gate Confirmation
 
 | Risk ID | Decision | Approver | session_id | Date |

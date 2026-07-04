@@ -374,7 +374,7 @@ for (let round = 1; round <= ADVANCE_MAX_ROUNDS; round++) {
     + '   advance-phase independently re-verifies EVERYTHING before it will advance — its own output tells you exactly what is missing. If it prints "[BLOCKED] ...", that message IS the fix instruction: read it verbatim and do exactly what it says, then re-run this same advance-phase command. Do NOT guess what might be wrong — trust only what advance-phase itself reports. It is safe to re-run repeatedly within this round.\n'
     + '2. Read ' + REPO + '/.methodology/state.json; confirm current_phase = 8 (advance-phase atomically writes state.json when complete).\n\n'
     + 'Report final line: "ADVANCE: PASS|FAIL — <details>". If still FAIL after exhausting this round\'s turn, report the LAST [BLOCKED] message verbatim so the next round starts from where this one left off. PHASE_8_PLAN: ' + REPO + '/.methodology/phase8_plan.md\n\n'
-    + 'SCOPE RULES:\n- DO NOT re-do P7 docs.\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY advance-phase + verify HANDOVER.md + the specific fixes advance-phase\'s own output asked for.',
+    + 'SCOPE RULES:\n- DO NOT re-do P7 docs.\n- DO NOT use --no-verify.\n- DO NOT modify harness/ (HR-17).\n- ONLY advance-phase + verify HANDOVER.md + the specific fixes advance-phase\'s own output asked for.\n- Any diagnostic/debug script MUST be written under .sessi-work/tmp/ (never repo root or source dirs) and self-cleaned before you exit.',
     { label: 'advance-r' + round, phase: 'Advance', agentType: 'general-purpose' },
   )
   if (advanceReport === null || advanceReport === undefined || (typeof advanceReport === 'string' && advanceReport.length < 10)) {
