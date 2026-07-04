@@ -572,7 +572,7 @@ const adrConstReport = await agent(
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py check-constitution --phase 2 --project ' + REPO + ' --file 02-architecture/adr/ADR.md`\n'
   + '- PASS → report "ADR-CONSTITUTION: PASS".\n'
-  + '- FAIL → expand decision/rationale/consequences, remove template-stub markers, re-run until PASS.\n'
+  + '- FAIL → the output lists `missing: <keywords>` on each sub-threshold dimension. Add substantive content covering those exact terms (e.g. a traceability table linking each decision to the SRS FR-IDs and specification it satisfies), remove any template-stub markers, re-run until PASS. Do NOT keyword-stuff — fold the terms into real decision context.\n'
   + '- File missing ([SKIP] exit 0) → report "ADR-CONSTITUTION: FAIL — ADR.md missing" (escalate).\n\n'
   + 'SCOPE RULES:\n- DO NOT touch SAD/TEST_SPEC.\n- DO NOT run phase-transition commands.\n- ONLY check-constitution on ADR.md and fix it.',
   { label: 'constitution-adr', phase: 'Constitution Check — ADR', agentType: 'general-purpose' },
@@ -662,7 +662,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     'YOU ARE THE PHASE-2 CONSTITUTION CHECKER. Run bash, fix, report.\n'
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
     + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py check-constitution --phase 2 --project ' + REPO + '`\n'
-    + 'If PASS: report "CONSTITUTION: PASS". If FAIL: read which docs miss keywords, surgically add them (do NOT remove content), re-run until PASS.\n\n'
+    + 'If PASS: report "CONSTITUTION: PASS". If FAIL: the output lists `missing: <keywords>` on each sub-threshold dimension — surgically fold those exact terms into the relevant P2 doc as real content (e.g. a traceability table to SRS FR-IDs), do NOT remove content or keyword-stuff, re-run until PASS.\n\n'
     + 'SCOPE RULES:\n- DO NOT run advance-phase/push/run-gate.\n- ONLY check-constitution + edit P2 deliverables to fix.',
     { label: 'constitution-' + attempt, phase: 'Constitution Check', agentType: 'general-purpose' },
   )
