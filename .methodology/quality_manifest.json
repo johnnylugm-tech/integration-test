@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "generated_at_phase": 2,
+  "fr_ids": [],
+  "nfr_dimension_mapping": {
+    "NFR-01": "performance",
+    "NFR-02": "security",
+    "NFR-03": "error_handling",
+    "NFR-04": "security",
+    "NFR-05": "readability"
+  },
+  "nfr_fr_mapping": {},
+  "nfr_traceability": {
+    "NFR-01": {
+      "type": "performance",
+      "target": "submit+status p95 < 50ms over 100 iterations",
+      "module": "taskq.cli"
+    },
+    "NFR-02": {
+      "type": "security",
+      "target": "shell=True usage rate = 0 across src/",
+      "module": "taskq.executor"
+    },
+    "NFR-03": {
+      "type": "reliability",
+      "target": "atomic_write 100% across 3 JSON files; breaker OPEN→CLOSED <= TASKQ_BREAKER_COOLDOWN + 1s",
+      "module": "taskq.store"
+    },
+    "NFR-04": {
+      "type": "security",
+      "target": "redaction hit rate = 100% for (sk-[A-Za-z0-9_-]{8,}|token=\\S+)",
+      "module": "taskq.executor"
+    },
+    "NFR-05": {
+      "type": "maintainability",
+      "target": "docstring [FR-XX] coverage = 100% of public funcs/classes in src/taskq/",
+      "module": "taskq.models"
+    },
+    "NFR-06": {
+      "type": "deployability",
+      "target": "8 TASKQ_* env vars exposed via typed getters in config.py",
+      "module": "taskq.config"
+    }
+  },
+  "quality_targets": {
+    "max_complexity": 15,
+    "min_coverage": 80,
+    "max_coupling": 0.3
+  },
+  "fr_module_traceability": {
+    "FR-01": "taskq.cli",
+    "FR-02": "taskq.executor",
+    "FR-03": "taskq.breaker",
+    "FR-04": "taskq.cache",
+    "FR-05": "taskq.cli"
+  },
+  "architecture_constraints": [
+    "no_circular_dependencies",
+    "no_shell_true_in_subprocess",
+    "atomic_write_required_for_all_json_files",
+    "single_subprocess_call_site_in_executor"
+  ],
+  "high_risk_modules": [
+    "taskq.executor",
+    "taskq.store"
+  ],
+  "gate_score_overrides": {
+    "performance": 75.0,
+    "security": 80.0,
+    "error_handling": 80.0,
+    "readability": 80.0,
+    "test_coverage": 80.0
+  },
+  "gate_results": {
+    "gate1": {},
+    "gate2": null,
+    "gate3": null,
+    "gate4": null
+  }
+}
