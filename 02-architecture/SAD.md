@@ -16,7 +16,7 @@
 > integration tests or smoke-test suite). The target name is fixed — the harness always
 > calls `make verify-system`.
 
-**Makefile target**: `verify-system` (already present at `Makefile:14,20-21`; chains `test → shell-audit → smoke`).
+**Makefile target**: `verify-system` (already present at `Makefile:20-21`; chains `test → shell-audit → smoke`).
 
 `verify-system` audit chain:
 1. `make test` — `pytest tests/ -q` (FR-01..FR-05 acceptance)
@@ -430,60 +430,53 @@ sab:
   phase: 2  # MUST be int, NOT a string — parser raises on 'phase: "2"'
   project: "taskq"
 
-  layers:  # single-layer CLI; modules enumerated per FR
-    - name: cli
+  layers:  # api/service/store-style from SAD §2.6 (modules are plain strings, not dicts)
+    - name: api  # entry + orchestration: CLI surface + python -m taskq dispatcher
       modules:
-        - taskq.cli
-        - taskq.executor
-        - taskq.breaker
-        - taskq.cache
-        - taskq.store
-        - taskq.config
-        - taskq.models
-        - taskq.__main__
+        - "taskq.cli"
+        - "taskq.__main__"
+      allowed_dependencies: ["service", "store", "config", "models"]
+    - name: service  # runtime logic: subprocess exec, retry, breaker, TTL cache
+      modules:
+        - "taskq.executor"
+        - "taskq.breaker"
+        - "taskq.cache"
+      allowed_dependencies: ["store", "config", "models"]
+    - name: config  # single env reader for all 8 TASKQ_* vars (NFR-06)
+      modules:
+        - "taskq.config"
+      allowed_dependencies: ["models"]
+    - name: store  # I/O HUB — atomic JSON writes + shared Lock (FR-01/02, NFR-03)
+      modules:
+        - "taskq.store"
+      allowed_dependencies: ["models"]
+    - name: models  # frozen dataclasses (Task / TaskStatus / BreakerState / CacheEntry)
+      modules:
+        - "taskq.models"
       allowed_dependencies: []
 
   allowed_dependencies:
-    # DAG (no cycles):
-    #   cli     → executor, breaker, cache, store, config, models
-    #   executor → breaker, cache, store, models, config
-    #   breaker  → store, models, config
-    #   cache    → store, models, config
-    #   store    → models
-    - from: cli
-      to: executor
-    - from: cli
-      to: breaker
-    - from: cli
-      to: cache
-    - from: cli
+    # DAG per SAD §2.6 (no cycles; cli top, models bottom).
+    # api → service, store, config, models
+    - from: api
+      to: service
+    - from: api
       to: store
-    - from: cli
+    - from: api
       to: config
-    - from: cli
+    - from: api
       to: models
-    - from: executor
-      to: breaker
-    - from: executor
-      to: cache
-    - from: executor
+    # service → store, config, models
+    - from: service
       to: store
-    - from: executor
-      to: models
-    - from: executor
+    - from: service
       to: config
-    - from: breaker
-      to: store
-    - from: breaker
+    - from: service
       to: models
-    - from: breaker
-      to: config
-    - from: cache
-      to: store
-    - from: cache
+    # config → models
+    - from: config
       to: models
-    - from: cache
-      to: config
+    # store → models
     - from: store
       to: models
 
@@ -492,44 +485,45 @@ sab:
     min_coverage: 80
     max_coupling: 0.3
 
-  nfr_dimension_mapping: {}  # OPTIONAL — auto-derived from nfr_traceability.type
+  nfr_dimension_mapping: {}  # OPTIONAL — auto-derived by parser from nfr_traceability.type
 
   nfr_traceability:
     NFR-01:
       type: performance
-      target: "p95 < 50ms"
+      target: "submit+status p95 < 50ms over 100 iterations"
       module: taskq.cli
     NFR-02:
       type: security
-      target: "shell=True usage = 0"
+      target: "shell=True usage rate = 0 across src/"
       module: taskq.executor
     NFR-03:
       type: reliability
-      target: "atomic_write 100%, breaker recovery <= TASKQ_BREAKER_COOLDOWN + 1s"
+      target: "atomic_write 100% across 3 JSON files; breaker OPEN→CLOSED <= TASKQ_BREAKER_COOLDOWN + 1s"
       module: taskq.store
     NFR-04:
       type: security
-      target: "redaction hit rate = 100% (sk-*, token=)"
+      target: "redaction hit rate = 100% for (sk-[A-Za-z0-9_-]{8,}|token=\\S+)"
       module: taskq.executor
     NFR-05:
       type: maintainability
-      target: "docstring [FR-XX] coverage = 100% of public funcs"
-      module: taskq.cli
+      target: "docstring [FR-XX] coverage = 100% of public funcs/classes in src/taskq/"
+      # Cross-cutting convention — applies to every public def/class in src/taskq/.
+      module: taskq.models
     NFR-06:
       type: deployability
-      target: "8 TASKQ_* env vars readable from config.py"
+      target: "8 TASKQ_* env vars exposed via typed getters in config.py"
       module: taskq.config
 
-  advisory_only: []  # AUTO-FILLED by parser — omit or leave []
+  advisory_only: []  # AUTO-FILLED by parser from nfr_traceability advisory types — omit or leave []
 
-  gate_score_overrides: {}  # AUTO-DERIVED by parser — omit or leave {}
+  gate_score_overrides: {}  # AUTO-DERIVED by parser from nfr_traceability — omit or leave {}
 
-  fr_module_traceability:  # one entry per FR (SPEC §3)
-    FR-01: "taskq.cli"
-    FR-02: "taskq.executor"
-    FR-03: "taskq.executor"
-    FR-04: "taskq.cache"
-    FR-05: "taskq.cli"
+  fr_module_traceability:  # one entry per FR (SPEC §3 — 5 FRs)
+    FR-01: "taskq.cli"          # submit + validation rules + atomic write dispatch
+    FR-02: "taskq.executor"     # subprocess.run + pending→running→{done,failed,timeout} state machine
+    FR-03: "taskq.breaker"      # CLOSED/OPEN/HALF_OPEN state machine + breaker.json atomic persistence
+    FR-04: "taskq.cache"        # sha256(command) TTL replay
+    FR-05: "taskq.cli"          # argparse subcommands (submit/run/status/list/clear) + exit codes
 
   architecture_constraints:
     - "no_circular_dependencies"
@@ -538,8 +532,8 @@ sab:
     - "single_subprocess_call_site_in_executor"
 
   high_risk_modules:
-    - "taskq.executor"   # subprocess + retry + redaction (FR-02/03/04 + NFR-02/04)
-    - "taskq.store"      # atomic write + Lock + concurrent safety (FR-01/02 + NFR-03)
+    - "taskq.executor"   # subprocess + retry + redaction (FR-02/03 + NFR-02/04); sole shell=True risk surface
+    - "taskq.store"      # atomic write + Lock + concurrent safety (FR-01/02 + NFR-03); breaker recovery bound
 ```
 <!-- SAB:END -->
 

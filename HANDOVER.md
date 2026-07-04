@@ -2,7 +2,7 @@
 
 **Checkpoint**: `P2-exit-20260704`  
 **Phase**: P2 — Architecture & Design  
-**Generated**: 2026-07-04T16:51:56Z
+**Generated**: 2026-07-04T18:10:35Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -53,16 +53,18 @@ P2 phase completed — pushed for record.
 
 ## 交付物清單
 
-- `02-architecture/SAD.md` ✅ (552L)
+- `02-architecture/SAD.md` ✅ (546L)
 
 ## 目前執行狀況
 
 0 FR(s) in quality manifest []. 1/3 P2 deliverables present, Agent-B APPROVED.
 
 **Recently Committed Files:**
-  - `.methodology/state.json`
   - `.methodology/trace/attestation.json`
-  - `HANDOVER.md`
+  - `harness`
+  - `.claude/workflows/phase1-requirements.js`
+  - `.claude/workflows/phase6-quality.js`
+  - `.claude/workflows/phase2-architecture.js`
   - `.claude/plans/phase1_plan.md`
   - `.claude/plans/phase2_plan.md`
   - `.claude/plans/phase3_plan.md`
@@ -74,12 +76,10 @@ P2 phase completed — pushed for record.
   - `.methodology/SAB.json`
   - `.methodology/agent_b_approvals/ADR.md.json`
   - `.methodology/agent_b_approvals/SAD.md.json`
+  - `.methodology/state.json`
   - `02-architecture/SAD.md`
   - `02-architecture/TEST_SPEC.md`
   - `02-architecture/adr/ADR.md`
-  - `TEST_INVENTORY.yaml`
-  - `.claude/workflows/phase2-architecture.js`
-  - `harness`
 
 ## 接下來的工作
 

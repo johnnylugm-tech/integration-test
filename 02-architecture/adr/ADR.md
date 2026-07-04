@@ -4,6 +4,8 @@
 > Each ADR captures context, decision, consequences, and alternatives considered.
 > Status legend: **Accepted** = binding for Phase 3+ | **Proposed** = pending review | **Deprecated** = superseded.
 
+> **Template parity note.** `harness/templates/ADR.md` prescribes the heading set *Status / Context / Decision / Rationale / Consequences*. This document uses **Alternatives Considered** in lieu of *Rationale* in each ADR — the rationale content is carried inside the *Decision* body, and *Alternatives Considered* enumerates the rejected options (a superset of the canonical *Rationale* semantics). Substitution is intentional: alternatives-capture the why-not of every considered approach, which *Rationale* does not.
+
 ---
 
 ## ADR-001: Python 3.11 stdlib-only runtime
@@ -286,7 +288,7 @@ subprocess.run(shlex.split(command), capture_output=True, text=True,
 ```
 - `shlex.split` decomposes the command into argv without invoking a shell.
 - `shell=False` (default) ensures the child process receives argv directly.
-- `make shell-audit` runs `grep -rE "shell\s*=\s*True" src/ tests/` — must produce zero hits.
+- `make shell-audit` invokes `python scripts/shell_audit.py $(SRC_DIR)`, which delegates to `harness.core.audit.audit_grep` with **docstring/comment exclusion** (per SAD.md §1.1 line 23). The audited pattern `shell\s*=\s*True` must produce zero hits across `src/` and `tests/`. Routing through the harness audit (rather than bare `grep`) is essential — plain `grep` re-introduces the docstring-false-positive class of bug (cf. Bug #126 from the 2026-06-27 E2E round) that the harness audit script exists to prevent.
 
 ### Consequences
 - **Positive**: shell injection is structurally impossible at the subprocess boundary.
@@ -428,7 +430,7 @@ This traceability matrix is the binding ledger between each architecture decisio
 
 | ADR | Title (short) | Owning SRS FR | Supporting SRS NFR | Spec section satisfied | Implementation site (for Phase 3+) |
 |-----|---------------|---------------|--------------------|------------------------|-------------------------------------|
-| ADR-001 | Python 3.11 stdlib-only runtime | FR-05 (CLI integration) | NFR-02 (security: shell), NFR-06 (deployability) | SPEC.md §2 dependency budget; SPEC.md §7 portability | all `src/taskq/*.py` (8 modules) |
+| ADR-001 | Python 3.11 stdlib-only runtime | cross-cutting (tech-stack constraint; no owning FR) | NFR-02 (security: shell), NFR-06 (deployability) | SPEC.md §2 dependency budget; SPEC.md §7 portability | all `src/taskq/*.py` (8 modules) |
 | ADR-002 | JSON-file persistence under $TASKQ_HOME | FR-01 (task submit), FR-02 (executor) | NFR-03 (atomic write + breaker recovery), NFR-06 | SPEC.md §1 storage model; SPEC.md §7 atomicity | `store.py` |
 | ADR-003 | ThreadPoolExecutor + shared Lock concurrency | FR-02 (parallel run --all) | NFR-01 (perf p95 < 50ms), NFR-03 | SPEC.md §3 FR-02 "concurrent execution" | `executor.py`, `store.py` |
 | ADR-004 | Atomic write `tmp + os.replace` | FR-01/02 (state transitions) | NFR-03 (reliability / torn-write prevention) | SPEC.md §7 atomicity clause | `store.atomic_write_json` |
@@ -436,7 +438,7 @@ This traceability matrix is the binding ledger between each architecture decisio
 | ADR-006 | TTL cache (sha256(command) keyed) | FR-04 (result replay) | NFR-01 (cache-hit zero-subprocess perf) | SPEC.md §3 FR-04 "within TTL window" | `cache.py` |
 | ADR-007 | Layered single-process CLI architecture | FR-05 (CLI surface) | NFR-05 (docstring `[FR-XX]` convention) | SPEC.md §1 "single-process CLI"; §6 module layout | `cli.py`, `__main__.py` |
 | ADR-008 | Hub-and-spoke internal structure | FR-01..FR-05 (all modules own ≥1 FR) | NFR-05 (docstring cross-ref) | SPEC.md §6 module count + naming | `store.py` (I/O hub), `cli.py` (orchestration hub), `executor.py` (secondary hub) |
-| ADR-009 | Argparse-based subcommand CLI | FR-05 (subcommands submit/run/status/list/clear) | NFR-01 (argparse zero overhead), NFR-07 (exit code policy) | SPEC.md §7 CLI surface + exit code table | `cli.py` |
+| ADR-009 | Argparse-based subcommand CLI | FR-05 (subcommands submit/run/status/list/clear + AC-FR-05-03 exit code policy) | NFR-01 (argparse zero overhead) | SPEC.md §7 CLI surface + exit code table | `cli.py` |
 | ADR-010 | Single subprocess call site, `shell=False` only | FR-02 (subprocess execution), FR-01 (validation) | NFR-02 (security: no shell, no injection) | SPEC.md §4 NFR-02 + FR-01 injection blacklist | `executor.execute` (only call site) |
 | ADR-011 | Determinism hooks (`sleep_fn`, `now_fn`, `time_fn`) | FR-03 (retry backoff + breaker cooldown), FR-04 (cache TTL) | NFR-03 (testability for recovery), NFR-05 | SPEC.md §3 FR-03/FR-04 timing contracts | `executor.py`, `breaker.py`, `cache.py` (kw-only params) |
 | ADR-012 | Frozen `@dataclass` models + explicit FSM transitions | FR-02 (state machine), FR-01 (Task identity) | NFR-05 (immutable models) | SPEC.md §3 FR-02 `pending → running → {done,failed,timeout}` | `models.py` |

@@ -1,0 +1,21 @@
+{
+  "fr": "TEST_SPEC.md",
+  "review_status": "APPROVE",
+  "reason": "TEST_SPEC.md v1.0 (2026-07-04) is a complete Phase 2 deliverable that satisfies the derive_test_cases.md protocol: every FR (FR-01..FR-05) and every NFR (NFR-01..NFR-06) has named test functions with concrete key=value Inputs, Q1-Q7 derivation columns, classification tags (DATA_ENTITY / STATE_MACHINE / ALGORITHM / API_ENDPOINT), per-FR sub-assertion tables (rule_id + predicate + applies_to), and an explicit AC Mapping Table back to canonical SRS ACs. NFR Pattern Activation is filled (NP-04, NP-06, NP-07, NP-13, NP-15) with the three SAD-driven forced patterns (NP-13 store.py / NP-15 executor.py / NP-07 cache.py) properly tagged SAD: and routed under tests/integration/. The previously-cited upstream ADR-005 default-value error (threshold=5 vs canonical=3) is correctly FIXED in TEST_SPEC FR-",
+  "citations": [
+    "02-architecture/TEST_SPEC.md:53",
+    "02-architecture/TEST_SPEC.md:135",
+    "02-architecture/TEST_SPEC.md:407",
+    "02-architecture/TEST_SPEC.md:417",
+    "01-requirements/SRS.md:445",
+    "02-architecture/SAD.md:143",
+    "02-architecture/adr/ADR.md:133"
+  ],
+  "docs_embedded": [
+    "SRS.md",
+    "SAD.md",
+    "TEST_SPEC.md",
+    "ADR.md"
+  ],
+  "confidence": 0.9
+}

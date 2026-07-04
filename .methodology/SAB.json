@@ -5,52 +5,71 @@
   "project": "taskq",
   "layers": [
     {
-      "name": "cli",
+      "name": "api",
       "modules": [
         "taskq.cli",
-        "taskq.executor",
-        "taskq.breaker",
-        "taskq.cache",
-        "taskq.store",
-        "taskq.config",
-        "taskq.models",
         "taskq.__main__"
       ],
       "allowed_dependencies": [
-        "executor",
-        "breaker",
-        "cache",
+        "service",
         "store",
         "config",
         "models"
       ]
+    },
+    {
+      "name": "service",
+      "modules": [
+        "taskq.executor",
+        "taskq.breaker",
+        "taskq.cache"
+      ],
+      "allowed_dependencies": [
+        "store",
+        "config",
+        "models"
+      ]
+    },
+    {
+      "name": "config",
+      "modules": [
+        "taskq.config"
+      ],
+      "allowed_dependencies": [
+        "models"
+      ]
+    },
+    {
+      "name": "store",
+      "modules": [
+        "taskq.store"
+      ],
+      "allowed_dependencies": [
+        "models"
+      ]
+    },
+    {
+      "name": "models",
+      "modules": [
+        "taskq.models"
+      ],
+      "allowed_dependencies": []
     }
   ],
   "dependencies": {
-    "cli": [
-      "executor",
-      "breaker",
-      "cache",
+    "api": [
+      "service",
       "store",
       "config",
       "models"
     ],
-    "executor": [
-      "breaker",
-      "cache",
+    "service": [
       "store",
-      "models",
-      "config"
+      "config",
+      "models"
     ],
-    "breaker": [
-      "store",
-      "models",
-      "config"
-    ],
-    "cache": [
-      "store",
-      "models",
-      "config"
+    "config": [
+      "models"
     ],
     "store": [
       "models"
@@ -71,32 +90,32 @@
   "nfr_traceability": {
     "NFR-01": {
       "type": "performance",
-      "target": "p95 < 50ms",
+      "target": "submit+status p95 < 50ms over 100 iterations",
       "module": "taskq.cli"
     },
     "NFR-02": {
       "type": "security",
-      "target": "shell=True usage = 0",
+      "target": "shell=True usage rate = 0 across src/",
       "module": "taskq.executor"
     },
     "NFR-03": {
       "type": "reliability",
-      "target": "atomic_write 100%, breaker recovery <= TASKQ_BREAKER_COOLDOWN + 1s",
+      "target": "atomic_write 100% across 3 JSON files; breaker OPEN→CLOSED <= TASKQ_BREAKER_COOLDOWN + 1s",
       "module": "taskq.store"
     },
     "NFR-04": {
       "type": "security",
-      "target": "redaction hit rate = 100% (sk-*, token=)",
+      "target": "redaction hit rate = 100% for (sk-[A-Za-z0-9_-]{8,}|token=\\S+)",
       "module": "taskq.executor"
     },
     "NFR-05": {
       "type": "maintainability",
-      "target": "docstring [FR-XX] coverage = 100% of public funcs",
-      "module": "taskq.cli"
+      "target": "docstring [FR-XX] coverage = 100% of public funcs/classes in src/taskq/",
+      "module": "taskq.models"
     },
     "NFR-06": {
       "type": "deployability",
-      "target": "8 TASKQ_* env vars readable from config.py",
+      "target": "8 TASKQ_* env vars exposed via typed getters in config.py",
       "module": "taskq.config"
     }
   },
@@ -112,7 +131,7 @@
   "fr_module_traceability": {
     "FR-01": "taskq.cli",
     "FR-02": "taskq.executor",
-    "FR-03": "taskq.executor",
+    "FR-03": "taskq.breaker",
     "FR-04": "taskq.cache",
     "FR-05": "taskq.cli"
   },

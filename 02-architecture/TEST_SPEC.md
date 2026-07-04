@@ -217,6 +217,75 @@ Note: TEST_INVENTORY names preserved. Case 6 integration variant under `tests/in
 
 ---
 
+## Rule ID Schema (Traceability Convention)
+
+> **Convention**: `rule_id` uses a local **case-number-as-prefix** format
+> `AC-FRxx-NN-<predicate>` where:
+> - `xx` is the FR number zero-padded (`01`, `02`, ..., `05`)
+> - `NN` is the local case number (`01`..N) inside this TEST_SPEC,
+>   indexed against the per-FR case tables above (case # column)
+> - `<predicate>` is a short kebab-case summary of the assertion
+>
+> This local convention **drifts from canonical SRS AC numbering**
+> (`AC-FR-XX-NN` where `XX` is the FR number and `NN` indexes the
+> canonical AC count). The mapping is preserved in the **AC Mapping Table**
+> below — it is the single source of truth for downstream traceability
+> tools to map `TEST_SPEC rule_id → SRS canonical AC`.
+>
+> **Why drift**: One TEST_SPEC case may cover multiple SRS ACs (e.g. FR-03
+> case 4 covers both `AC-FR-03-02` threshold and `AC-FR-03-03` OPEN exit
+> code), and one SRS AC may be split across multiple TEST_SPEC cases
+> (e.g. SRS `AC-FR-01-01` non-empty split into TEST_SPEC case 2 empty + case
+> 3 whitespace per SPEC.md §3 FR-01 row "非空"). The local case index is
+> stable per test catalog; canonical ACs are preserved verbatim.
+
+### AC Mapping Table (TEST_SPEC rule_id → SRS canonical AC)
+
+| TEST_SPEC rule_id | SRS canonical AC | Notes |
+|---|---|---|
+| `AC-FR01-01-id-len` / `-id-hex` / `-status-pending` / `-task-count-one` | `AC-FR-01-05` | success path |
+| `AC-FR01-02-empty-rejected` | `AC-FR-01-01` | empty substring |
+| `AC-FR01-03-whitespace-rejected` | `AC-FR-01-01` | whitespace substring (TEST_SPEC adds case 3 split) |
+| `AC-FR01-04-too-long-rejected` / `-len-1001` | `AC-FR-01-02` | |
+| `AC-FR01-05-injection-rejected` / `-has-semicolon` / `-via-NFR02-cross-ref` | `AC-FR-01-03` | also satisfies `AC-NFR-02-02` |
+| `AC-FR01-06-name-conflict-rejected` / `-name-dup` | `AC-FR-01-04` | |
+| `AC-FR02-01-exit-0` / `-no-shell-true` | `AC-FR-02-01` | |
+| `AC-FR02-02-done` / `-failed` / `-timeout` | `AC-FR-02-02` | |
+| `AC-FR02-03-tail-2000` | `AC-FR-02-03` | |
+| `AC-FR02-04-pool-done` / `-pool-workers` / `AC-FR02-06-json-valid` / `-no-loss` / `-n-tasks` | `AC-FR-02-04` | |
+| `AC-FR02-05-timeout-exit-4` / `-timeout-status` | `AC-FR-02-05` | |
+| `AC-FR03-01-backoff-formula` / `-backoff-base` / `-attempt-n` | `AC-FR-03-01` | |
+| `AC-FR03-02-cap-applied` / `-limit-2` | `AC-FR-03-01` | retry cap (sub-clause) |
+| `AC-FR03-03-timeout-retry` | `AC-FR-03-01` | timeout-triggered retry |
+| `AC-FR03-04-opens` / `-threshold-3` | `AC-FR-03-02` | |
+| `AC-FR03-05-exit-3` / `-stderr-marker` | `AC-FR-03-03` | |
+| `AC-FR03-06-closes` / `-count-zero` | `AC-FR-03-04` | HALF_OPEN→CLOSED |
+| `AC-FR03-07-reopens` | `AC-FR-03-04` | HALF_OPEN→OPEN |
+| `AC-FR03-08-json-valid` / `-file` | `AC-FR-03-05` | breaker.json persistence |
+| `AC-FR04-01-sha256-len-64` | `AC-FR-04-01` | |
+| `AC-FR04-02-replay-status` / `-cached-true` / `-ttl-3600` | `AC-FR-04-02` | |
+| `AC-FR04-03-expiry-reruns` / `-cached-false` / `-expired` | `AC-FR-04-03` | |
+| `AC-FR04-04-json-valid` / `-no-loss` / `-writers` | `AC-FR-04-04` | |
+| `AC-FR05-01-5-subcommands` / `-rcs-zero` | `AC-FR-05-01` | |
+| `AC-FR05-02-json-key` / `-json-flag` | `AC-FR-05-02` | |
+| `AC-FR05-03-rc-matrix` / `-six-cases` | `AC-FR-05-03` | |
+| `AC-FR05-04-unknown-id` / `-stderr-marker` / `-id-hex8` | `AC-FR-05-03` | unknown-id exit-2 |
+| `AC-NFR01-01-iters-100` / `-budget-50` | `AC-NFR-01-01` | |
+| `AC-NFR02-01-hits-0` / `-pattern` | `AC-NFR-02-01` | |
+| `AC-NFR02-02-injection-tests-exist` | `AC-NFR-02-02` | cross-references FR-01 case 5 |
+| `AC-NFR03-01-json-valid` / `-three-files` | `AC-NFR-03-01` | |
+| `AC-NFR03-02-budget-6` / `-state-closed` | `AC-NFR-03-02` | |
+| `AC-NFR04-01-sk-redacted` / `-sk-8plus` | `AC-NFR-04-01` | |
+| `AC-NFR04-02-token-redacted` / `-token-pattern` | `AC-NFR-04-01` | |
+| `AC-NFR04-03-unchanged` / `-no-pattern` | `AC-NFR-04-01` | negative |
+| `AC-NFR04-04-persisted` / `-tasks-json` | `AC-NFR-04-01` | persistence-cross-cut |
+| `AC-NFR05-01-coverage-100` / `-src-taskq` | `AC-NFR-05-01` | |
+| `AC-NFR06-01-default-home` / `-eight-vars` | `AC-NFR-06-01` | |
+| `AC-NFR06-02-override` / `-env-set` | `AC-NFR-06-01` | override sub-clause |
+| `AC-NFR06-03-env-file` / `-eight-vars` | `AC-NFR-06-01` | .env.example sub-clause |
+
+---
+
 ## Cross-Cutting Test Cases
 
 ### NFR-01 — Performance (p95 latency)
@@ -237,6 +306,7 @@ Note: TEST_INVENTORY names preserved. Case 6 integration variant under `tests/in
 | # | Test Function | Inputs | Type | Derivation |
 |---|---|---|---|---|
 | 1 | `test_nfr02_no_shell_true_in_codebase` | pattern="shell=True"; expected_hits="0"; scan_path="src/" | security | Q6 |
+| 2 | `test_nfr02_injection_blacklist_test_exists` | target_test="test_fr01_add_task_injection_chars_rejected"; expected_in_catalog="true" | security (cross-ref guard) | Q7 |
 
 **Sub-assertions**
 
@@ -244,8 +314,10 @@ Note: TEST_INVENTORY names preserved. Case 6 integration variant under `tests/in
 |---|---|---|
 | AC-NFR02-01-hits-0 | `expected_hits == "0"` | 1 |
 | AC-NFR02-01-pattern | `pattern == "shell=True"` | 1 |
+| AC-NFR02-02-injection-tests-exist | `expected_in_catalog == "true"` | 2 |
+| AC-NFR02-02-target-test | `target_test == "test_fr01_add_task_injection_chars_rejected"` | 2 |
 
-*Note*: AC-NFR-02-02 (injection char blacklist test coverage) is satisfied by FR-01 case 5 (`test_fr01_add_task_injection_chars_rejected`); see FR-01 sub-assertion rule_id `AC-FR01-05-via-NFR02-cross-ref` for the explicit cross-reference predicate.
+*Note*: AC-NFR-02-02 (injection char blacklist test coverage) is satisfied as a first-class row by case 2 above (cross-ref guard asserting the FR-01 case 5 test function exists in the catalog). Case 5 itself (`test_fr01_add_task_injection_chars_rejected`) is the substantive blackbox test that exercises the injection-char rejection behavior; see FR-01 sub-assertion rule_id `AC-FR01-05-via-NFR02-cross-ref` for the runtime cross-reference predicate.
 
 ### NFR-03 — Reliability (atomic write + breaker recovery)
 
@@ -321,9 +393,9 @@ Note: TEST_INVENTORY names preserved. Case 6 integration variant under `tests/in
 
 | # | Test Function | Type | Derivation |
 |---|---|---|---|
-| 1 | `test_app_starts_and_health_endpoint_returns_200` | smoke | deployment |
+| 1 | `test_smoke_cli_e2e` | smoke | deployment |
 
-*Note*: taskq is a CLI tool (no HTTP endpoint). The smoke case validates `python -m taskq submit "echo hi" && python -m taskq run <id>` end-to-end; the literal name `test_app_starts_and_health_endpoint_returns_200` is retained from the template per D4 name preservation rule. P3 may rename to `test_smoke_cli_e2e` with Agent B sign-off.
+*Note*: taskq is a CLI tool (no HTTP endpoint). The smoke case validates `python -m taskq submit "echo hi" && python -m taskq run <id>` end-to-end. Name renamed from template-derived `test_app_starts_and_health_endpoint_returns_200` to `test_smoke_cli_e2e` at Round 2 (P2 review gap closure) — the original name was misleading for a CLI tool that has no health endpoint per SPEC.md §1 and SRS.md §1.2.
 
 ---
 
@@ -332,13 +404,13 @@ Note: TEST_INVENTORY names preserved. Case 6 integration variant under `tests/in
 | Metric | Count |
 |---|---|
 | FRs covered | 5 (FR-01..FR-05) + 6 NFRs (NFR-01..NFR-06) |
-| Total test cases | 40 (TEST_INVENTORY.yaml says 39; TEST_SPEC adds +1 for FR-01 whitespace split per FR-01 row below — discrepancy accepted at P2 review with rationale) |
+| Total test cases | 41 (TEST_INVENTORY.yaml says 39; TEST_SPEC adds +1 for FR-01 whitespace split per FR-01 row below + +1 for NFR-02 case 2 cross-ref guard added at Round 2 — both discrepancies accepted at P2 review with rationale) |
 | By type: happy_path | 11 |
 | By type: validation/failure | 11 |
 | By type: boundary | 3 |
 | By type: state_transition | 6 |
 | By type: fault_injection / integration | 5 |
-| By type: nfr_pattern (perf / security / reliability / maintainability / deployability) | 8 |
+| By type: nfr_pattern (perf / security / reliability / maintainability / deployability) | 9 |
 | By type: smoke | 1 |
 | Active NFR patterns applied | NP-04, NP-06, NP-07, NP-13, NP-15 |
 | SAD-driven forced patterns (Step 1b) | NP-13 (store.py), NP-15 (executor.py), NP-07 (cache.py) |
@@ -353,10 +425,12 @@ Per-FR test case counts (cross-checked against TEST_INVENTORY.yaml `by_fr`):
 | FR-03 | 8 | 8 |
 | FR-04 | 4 | 4 |
 | FR-05 | 4 | 4 |
-| NFR-01..06 | 12 | 12 |
-| **Total** | **39** | **40** |
+| NFR-01..06 | 12 | 13 (+1 for NFR-02 case 2 cross-ref guard added at Round 2 to make AC-NFR-02-02 a first-class row) |
+| **Total** | **39** | **41** |
 
-Discrepancy: FR-01 has 6 cases in TEST_SPEC vs 5 in TEST_INVENTORY — TEST_INVENTORY rolls all injection chars into `test_fr01_add_task_injection_chars_rejected` (parametric enumeration), while TEST_SPEC splits whitespace-only into a separate case to satisfy the Q2 "validation or failure" mandate that whitespace-rejection is a distinct observable rule. P3 Agent A implements `test_fr01_add_task_whitespace_rejected` as an additional test (whitespace is a distinct rule per SPEC §3 FR-01 row "非空"). Agent B (TECH_LEAD) will accept this discrepancy at P2 review with rationale.
+Discrepancy 1 (FR-01): FR-01 has 6 cases in TEST_SPEC vs 5 in TEST_INVENTORY — TEST_INVENTORY rolls all injection chars into `test_fr01_add_task_injection_chars_rejected` (parametric enumeration), while TEST_SPEC splits whitespace-only into a separate case to satisfy the Q2 "validation or failure" mandate that whitespace-rejection is a distinct observable rule. P3 Agent A implements `test_fr01_add_task_whitespace_rejected` as an additional test (whitespace is a distinct rule per SPEC §3 FR-01 row "非空"). Agent B (TECH_LEAD) will accept this discrepancy at P2 review with rationale.
+
+Discrepancy 2 (NFR-02): NFR-02 has 2 cases in TEST_SPEC vs 1 in TEST_INVENTORY — TEST_INVENTORY has only `test_nfr02_no_shell_true_in_codebase`; TEST_SPEC adds `test_nfr02_injection_blacklist_test_exists` as a cross-ref guard to make AC-NFR-02-02 (injection blacklist test coverage) a first-class row rather than a hidden cross-reference. The guard is a no-op over the catalog: it asserts the FR-01 case 5 test function exists.
 
 ---
 
