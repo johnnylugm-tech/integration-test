@@ -64,8 +64,8 @@ async function writeApprovalJson(deliverableId, obj) {
   })
   const cliPath = REPO + '/harness/harness_cli.py'
   const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
-  const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
-    JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
+  const cmd = PY + ' ' + cliPath + ' write-approval --project ' + REPO +
+    ' --fr-id ' + JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
   const MAX = 3
   let lastErr = null
   for (let attempt = 1; attempt <= MAX; attempt++) {

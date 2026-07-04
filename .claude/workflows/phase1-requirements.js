@@ -510,8 +510,8 @@ async function persistApproval(deliverableId, b2) {
   // LLM agent emits the command verbatim or paraphrases it. Single quotes in
   // the payload are escaped via the close-escape-reopen pattern ('\'').
   const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
-  const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
-    JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
+  const cmd = PY + ' ' + cliPath + ' write-approval --project ' + REPO +
+    ' --fr-id ' + JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
 
   let lastErr = null
   for (let attempt = 1; attempt <= MAX_OUTER_ATTEMPTS; attempt++) {
