@@ -1,15 +1,9 @@
 {
   "state": "RUNNING",
-  "current_phase": 1,
+  "current_phase": 2,
   "last_gate": null,
   "last_fr": null,
-  "last_update": "2026-07-04T06:52:39.816561+00:00",
-  "last_push_checkpoint": "2026-07-04T10:52:36.981153+00:00",
-  "last_push_checkpoint_phase": 1,
-  "phase_completed": {
-    "1": {
-      "sha": "1bbe4dc5ebb31ceb1ee379cdb2662506aeca9bf2",
-      "timestamp": "2026-07-04T10:52:36.981321+00:00"
-    }
-  }
+  "last_update": "2026-07-04T10:52:47.608872+00:00",
+  "phase_truth_passed": true,
+  "last_milestone_command": "advance-phase --completed-phase 1"
 }
