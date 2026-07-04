@@ -18,6 +18,71 @@
 #     (NEVER via deletion).
 #   - Status values: PLANNED (Phase 1) → DESIGNED → IMPLEMENTED → TESTED →
 #     VERIFIED → ACCEPTED.
+# fr_tests + cross_cutting: flat registries required by the validate-handoff
+# P1→P2 gate (harness_cli.py:5077). Each FR declared in SRS.md must list at
+# least one named pytest function under its layer(s). Cross-cutting tests
+# (NFRs spanning multiple FRs) are grouped by concern (security /
+# reliability / maintainability / perf).
+fr_tests:
+  FR-01:
+    unit:
+      - test_fr01_add_task_empty_rejected
+      - test_fr01_add_task_too_long_rejected
+      - test_fr01_add_task_injection_chars_rejected
+      - test_fr01_add_task_name_conflict_rejected
+      - test_fr01_add_task_success_atomic_write
+  FR-02:
+    unit:
+      - test_fr02_subprocess_shlex_split_no_shell_true
+      - test_fr02_status_machine_done_failed_timeout
+      - test_fr02_result_fields_tail_2000
+      - test_fr02_concurrent_threadpool
+      - test_fr02_timeout_exit_code_4
+    integration:
+      - test_fr02_concurrent_run_all_no_loss
+  FR-03:
+    unit:
+      - test_fr03_exponential_backoff_injectable_sleep
+      - test_fr03_retry_limit_cap
+      - test_fr03_timeout_triggers_retry
+      - test_fr03_threshold_opens_breaker
+      - test_fr03_open_refuses_with_exit_3
+      - test_fr03_half_open_probe_success_closes
+      - test_fr03_half_open_probe_failure_reopens
+      - test_fr03_state_persisted_atomically
+  FR-04:
+    unit:
+      - test_fr04_signature_sha256
+      - test_fr04_cached_replay_no_subprocess
+      - test_fr04_expiry_normal_execution
+      - test_fr04_atomic_thread_safe_write
+  FR-05:
+    integration:
+      - test_fr05_argparse_subcommands
+      - test_fr05_json_flag_round_trip
+      - test_fr05_exit_code_matrix
+      - test_fr05_unknown_task_id_exit_2
+
+cross_cutting:
+  security:
+    - test_nfr02_no_shell_true_in_codebase
+  reliability:
+    - test_nfr03_atomic_write_kill9_recovery
+    - test_nfr03_open_to_closed_within_cooldown_plus_1s
+  maintainability:
+    - test_nfr05_every_public_symbol_has_fr_ref
+  perf:
+    - test_nfr01_submit_status_p95_under_50ms
+  redaction:
+    - test_nfr04_sk_pattern_redacted
+    - test_nfr04_token_pattern_redacted
+    - test_nfr04_negative_no_match_unchanged
+    - test_nfr04_redaction_before_persistence
+  deployability:
+    - test_nfr06_env_var_defaults
+    - test_nfr06_env_var_override
+    - test_env_example_complete
+
 format_version: "1.1"
 
 test_inventory:

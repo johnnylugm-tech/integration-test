@@ -5,5 +5,13 @@
   "last_fr": null,
   "last_update": "2026-07-04T10:52:47.608872+00:00",
   "phase_truth_passed": true,
-  "last_milestone_command": "advance-phase --completed-phase 1"
+  "last_milestone_command": "advance-phase --completed-phase 1",
+  "phase_completed": {
+    "2": {
+      "sha": "5d30e174b5b7ccc0b0b205cb13a62ce1731f2f5b",
+      "timestamp": "2026-07-04T16:51:56.725685+00:00"
+    }
+  },
+  "last_push_checkpoint": "2026-07-04T16:51:56.725520+00:00",
+  "last_push_checkpoint_phase": 2
 }

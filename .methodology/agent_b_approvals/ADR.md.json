@@ -1,0 +1,33 @@
+{
+  "fr": "ADR.md",
+  "review_status": "APPROVE",
+  "reason": "ADR.md covers all 14 architectural decisions required by Phase 2: stdlib-only stack (ADR-001), JSON persistence (ADR-002), ThreadPoolExecutor concurrency (ADR-003), atomic write pattern (ADR-004), circuit breaker state machine (ADR-005), TTL cache (ADR-006), single-process layering (ADR-007), hub-and-spoke for CRG cohesion (ADR-008), argparse CLI (ADR-009), single-subprocess-call-site NFR-02 (ADR-010), injectable clocks (ADR-011), frozen dataclasses (ADR-012), config.py reader (ADR-013), and single production community layout (ADR-014). Every ADR has Status, Context, Decision, Consequences, and Alternatives Considered sections; decisions cross-reference SPEC §1/§2/§3/§7/NFR-03 and SAD §2.7 budget consistently. Exit codes 0/1/2/3/4 in ADR-009 verified against SPEC §7 lines 183-188; state ma",
+  "citations": [
+    "02-architecture/adr/ADR.md:9",
+    "02-architecture/adr/ADR.md:34",
+    "02-architecture/adr/ADR.md:65",
+    "02-architecture/adr/ADR.md:91",
+    "02-architecture/adr/ADR.md:121",
+    "02-architecture/adr/ADR.md:151",
+    "02-architecture/adr/ADR.md:180",
+    "02-architecture/adr/ADR.md:212",
+    "02-architecture/adr/ADR.md:243",
+    "02-architecture/adr/ADR.md:273",
+    "02-architecture/adr/ADR.md:304",
+    "02-architecture/adr/ADR.md:334",
+    "02-architecture/adr/ADR.md:359",
+    "02-architecture/adr/ADR.md:394",
+    "02-architecture/adr/ADR.md:253",
+    "02-architecture/adr/ADR.md:279",
+    "02-architecture/adr/ADR.md:340",
+    "SPEC.md:79",
+    "SPEC.md:65",
+    "SPEC.md:183-188"
+  ],
+  "docs_embedded": [
+    "SRS.md",
+    "SAD.md",
+    "ADR.md"
+  ],
+  "confidence": 0.9
+}
