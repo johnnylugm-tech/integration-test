@@ -1,0 +1,549 @@
+# TEST_INVENTORY.yaml — taskq Phase 1 Test Naming Authority
+# Canonical TC ID registry. Maps every FR / NFR / AC to one or more named
+# pytest test functions (one tc_id per test function — sub-cases within
+# an AC are split via trailing letter suffix, e.g. TC-FR03-01a..c).
+#
+# Source of truth: SPEC.md v3.0.0 (2026-07-04)
+# Mirrors: 01-requirements/SRS.md §3 / §4
+# Cross-ref matrix: 01-requirements/TRACEABILITY_MATRIX.md (§1, §4.1, §5)
+# Naming convention: test_(fr{NN}|nfr{NN})_<descriptor>
+#
+# Schema contract:
+#   - Top-level key: test_inventory: (orchestrator loader requirement)
+#   - tests: block MUST enumerate each tc_id listed below as a separate entry.
+#   - by_fr.<FR>.tc_count MUST equal count(tests.* where fr == <FR>).
+#   - by_layer.<L>.count MUST equal count(tests.* where layer == <L>).
+#   - Sum of by_fr counts == sum of by_layer counts == total_test_cases.
+#   - Cross-cutting coverage is signalled via cross_ref_frs / cross_ref_nfrs
+#     (NEVER via deletion).
+#   - Status values: PLANNED (Phase 1) → DESIGNED → IMPLEMENTED → TESTED →
+#     VERIFIED → ACCEPTED.
+format_version: "1.1"
+
+test_inventory:
+  project: taskq
+  language: python
+  test_runner: pytest
+  source_of_truth: SPEC.md v3.0.0 (2026-07-04)
+  matrix_ref: 01-requirements/TRACEABILITY_MATRIX.md
+  naming_convention: "test_(fr{NN}|nfr{NN})_<descriptor>"
+  tc_id_format: "TC-(FR|NFR){NN}-{AC-NN}{a|b|c|...}"
+
+  coverage:
+    total_test_cases: 39
+    by_fr:
+      FR-01:
+        tc_count: 5
+        title: "任務提交與驗證"
+      FR-02:
+        tc_count: 6
+        title: "任務執行器"
+      FR-03:
+        tc_count: 8
+        title: "重試與斷路器"
+      FR-04:
+        tc_count: 4
+        title: "結果 TTL 快取"
+      FR-05:
+        tc_count: 4
+        title: "CLI 整合"
+      NFR-01:
+        tc_count: 1
+        title: "Performance"
+      NFR-02:
+        tc_count: 1
+        title: "Security (shell + injection)"
+      NFR-03:
+        tc_count: 2
+        title: "Reliability (atomic write + breaker recovery)"
+      NFR-04:
+        tc_count: 4
+        title: "Security (secret redaction)"
+      NFR-05:
+        tc_count: 1
+        title: "Maintainability (docstring FR-cross-ref)"
+      NFR-06:
+        tc_count: 3
+        title: "Deployability (env vars)"
+    by_layer:
+      unit:
+        count: 31
+        description: "module-level pytest tests (single-module scope)"
+      integration:
+        count: 5
+        description: "cross-module pytest tests (store+executor concurrent; CLI orchestrating all modules)"
+      cross_cutting:
+        count: 1
+        description: "NFR gates that scan the whole codebase (docstring FR-cross-ref)"
+      perf:
+        count: 1
+        description: "pytest-benchmark suite (NFR-01 p95 budget)"
+      security:
+        count: 1
+        description: "CI grep-gate (NFR-02 shell=True forbidden)"
+    by_fr_total: 39
+    by_layer_total: 39
+
+  tests:
+
+    # ────────────────────────────────────────────────────────────────────
+    # FR-01 — 任務提交與驗證 (5 / 5)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-FR01-01
+      test_function: test_fr01_add_task_empty_rejected
+      fr: FR-01
+      layer: unit
+      file_path: tests/test_store.py
+      ac_refs: [AC-FR-01-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-01-01: 命令為空或全空白 → 拒絕"
+      status: PLANNED
+
+    - tc_id: TC-FR01-02
+      test_function: test_fr01_add_task_too_long_rejected
+      fr: FR-01
+      layer: unit
+      file_path: tests/test_store.py
+      ac_refs: [AC-FR-01-02]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-01-02: 命令 > 1000 字元 → 拒絕"
+      status: PLANNED
+
+    - tc_id: TC-FR01-03
+      test_function: test_fr01_add_task_injection_chars_rejected
+      fr: FR-01
+      layer: unit
+      file_path: tests/test_store.py
+      ac_refs: [AC-FR-01-03, AC-NFR-02-02]
+      cross_ref_frs: []
+      cross_ref_nfrs: [NFR-02]
+      description: "AC-FR-01-03: 命令含 ; | & $ > < ` 任一注入字元 → 拒絕; also covers AC-NFR-02-02 (injection blacklist test coverage)"
+      status: PLANNED
+
+    - tc_id: TC-FR01-04
+      test_function: test_fr01_add_task_name_conflict_rejected
+      fr: FR-01
+      layer: unit
+      file_path: tests/test_store.py
+      ac_refs: [AC-FR-01-04]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-01-04: --name 與既有 pending/running 任務重複 → 拒絕"
+      status: PLANNED
+
+    - tc_id: TC-FR01-05
+      test_function: test_fr01_add_task_success_atomic_write
+      fr: FR-01
+      layer: unit
+      file_path: tests/test_store.py
+      ac_refs: [AC-FR-01-05]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-01-05: 產生 task id (uuid4 前 8 hex); 狀態 pending; 原子寫入 tasks.json; stdout 輸出 id (--json JSON)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # FR-02 — 任務執行器 (6 / 6)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-FR02-01
+      test_function: test_fr02_subprocess_shlex_split_no_shell_true
+      fr: FR-02
+      layer: unit
+      file_path: tests/test_executor.py
+      ac_refs: [AC-FR-02-01, AC-NFR-02-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: [NFR-02]
+      description: "AC-FR-02-01: subprocess.run(shlex.split(...), capture_output, text, timeout=TASKQ_TASK_TIMEOUT); 任何路徑禁用 shell=True; also covers AC-NFR-02-01 (no shell=True codebase-wide)"
+      status: PLANNED
+
+    - tc_id: TC-FR02-02
+      test_function: test_fr02_status_machine_done_failed_timeout
+      fr: FR-02
+      layer: unit
+      file_path: tests/test_executor.py
+      ac_refs: [AC-FR-02-02]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-02-02: 狀態機 pending → running → done | failed | timeout (exit 0 → done; 非 0 → failed; TimeoutExpired → timeout)"
+      status: PLANNED
+
+    - tc_id: TC-FR02-03
+      test_function: test_fr02_result_fields_tail_2000
+      fr: FR-02
+      layer: unit
+      file_path: tests/test_executor.py
+      ac_refs: [AC-FR-02-03]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-02-03: 結果欄位 exit_code / stdout_tail (末 2000) / stderr_tail (末 2000) / duration_ms / finished_at"
+      status: PLANNED
+
+    - tc_id: TC-FR02-04a
+      test_function: test_fr02_concurrent_threadpool
+      fr: FR-02
+      layer: unit
+      file_path: tests/test_executor.py
+      ac_refs: [AC-FR-02-04]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-02-04 (unit path): ThreadPoolExecutor(max_workers=TASKQ_MAX_WORKERS) 並發執行 pending 任務"
+      status: PLANNED
+
+    - tc_id: TC-FR02-04b
+      test_function: test_fr02_concurrent_run_all_no_loss
+      fr: FR-02
+      layer: integration
+      file_path: tests/test_store.py
+      ac_refs: [AC-FR-02-04]
+      cross_ref_frs: [FR-01]
+      cross_ref_nfrs: [NFR-03]
+      description: "AC-FR-02-04 (integration path): --all 並發後 tasks.json 仍為合法 JSON, 無任務遺失; cross-cuts FR-01 (store) and NFR-03 (atomic write)"
+      status: PLANNED
+
+    - tc_id: TC-FR02-05
+      test_function: test_fr02_timeout_exit_code_4
+      fr: FR-02
+      layer: unit
+      file_path: tests/test_executor.py
+      ac_refs: [AC-FR-02-05]
+      cross_ref_frs: [FR-05]
+      cross_ref_nfrs: []
+      description: "AC-FR-02-05: 單一任務模式下 timeout 結果 → exit 4; cross-cuts FR-05 (CLI exit code)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # FR-03 — 重試與斷路器 (8 / 8)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-FR03-01a
+      test_function: test_fr03_exponential_backoff_injectable_sleep
+      fr: FR-03
+      layer: unit
+      file_path: tests/test_retry.py
+      ac_refs: [AC-FR-03-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-03-01 (sub-case a): 第 n 次重試前等待 TASKQ_BACKOFF_BASE × 2^n 秒 (exponential backoff; sleep 函式可注入)"
+      status: PLANNED
+
+    - tc_id: TC-FR03-01b
+      test_function: test_fr03_retry_limit_cap
+      fr: FR-03
+      layer: unit
+      file_path: tests/test_retry.py
+      ac_refs: [AC-FR-03-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-03-01 (sub-case b): 重試上限 TASKQ_RETRY_LIMIT 次"
+      status: PLANNED
+
+    - tc_id: TC-FR03-01c
+      test_function: test_fr03_timeout_triggers_retry
+      fr: FR-03
+      layer: unit
+      file_path: tests/test_retry.py
+      ac_refs: [AC-FR-03-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-03-01 (sub-case c): failed/timeout 結果自動觸發重試"
+      status: PLANNED
+
+    - tc_id: TC-FR03-02
+      test_function: test_fr03_threshold_opens_breaker
+      fr: FR-03
+      layer: unit
+      file_path: tests/test_breaker.py
+      ac_refs: [AC-FR-03-02]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-03-02: 連續最終失敗計數 ≥ TASKQ_BREAKER_THRESHOLD → 斷路器 OPEN"
+      status: PLANNED
+
+    - tc_id: TC-FR03-03
+      test_function: test_fr03_open_refuses_with_exit_3
+      fr: FR-03
+      layer: unit
+      file_path: tests/test_breaker.py
+      ac_refs: [AC-FR-03-03]
+      cross_ref_frs: [FR-05]
+      cross_ref_nfrs: []
+      description: "AC-FR-03-03: OPEN 期間任何 run 立即拒絕 → exit 3 + stderr 'breaker open', 不執行 subprocess; cross-cuts FR-05 (CLI exit code)"
+      status: PLANNED
+
+    - tc_id: TC-FR03-04a
+      test_function: test_fr03_half_open_probe_success_closes
+      fr: FR-03
+      layer: unit
+      file_path: tests/test_breaker.py
+      ac_refs: [AC-FR-03-04]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-03-04 (sub-case a): cooldown 後 HALF_OPEN 探針成功 → CLOSED 且計數歸零 (NFR-99-b ambiguity anchors here)"
+      status: PLANNED
+
+    - tc_id: TC-FR03-04b
+      test_function: test_fr03_half_open_probe_failure_reopens
+      fr: FR-03
+      layer: unit
+      file_path: tests/test_breaker.py
+      ac_refs: [AC-FR-03-04]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-03-04 (sub-case b): HALF_OPEN 探針失敗 → 重新 OPEN"
+      status: PLANNED
+
+    - tc_id: TC-FR03-05
+      test_function: test_fr03_state_persisted_atomically
+      fr: FR-03
+      layer: unit
+      file_path: tests/test_breaker.py
+      ac_refs: [AC-FR-03-05]
+      cross_ref_frs: []
+      cross_ref_nfrs: [NFR-03]
+      description: "AC-FR-03-05: 斷路器狀態持久化於 $TASKQ_HOME/breaker.json (原子寫); cross-cuts NFR-03 (atomic write)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # FR-04 — 結果 TTL 快取 (4 / 4)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-FR04-01
+      test_function: test_fr04_signature_sha256
+      fr: FR-04
+      layer: unit
+      file_path: tests/test_cache.py
+      ac_refs: [AC-FR-04-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-04-01: 快取簽名 = sha256(command)"
+      status: PLANNED
+
+    - tc_id: TC-FR04-02
+      test_function: test_fr04_cached_replay_no_subprocess
+      fr: FR-04
+      layer: unit
+      file_path: tests/test_cache.py
+      ac_refs: [AC-FR-04-02]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-04-02: run <id> --cached TTL 內回放 done 結果, 不執行 subprocess, cached: true"
+      status: PLANNED
+
+    - tc_id: TC-FR04-03
+      test_function: test_fr04_expiry_normal_execution
+      fr: FR-04
+      layer: unit
+      file_path: tests/test_cache.py
+      ac_refs: [AC-FR-04-03]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-04-03: 快取過期或不存在 → 正常執行, 成功 (done) 後寫入 cache.json"
+      status: PLANNED
+
+    - tc_id: TC-FR04-04
+      test_function: test_fr04_atomic_thread_safe_write
+      fr: FR-04
+      layer: unit
+      file_path: tests/test_cache.py
+      ac_refs: [AC-FR-04-04]
+      cross_ref_frs: []
+      cross_ref_nfrs: [NFR-03]
+      description: "AC-FR-04-04: 快取讀寫: 原子 + 執行緒安全 (與 FR-02 並發共存); cross-cuts NFR-03 (atomic write)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # FR-05 — CLI 整合 (4 / 4)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-FR05-01
+      test_function: test_fr05_argparse_subcommands
+      fr: FR-05
+      layer: integration
+      file_path: tests/test_cli.py
+      ac_refs: [AC-FR-05-01]
+      cross_ref_frs: [FR-01, FR-02, FR-03, FR-04]
+      cross_ref_nfrs: []
+      description: "AC-FR-05-01: argparse 子命令 submit / run / status / list / clear (CLI orchestrator; cross-cuts FR-01..FR-04)"
+      status: PLANNED
+
+    - tc_id: TC-FR05-02
+      test_function: test_fr05_json_flag_round_trip
+      fr: FR-05
+      layer: integration
+      file_path: tests/test_cli.py
+      ac_refs: [AC-FR-05-02]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-05-02: 全域 --json 旗標 (機器可讀單行 JSON 輸出)"
+      status: PLANNED
+
+    - tc_id: TC-FR05-03a
+      test_function: test_fr05_exit_code_matrix
+      fr: FR-05
+      layer: integration
+      file_path: tests/test_cli.py
+      ac_refs: [AC-FR-05-03]
+      cross_ref_frs: [FR-01, FR-02, FR-03]
+      cross_ref_nfrs: []
+      description: "AC-FR-05-03 (sub-case a): Exit codes 0/1/2/3/4 matrix (success / other internal / validation / breaker open / timeout); cross-cuts FR-01 (validation → 2), FR-02 (timeout → 4), FR-03 (breaker → 3)"
+      status: PLANNED
+
+    - tc_id: TC-FR05-03b
+      test_function: test_fr05_unknown_task_id_exit_2
+      fr: FR-05
+      layer: integration
+      file_path: tests/test_exit_codes.py
+      ac_refs: [AC-FR-05-03]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-FR-05-03 (sub-case b): 未知 task id → exit 2 (input validation)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # NFR-01 — Performance (1 / 1)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-NFR01-01
+      test_function: test_nfr01_submit_status_p95_under_50ms
+      fr: NFR-01
+      layer: perf
+      file_path: tests/bench/test_bench_submit_status.py
+      ac_refs: [AC-NFR-01-01]
+      cross_ref_frs: [FR-01, FR-05]
+      cross_ref_nfrs: []
+      description: "AC-NFR-01-01: submit + status 100 次 p95 < 50ms (pytest-benchmark; NFR-99-a ambiguity anchors here — 含/不含 subprocess 邊界)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # NFR-02 — Security (shell + injection) (1 / 1)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-NFR02-01
+      test_function: test_nfr02_no_shell_true_in_codebase
+      fr: NFR-02
+      layer: security
+      file_path: tests/test_security.py
+      ac_refs: [AC-NFR-02-01]
+      cross_ref_frs: [FR-02]
+      cross_ref_nfrs: []
+      description: "AC-NFR-02-01: 全 codebase 禁用 shell=True (CI grep-gate; grep -rn 'shell=True' src/ tests/ must return 0 hits)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # NFR-03 — Reliability (atomic write + breaker recovery) (2 / 2)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-NFR03-01
+      test_function: test_nfr03_atomic_write_kill9_recovery
+      fr: NFR-03
+      layer: unit
+      file_path: tests/test_store.py
+      ac_refs: [AC-NFR-03-01]
+      cross_ref_frs: [FR-01, FR-02]
+      cross_ref_nfrs: []
+      description: "AC-NFR-03-01: 三個資料檔全部原子寫 (tmp + os.replace); fault-injection: kill -9 mid-write, validate tasks.json still parses as valid JSON on restart"
+      status: PLANNED
+
+    - tc_id: TC-NFR03-02
+      test_function: test_nfr03_open_to_closed_within_cooldown_plus_1s
+      fr: NFR-03
+      layer: unit
+      file_path: tests/test_breaker.py
+      ac_refs: [AC-NFR-03-02]
+      cross_ref_frs: [FR-03]
+      cross_ref_nfrs: []
+      description: "AC-NFR-03-02: breaker OPEN → CLOSED 恢復時間 ≤ TASKQ_BREAKER_COOLDOWN + 1s (NFR-99-b ambiguity anchors here — HALF_OPEN probe vs explicit reset)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # NFR-04 — Security (secret redaction) (4 / 4)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-NFR04-01a
+      test_function: test_nfr04_sk_pattern_redacted
+      fr: NFR-04
+      layer: unit
+      file_path: tests/test_redaction.py
+      ac_refs: [AC-NFR-04-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-NFR-04-01 (sub-case a): stdout_tail / stderr_tail 中匹配 sk-[A-Za-z0-9_-]{8,} 的行整行以 [REDACTED] 取代"
+      status: PLANNED
+
+    - tc_id: TC-NFR04-01b
+      test_function: test_nfr04_token_pattern_redacted
+      fr: NFR-04
+      layer: unit
+      file_path: tests/test_redaction.py
+      ac_refs: [AC-NFR-04-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-NFR-04-01 (sub-case b): stdout_tail / stderr_tail 中匹配 token=\\S+ 的行整行以 [REDACTED] 取代"
+      status: PLANNED
+
+    - tc_id: TC-NFR04-01c
+      test_function: test_nfr04_negative_no_match_unchanged
+      fr: NFR-04
+      layer: unit
+      file_path: tests/test_redaction.py
+      ac_refs: [AC-NFR-04-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-NFR-04-01 (sub-case c): 未匹配任一 pattern 的行保持不變 (negative case)"
+      status: PLANNED
+
+    - tc_id: TC-NFR04-01d
+      test_function: test_nfr04_redaction_before_persistence
+      fr: NFR-04
+      layer: unit
+      file_path: tests/test_redaction.py
+      ac_refs: [AC-NFR-04-01]
+      cross_ref_frs: [FR-02, FR-04]
+      cross_ref_nfrs: []
+      description: "AC-NFR-04-01 (sub-case d): redact 發生在落盤前 (不只是顯示前); cross-cuts FR-02 (executor captures stdout/stderr) + FR-04 (cache writes stdout)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # NFR-05 — Maintainability (docstring FR-cross-ref) (1 / 1)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-NFR05-01
+      test_function: test_nfr05_every_public_symbol_has_fr_ref
+      fr: NFR-05
+      layer: cross_cutting
+      file_path: tests/test_docstring_fr_refs.py
+      ac_refs: [AC-NFR-05-01]
+      cross_ref_frs: [FR-01, FR-02, FR-03, FR-04, FR-05]
+      cross_ref_nfrs: []
+      description: "AC-NFR-05-01: src/taskq/ 全部公開函式/類別 docstring 含 [FR-XX] 引用 (AST scan; cross-cuts all FRs)"
+      status: PLANNED
+
+    # ────────────────────────────────────────────────────────────────────
+    # NFR-06 — Deployability (env vars) (3 / 3)
+    # ────────────────────────────────────────────────────────────────────
+    - tc_id: TC-NFR06-01a
+      test_function: test_nfr06_env_var_defaults
+      fr: NFR-06
+      layer: unit
+      file_path: tests/test_config.py
+      ac_refs: [AC-NFR-06-01]
+      cross_ref_frs: [FR-02, FR-03, FR-04]
+      cross_ref_nfrs: []
+      description: "AC-NFR-06-01 (sub-case a): 8 個 TASKQ_* env var unset 時 fallback 至預設值 (config.py 集中讀取)"
+      status: PLANNED
+
+    - tc_id: TC-NFR06-01b
+      test_function: test_nfr06_env_var_override
+      fr: NFR-06
+      layer: unit
+      file_path: tests/test_config.py
+      ac_refs: [AC-NFR-06-01]
+      cross_ref_frs: [FR-02, FR-03, FR-04]
+      cross_ref_nfrs: []
+      description: "AC-NFR-06-01 (sub-case b): 8 個 TASKQ_* env var set 後覆蓋預設值"
+      status: PLANNED
+
+    - tc_id: TC-NFR06-01c
+      test_function: test_env_example_complete
+      fr: NFR-06
+      layer: unit
+      file_path: tests/test_config.py
+      ac_refs: [AC-NFR-06-01]
+      cross_ref_frs: []
+      cross_ref_nfrs: []
+      description: "AC-NFR-06-01 (sub-case c): .env.example 宣告全部 8 個 TASKQ_* 變數 + 逐一附註解 (file lint)"
+      status: PLANNED
