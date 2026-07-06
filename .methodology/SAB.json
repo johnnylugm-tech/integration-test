@@ -2,6 +2,16 @@
   "version": "1.0",
   "created_at": "2026-07-05",
   "phase": 2,
+  "amendments": [
+    {
+      "date": "2026-07-07",
+      "reason": "Phase 4 E2E surfaced P2-SAB-drift bug (harness commit pending): taskq.config and taskq.models were planned in P2 SAB but never implemented in P3. The harness now symmetrically enforces phantom-module detection at Gate 1 (_check_sab_module_alignment). Phantom modules removed; NFR-05/06 owners re-pointed to modules that actually own the work in the codebase.",
+      "phantom_modules_removed": [
+        "taskq.config",
+        "taskq.models"
+      ]
+    }
+  ],
   "project": "taskq",
   "layers": [
     {
@@ -12,9 +22,7 @@
       ],
       "allowed_dependencies": [
         "service",
-        "store",
-        "config",
-        "models"
+        "store"
       ]
     },
     {
@@ -25,18 +33,7 @@
         "taskq.cache"
       ],
       "allowed_dependencies": [
-        "store",
-        "config",
-        "models"
-      ]
-    },
-    {
-      "name": "config",
-      "modules": [
-        "taskq.config"
-      ],
-      "allowed_dependencies": [
-        "models"
+        "store"
       ]
     },
     {
@@ -44,36 +41,18 @@
       "modules": [
         "taskq.store"
       ],
-      "allowed_dependencies": [
-        "models"
-      ]
-    },
-    {
-      "name": "models",
-      "modules": [
-        "taskq.models"
-      ],
       "allowed_dependencies": []
     }
   ],
   "dependencies": {
     "api": [
       "service",
-      "store",
-      "config",
-      "models"
+      "store"
     ],
     "service": [
-      "store",
-      "config",
-      "models"
+      "store"
     ],
-    "config": [
-      "models"
-    ],
-    "store": [
-      "models"
-    ]
+    "store": []
   },
   "quality_targets": {
     "max_complexity": 15,
@@ -111,12 +90,14 @@
     "NFR-05": {
       "type": "maintainability",
       "target": "docstring [FR-XX] coverage = 100% of public funcs/classes in src/taskq/",
-      "module": "taskq.models"
+      "module": "taskq.cli",
+      "note": "Was taskq.models under P2 SAB phantom planning; re-pointed to taskq.cli because docstring coverage is enforced as a codebase-wide property (every module contributes public defs with [FR-XX] tags), not as a single-module responsibility."
     },
     "NFR-06": {
       "type": "deployability",
       "target": "8 TASKQ_* env vars exposed via typed getters in config.py",
-      "module": "taskq.config"
+      "module": "taskq.cli",
+      "note": "Was taskq.config under P2 SAB phantom planning; re-pointed to taskq.cli because the centralized config.py was never built. env vars are read in-place by the modules that consume them (store.TASKQ_HOME, breaker.TASKQ_BREAKER_*, executor timeout, etc.). config.py refactor is a P3+ extension item, not a P2/3 deliverable."
     }
   },
   "advisory_only": [
