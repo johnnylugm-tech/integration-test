@@ -215,7 +215,9 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
   > (`harness/crg_independent.py`) and overrides any agent-recorded score with
   > `community_cohesion`. error_handling is tool-scored (`ast-error-handling`), not CRG.
   > If architecture = 0 due to Orchestrator/hub-and-spoke pattern: complete DA challenge (A3 above)
-  > and set `da_waiver` in quality_manifest.json to bypass the threshold.
+  > and set `devil_advocate` + `da_waiver` + `devil_advocate_evidence` in
+  > `.sessi-work/gate{N}_result.json` (gate3_result.json at Gate 3, gate4_result.json at Gate 4)
+  > to bypass the threshold — the harness reads the waiver from that file, NOT quality_manifest.json.
   > See `harness/ssi/prompts/evaluate_dimension.md` §Orchestrator Pattern False Positive.
   > **traceability** is also framework-owned: the harness calls `compute_trace_dimension()`
   > inside `finalize-gate` and injects the score automatically. Do NOT report a traceability
@@ -250,7 +252,7 @@ python3 harness_cli.py load-context --phase 4 --project . --json \
 | Dimension | Fix |
 |-----------|-----|
 | mutation_testing | Framework-owned score: `python3 harness_cli.py mutation-test-score --project .` runs `compute_mutation_score()` (harness-managed workdir + setup.cfg rewrite + sqlite cache parse). To investigate surviving mutants manually: `mutmut results` (legacy). Exclude data-only files (constants, dicts, Pydantic models) via `paths_to_exclude` in setup.cfg. Target: kill rate ≥ threshold. |
-| architecture (G3/G4 only) | Community cohesion low → add cross-module integration tests, break hub-and-spoke coupling, or file a DA waiver if the pattern is intentional (Orchestrator). |
+| architecture (G3/G4 only) | Community cohesion low → add cross-module integration tests, break hub-and-spoke coupling, or file an artifact-backed DA waiver in `.sessi-work/gate{N}_result.json` if the pattern is intentional (Orchestrator); calibrate `crg_excludes` / `crg_cohesion_healthy` in `.methodology/harness_config.json` for CRG false positives (tooling counted as product, small-package over-fragmentation). |
 | error_handling | (1) **Presence**: add try/except blocks. `grep -r 'try:' 03-development/src/` to see coverage. (2) **Anti-patterns** (v2.9 A1, −5 each): remove `except BaseException:` (flagged even with re-raise), bare `except:` without re-raise, `except Exception: pass`. Run `python3 harness_cli.py run-tool ast-error-handling --project .` to see exact deductions. |
 | documentation | Add docstrings to public functions/classes. `python3 -m ast_docstrings` or manual: every `def`/`class` in `03-development/src/` needs a docstring. |
 | readability | Refactor complex functions (readability_v2 < 65). Run `python3 -m harness.toolchains.readability_v2 03-development/src/` to see scores per file. |

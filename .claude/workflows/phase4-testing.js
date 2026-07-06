@@ -24,6 +24,7 @@ export const meta = {
     { title: 'Per-FR Delta' },
     { title: 'Coverage' },
     { title: 'Bug Hunt' },
+    { title: 'Artifacts Commit' },
     { title: 'Gate 3' },
     { title: 'Advance' },
   ],
@@ -284,7 +285,7 @@ const fastProbe = await agent(
   'YOU ARE THE GATE1-DELTA FAST-PATH PROBE. Classify each FR — fix NOTHING.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\nFRs: ' + JSON.stringify(frIds) + '\n\n'
   + 'For EACH FR in order, substituting <FR> with the FR id:\n'
-  + '1. `timeout 180 ' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 4 --fr-id <FR> --step GATE1-DELTA --project ' + REPO + ' 2>&1 | tail -5`\n'
+  + '1. `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 4 --fr-id <FR> --step GATE1-DELTA --project ' + REPO + ' 2>&1 | tail -5`\n'
   + '2. Authoritative verdict (manifest qc AND a phase-4 gate-1 timestamp for <FR>): `' + PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'<FR>\',{}) or {}; ts=any(e.get(\'phase\')==4 and e.get(\'gate\')==1 and e.get(\'fr_id\')==\'<FR>\' for e in (json.loads(l) for l in open(\'' + REPO + '/.methodology/gate_timestamps.jsonl\') if l.strip())); print(bool(g.get(\'quality_complete\')) and ts)"`\n'
   + '   stdout `True` → pass_fr_ids; anything else (False/None/timeout/error/missing file) → fail_fr_ids.\n\n'
   + 'HARD RULES:\n- DO NOT fix code, edit files, or run TDD steps.\n- DO NOT retry a failing FR — classify it and move on (the full loop handles it).\n- DO NOT run run-gate / bug-hunt / advance-phase / push-milestone.\n- DO NOT modify harness/.\n\n'
@@ -401,6 +402,25 @@ const huntReport = await agent(
 if (!(huntReport && huntReport.pass === true)) {
   return { error: 'Phase 4 bug hunt did not PASS (Gate 3 adversarial_review will block)', reason: huntReport ? String(huntReport.reason ?? '').slice(-600) : 'agent returned null' }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase: Artifacts Commit (commit test/hunt artifacts BEFORE Gate 3)
+// ════════════════════════════════════════════════════════════════════════
+// Gate PASS paths sweep the tree via commit_and_push_gate (git add -A), but a
+// Gate 3 FAIL exits this workflow early (HR-08) with the artifacts still
+// dirty — the human then has to clean up before anything else can run.
+// Commit the already-final deterministic artifacts NOW with an explicit path
+// list (allowlist philosophy, mirrors harness _advance_commit_targets — never
+// `git add -A` here, mid-workflow trees can carry unrelated noise).
+phase('Artifacts Commit')
+log('Committing phase-4 artifacts (explicit paths) so a Gate 3 FAIL exit leaves a clean tree')
+await agent(
+  'Run ONE bash command and report its stdout/stderr:\n'
+  + '`git -C ' + REPO + ' add 04-testing .methodology/bug_hunt_report.json .methodology/bug_hunt_targets.json .methodology/decision_logs && git -C ' + REPO + ' commit -m "chore(p4): test-plan + coverage + bug-hunt artifacts" || true`\n\n'
+  + 'Report: the verbatim stdout/stderr of that command. "nothing to commit" is a valid outcome.\n\n'
+  + 'SCOPE RULES:\n- DO NOT run any code, tests, gates, or phase transitions.\n- DO NOT stage any path other than the four listed above.\n- ONLY the git command above.',
+  { label: 'artifacts-commit', phase: 'Artifacts Commit', agentType: 'general-purpose' },
+)
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Gate 3 (run-gate → eval 15 dims → finalize → D4 80%; HR-08)
