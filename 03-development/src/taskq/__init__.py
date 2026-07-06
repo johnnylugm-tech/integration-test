@@ -7,6 +7,6 @@ Citations:
 
 from __future__ import annotations
 
-from taskq import breaker, store
+from taskq import breaker, cache, store
 
-__all__ = ["breaker", "store"]
+__all__ = ["breaker", "cache", "store"]
