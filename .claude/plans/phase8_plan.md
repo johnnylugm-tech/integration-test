@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-04
+> **Date**: 2026-07-06
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 8 - Configuration Management
 > **Status**: Full version (including Phase 8 detailed tasks)
@@ -10,7 +10,7 @@
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
 > - HR-05: harness-methodology wins all conflicts — if a project decision contradicts SKILL.md / INIT / this plan, the harness wins.
-> - HR-16: Trace 4a = 100% required (G2/G3/G4 only). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs to 100%, accept gate block, or escalate to human. No automated override.
+> - HR-16: Trace dimension = `min(4a, 4b, 4c)` — ALL THREE must pass (G2/G3/G4 only): 4a = 100% over IN_PROGRESS+VERIFIED FRs, 4b = TEST_SPEC→test coverage (60/80/90% at G2/G3/G4), 4c = NFR→test coverage (60/80/90% at G2/G3/G4, NFR-99 placeholder excluded). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs/tests to pass, accept gate block, or escalate to human. No automated override.
 > - HR-17: NEVER modify files inside `harness/` — debug the framework, never hot-patch the submodule.
 
 ---
@@ -29,6 +29,11 @@ Each FR gets a Gate 1 config-aware re-evaluation (CHECKPOINT). No harness run-ga
 > At milestones, `HANDOVER.md` is written with phase/FR/status summary.
 
 > **Checkpoint Index**:
+> - CHECKPOINT-1: Gate 1 / FR-01 *(auto-push via run-fr-step)*
+> - CHECKPOINT-2: Gate 1 / FR-02 *(auto-push via run-fr-step)*
+> - CHECKPOINT-3: Gate 1 / FR-03 *(auto-push via run-fr-step)*
+> - CHECKPOINT-4: Gate 1 / FR-04 *(auto-push via run-fr-step)*
+> - CHECKPOINT-5: Gate 1 / FR-05 *(auto-push via run-fr-step)*
 > - MILESTONE: P8 exit push (config records complete) → **HANDOVER.md**
 
 ### Entry Gate Verification
@@ -82,7 +87,137 @@ Each FR gets a Gate 1 config-aware re-evaluation (CHECKPOINT). No harness run-ga
 - Security configuration
 - Monitoring configuration
 
-(No FR list found in manifest — run Gate 1 per FR manually)
+### FR Configuration Evaluation (5 total)
+
+#### FR-01: Configuration Record
+- Confirm FR-01 configuration items are documented in CONFIG_RECORDS.md
+- Confirm environment variables / secrets are managed (not hardcoded)
+- Confirm deployment checklist entries for FR-01
+
+**Gate 1 Re-evaluation — FR-01** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 8 --fr-id FR-01 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-01 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-01` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-01
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-02: Configuration Record
+- Confirm FR-02 configuration items are documented in CONFIG_RECORDS.md
+- Confirm environment variables / secrets are managed (not hardcoded)
+- Confirm deployment checklist entries for FR-02
+
+**Gate 1 Re-evaluation — FR-02** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 8 --fr-id FR-02 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-02 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-02` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-02
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-03: Configuration Record
+- Confirm FR-03 configuration items are documented in CONFIG_RECORDS.md
+- Confirm environment variables / secrets are managed (not hardcoded)
+- Confirm deployment checklist entries for FR-03
+
+**Gate 1 Re-evaluation — FR-03** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 8 --fr-id FR-03 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-03 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-03` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-03
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-04: Configuration Record
+- Confirm FR-04 configuration items are documented in CONFIG_RECORDS.md
+- Confirm environment variables / secrets are managed (not hardcoded)
+- Confirm deployment checklist entries for FR-04
+
+**Gate 1 Re-evaluation — FR-04** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 8 --fr-id FR-04 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-04 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-04` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-04
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-05: Configuration Record
+- Confirm FR-05 configuration items are documented in CONFIG_RECORDS.md
+- Confirm environment variables / secrets are managed (not hardcoded)
+- Confirm deployment checklist entries for FR-05
+
+**Gate 1 Re-evaluation — FR-05** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 8 --fr-id FR-05 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-05 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-05` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-05
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
 
 ### P8 Archive — REQUIRED before push-milestone (CI p8-archive-check)
 

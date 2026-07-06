@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-04
+> **Date**: 2026-07-06
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 1 - Requirements Specification
 > **Status**: Full version (including Phase 1 detailed tasks)
@@ -10,7 +10,7 @@
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
 > - HR-05: harness-methodology wins all conflicts — if a project decision contradicts SKILL.md / INIT / this plan, the harness wins.
-> - HR-16: Trace 4a = 100% required (G2/G3/G4 only). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs to 100%, accept gate block, or escalate to human. No automated override.
+> - HR-16: Trace dimension = `min(4a, 4b, 4c)` — ALL THREE must pass (G2/G3/G4 only): 4a = 100% over IN_PROGRESS+VERIFIED FRs, 4b = TEST_SPEC→test coverage (60/80/90% at G2/G3/G4), 4c = NFR→test coverage (60/80/90% at G2/G3/G4, NFR-99 placeholder excluded). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs/tests to pass, accept gate block, or escalate to human. No automated override.
 > - HR-17: NEVER modify files inside `harness/` — debug the framework, never hot-patch the submodule.
 
 ---
@@ -368,6 +368,23 @@ are not re-opened. This bounds backtracking to a single step.
   > AgentSpawner records dispatches to `.methodology/sessions_spawn.log` (non-blocking debug trail).
 
   > fr_id uses P1 as phase-level placeholder; replace with FR-XX for FR-specific plans.
+
+### FR Requirements (5 total)
+
+#### FR-01: 任務提交與驗證
+**Task**: taskq submit "<command>" [--name NAME] with validation rules (empty / length / injection / name-unique) per SPEC.md §3 FR-01
+
+#### FR-02: 任務執行器
+**Task**: taskq run <id> / run --all via subprocess.run(shlex.split, capture_output, text, timeout=TASKQ_TASK_TIMEOUT) + ThreadPoolExecutor; status machine pending→running→done|failed|timeout per SPEC.md §3 FR-02
+
+#### FR-03: 重試與斷路器
+**Task**: Retry with exponential backoff (TASKQ_BACKOFF_BASE * 2^n) up to TASKQ_RETRY_LIMIT; circuit breaker CLOSED/OPEN/HALF_OPEN state machine with TASKQ_BREAKER_THRESHOLD/COOLDOWN; persisted to breaker.json per SPEC.md §3 FR-03
+
+#### FR-04: 結果 TTL 快取
+**Task**: Cache signature = sha256(command); run --cached replays done result within TASKQ_CACHE_TTL; atomic + thread-safe read/write per SPEC.md §3 FR-04
+
+#### FR-05: CLI 整合
+**Task**: argparse subcommands submit / run / status / list / clear + global --json flag + 5 exit codes per SPEC.md §3 FR-05 + §7
 
 ### Phase 1 Deliverables
 - `SRS.md` - Software Requirements Specification (FRs + NFRs)

@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-04
+> **Date**: 2026-07-06
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 4 - Testing
 > **Status**: Full version (including Phase 4 detailed tasks)
@@ -10,7 +10,7 @@
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
 > - HR-05: harness-methodology wins all conflicts — if a project decision contradicts SKILL.md / INIT / this plan, the harness wins.
-> - HR-16: Trace 4a = 100% required (G2/G3/G4 only). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs to 100%, accept gate block, or escalate to human. No automated override.
+> - HR-16: Trace dimension = `min(4a, 4b, 4c)` — ALL THREE must pass (G2/G3/G4 only): 4a = 100% over IN_PROGRESS+VERIFIED FRs, 4b = TEST_SPEC→test coverage (60/80/90% at G2/G3/G4), 4c = NFR→test coverage (60/80/90% at G2/G3/G4, NFR-99 placeholder excluded). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs/tests to pass, accept gate block, or escalate to human. No automated override.
 > - HR-17: NEVER modify files inside `harness/` — debug the framework, never hot-patch the submodule.
 
 ---
@@ -28,6 +28,11 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
 
 > **Checkpoint Index**:
 > - CHECKPOINT-0: TEST_PLAN.md (generate before per-FR testing starts)
+> - CHECKPOINT-1: Gate 1 / FR-01 *(auto-push via run-fr-step)*
+> - CHECKPOINT-2: Gate 1 / FR-02 *(auto-push via run-fr-step)*
+> - CHECKPOINT-3: Gate 1 / FR-03 *(auto-push via run-fr-step)*
+> - CHECKPOINT-4: Gate 1 / FR-04 *(auto-push via run-fr-step)*
+> - CHECKPOINT-5: Gate 1 / FR-05 *(auto-push via run-fr-step)*
 > - MILESTONE: P4-mid push (≥50% FRs Gate 1 PASS) → **HANDOVER.md**
 > - MILESTONE: P4-pre-gate3 push (all FRs done, before Gate 3) → **HANDOVER.md**
 > - CHECKPOINT-GATE-3: Gate 3 (Phase 4 Exit) → **push + HANDOVER.md**
@@ -83,11 +88,127 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
 - Verify TEST_PLAN.md covers all FRs from manifest/quality_manifest.json
 - **[TP-DONE]** TEST_PLAN.md written: all FRs have ≥1 test case, NFRs addressed
 
-### ⚠️  FR Test Coverage — NONE FOUND
+### FR Test Coverage
 
-> **WARNING**: No FR sections parsed and no manifest FR list found.
-> Verify SRS.md format or re-run `plan-phase --phase 4` after
-> quality_manifest.json is generated.
+#### FR-01: 任務提交與驗證
+**Test Target**: Verify taskq submit "<command>" [--name NAME] with validation rules (empty / length / injection / name-unique) per SPEC.md §3 FR-01
+
+**Gate 1 Re-evaluation — FR-01** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 4 --fr-id FR-01 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-01 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-01` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-01
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-02: 任務執行器
+**Test Target**: Verify taskq run <id> / run --all via subprocess.run(shlex.split, capture_output, text, timeout=TASKQ_TASK_TIMEOUT) + ThreadPoolExecutor; status machine pending→running→done|failed|timeout per SPEC.md §3 FR-02
+
+**Gate 1 Re-evaluation — FR-02** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 4 --fr-id FR-02 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-02 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-02` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-02
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-03: 重試與斷路器
+**Test Target**: Verify Retry with exponential backoff (TASKQ_BACKOFF_BASE * 2^n) up to TASKQ_RETRY_LIMIT; circuit breaker CLOSED/OPEN/HALF_OPEN state machine with TASKQ_BREAKER_THRESHOLD/COOLDOWN; persisted to breaker.json per SPEC.md §3 FR-03
+
+**Gate 1 Re-evaluation — FR-03** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 4 --fr-id FR-03 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-03 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-03` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-03
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-04: 結果 TTL 快取
+**Test Target**: Verify Cache signature = sha256(command); run --cached replays done result within TASKQ_CACHE_TTL; atomic + thread-safe read/write per SPEC.md §3 FR-04
+
+**Gate 1 Re-evaluation — FR-04** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 4 --fr-id FR-04 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-04 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-04` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-04
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+#### FR-05: CLI 整合
+**Test Target**: Verify argparse subcommands submit / run / status / list / clear + global --json flag + 5 exit codes per SPEC.md §3 FR-05 + §7
+
+**Gate 1 Re-evaluation — FR-05** (carry-forward · sub-agent dispatch):
+- **[ORCH-GATE1-DELTA]** Dispatch GATE1-DELTA evaluator sub-agent:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 4 --fr-id FR-05 \
+    --step GATE1-DELTA --project .
+  ```
+  → Code-change detection: git diff FR-05 files since last Gate 1 PASS
+  → No changes → skip (idempotent — safe to re-run)
+  → Changes detected → full GATE1 re-evaluation (3 dims: linting/type_safety/test_coverage)
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1-DELTA --fr-id FR-05` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1-DELTA PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-05
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
 
 ### TEST_RESULTS.md Summary
 
@@ -110,6 +231,28 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
   > cross_artifact.py validates this file's numbers against live `pytest --cov` at Gate 3.
   > Fabricated numbers will be caught by the cross-artifact check.
 
+### P4 Milestone Pushes (10-Push Strategy ⑤⑥)
+
+> Per-FR steps push automatically via `run-fr-step`. The milestone pushes below
+> also write `HANDOVER.md` with phase/FR/status summary and push to origin.
+> **Note**: A `[WARN] post-push dirty tree` message may appear if local files were updated. This is non-blocking; do NOT attempt to self-correct.
+> All FR IDs in this project: FR-01,FR-02,FR-03,FR-04,FR-05
+
+- **PUSH ⑤ — P4-mid** (trigger when ≥2/5 FRs have Gate 1 PASS):
+  ```bash
+  python3 harness_cli.py push-milestone --type p4-mid --project . \
+    --fr-done 2 --fr-total 5 --fr-ids FR-01,FR-02
+  ```
+  > `--fr-ids` lists the FRs with Gate 1 PASS so far. Replace `FR-01,FR-02` with actual.
+  > Writes HANDOVER.md + commits + pushes. Next session reads HANDOVER.md to resume.
+
+- **PUSH ⑥ — P4-pre-gate3** (trigger when all 5 FRs Gate 1 PASS, before Gate 3):
+  ```bash
+  python3 harness_cli.py push-milestone --type p4-pre-gate3 --project . \
+    --fr-ids FR-01,FR-02,FR-03,FR-04,FR-05
+  ```
+  > Last stable snapshot before Gate 3 evaluation. HANDOVER.md + push.
+
 
 ### 🔒 CHECKPOINT-GATE-3: Phase 4 Exit
 > linting(90) · type_safety(85) · test_coverage(80) · security(80) · secrets_scanning(100) · license_compliance(100) · integration_coverage(60) · architecture(80) · readability(80) · error_handling(80) · documentation(75) · test_assertion_quality(60) · performance(75) · traceability(100) · adversarial_review(100) · composite ≥ 80  [traceability: framework-owned, harness-computed · adversarial_review: framework-owned, requires .methodology/bug_hunt_report.json · CRG recon inside run-gate · D4 spec-coverage unified ≥80%]
@@ -130,7 +273,7 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
   Output: `.methodology/bug_hunt_targets.json`
 
 - **[HUNT-RUN]** Execute the adversarial bug hunt:
-  - Protocol: `harness/ssi/prompts/hunt_bugs.md` (4-phase: scout → lens hunters → verify → synthesize)
+  - Protocol: `harness/harness/ssi/prompts/hunt_bugs.md` (4-phase: scout → lens hunters → verify → synthesize)
   - Reference workflow: `templates/workflows/hunt-bugs.js`
   - **Use a model DIFFERENT from the developer model** to minimise same-source bias
   - Output: `.methodology/bug_hunt_report.json` + `.audit/*.md`
@@ -148,7 +291,7 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
   (CRG recon triggered inside run-gate automatically — no separate action needed)
 
 - **G3b** Evaluate all Gate 3 dimensions inline:
-  - Follow `harness/ssi/prompts/evaluate_dimension.md`
+  - Follow `harness/harness/ssi/prompts/evaluate_dimension.md`
   - Write result to `.sessi-work/gate3_result.json`
   - Failing dim: fix code → re-evaluate → re-score
   > Failing dims: fix the root cause in code, then re-evaluate → re-score.
@@ -158,7 +301,7 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). Phase exits via Gate 3 (1
   > `community_cohesion`. error_handling is tool-scored (`ast-error-handling`), not CRG.
   > If architecture = 0 due to Orchestrator/hub-and-spoke pattern: complete DA challenge (A3 above)
   > and set `da_waiver` in quality_manifest.json to bypass the threshold.
-  > See `harness/ssi/prompts/evaluate_dimension.md` §Orchestrator Pattern False Positive.
+  > See `harness/harness/ssi/prompts/evaluate_dimension.md` §Orchestrator Pattern False Positive.
   > **traceability** is also framework-owned: the harness calls `compute_trace_dimension()`
   > inside `finalize-gate` and injects the score automatically. Do NOT report a traceability
   > score in gate_result.json. If the gate is blocked by traceability, fix gaps then run:

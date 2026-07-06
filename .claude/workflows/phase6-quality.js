@@ -241,7 +241,7 @@ for (let round = 1; round <= 3; round++) {
     + '   "devil_advocate": {"architecture":true,"readability":true,"error_handling":true,"documentation":true,"performance":true},\n'
     + '   "devil_advocate_evidence": {"<dim>": {"challenger_model":"claude","challenge":"<≥120 chars actual critique>","response":"<≥120 chars defence>"}, ...}.\n'
     + '   A bare boolean is NOT accepted. If architecture/error_handling score 0 due to Orchestrator hub-and-spoke: also add "da_waiver": {"architecture": true} (requires the matching evidence artifact).\n'
-    + '3. G4b: Evaluate all 14 dims inline per ' + REPO + '/harness/ssi/prompts/evaluate_dimension.md → .sessi-work/gate4_result.json.\n'
+    + '3. G4b: Evaluate all 14 dims inline per ' + REPO + '/harness/harness/ssi/prompts/evaluate_dimension.md → .sessi-work/gate4_result.json.\n'
     + '   Dims: linting(90) type_safety(85) test_coverage(80) security(80) secrets_scanning(100) license_compliance(100) architecture(80) readability(80) error_handling(80) documentation(75) performance(75) integration_coverage(75) test_assertion_quality(70).\n'
     + '   NOTE: mutation_testing is disabled by default via .methodology/harness_config.json (mutation_testing=false). If enabled, the harness auto-includes it and re-normalises the composite score.\n'
     + '   FRAMEWORK-OWNED (do NOT self-score): traceability + architecture (CRG override). Fix failing dims at ROOT CAUSE in code.\n'

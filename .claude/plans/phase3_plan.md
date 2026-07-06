@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-04
+> **Date**: 2026-07-06
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 3 - Implementation
 > **Status**: Full version (including Phase 3 detailed tasks)
@@ -10,7 +10,7 @@
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
 > - HR-05: harness-methodology wins all conflicts — if a project decision contradicts SKILL.md / INIT / this plan, the harness wins.
-> - HR-16: Trace 4a = 100% required (G2/G3/G4 only). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs to 100%, accept gate block, or escalate to human. No automated override.
+> - HR-16: Trace dimension = `min(4a, 4b, 4c)` — ALL THREE must pass (G2/G3/G4 only): 4a = 100% over IN_PROGRESS+VERIFIED FRs, 4b = TEST_SPEC→test coverage (60/80/90% at G2/G3/G4), 4c = NFR→test coverage (60/80/90% at G2/G3/G4, NFR-99 placeholder excluded). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs/tests to pass, accept gate block, or escalate to human. No automated override.
 > - HR-17: NEVER modify files inside `harness/` — debug the framework, never hot-patch the submodule.
 
 ---
@@ -27,6 +27,11 @@ Each FR ends with a Gate 1 quality evaluation (CHECKPOINT). Phase exits via Gate
 > At milestones, `HANDOVER.md` is written with phase/FR/status summary.
 
 > **Checkpoint Index**:
+> - CHECKPOINT-1: Gate 1 / FR-01 *(auto-push via run-fr-step)*
+> - CHECKPOINT-2: Gate 1 / FR-02 *(auto-push via run-fr-step)*
+> - CHECKPOINT-3: Gate 1 / FR-03 *(auto-push via run-fr-step)*
+> - CHECKPOINT-4: Gate 1 / FR-04 *(auto-push via run-fr-step)*
+> - CHECKPOINT-5: Gate 1 / FR-05 *(auto-push via run-fr-step)*
 > - MILESTONE: P3-mid push (≥50% FRs Gate 1 PASS) → **HANDOVER.md**
 > - MILESTONE: P3-pre-gate2 push (all FRs done) → **HANDOVER.md**
 > - CHECKPOINT-GATE-2: Gate 2 (Phase 3 Exit) → **push + HANDOVER.md**
@@ -70,19 +75,411 @@ Each FR ends with a Gate 1 quality evaluation (CHECKPOINT). Phase exits via Gate
   4. Phase 3 confirmed in `.methodology/state.json` (`advance-phase` already run)
   > If stale: run `python3 harness_cli.py init-project --phase 3 --project . --overwrite`
 
-### ⚠️  FR Implementation Tasks — NONE FOUND
+### FR Implementation Tasks (5 total)
 
-> **WARNING**: `parse_srs_fr_sections()` returned zero FRs and no
-> `quality_manifest.json` FR list was found. The plan has **no per-FR
-> task blocks**.  Verify SRS.md format: use `### FR-01: Title` sections
-> or `| FR-01 | description |` table rows.
+#### FR-01: 任務提交與驗證
+**Task**: taskq submit "<command>" [--name NAME] with validation rules (empty / length / injection / name-unique) per SPEC.md §3 FR-01
+**Forbidden**:
+- app/infrastructure/ (deprecated)
+- @covers: L1 Error
+- @type: edge
 
-To fix: update SRS.md format and re-run `plan-phase --phase 3`.
+**TDD — FR-01** (Orchestrator dispatches sub-agents · push after each step):
+
+- **[ORCH-RED]** Dispatch TDD-RED sub-agent for FR-01:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-01 --step TDD-RED \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `git log --oneline -1` shows `test(RED): failing test for FR-01`
+  → GitHub push: ✅ auto-done by run-fr-step
+
+  → **NFR annotation (4c gate dim — F-2.3)**: the new test file
+    `03-development/tests/test_fr01.py` MUST include `# NFR-XX` annotations
+    for every NFR associated with FR-01 in `01-requirements/SRS.md §2`
+    `NFR Association` column. Example:
+    ```python
+    # NFR-01 perf: submit+status p95 < 50ms
+    # NFR-04 sec: redaction hit rate = 100%
+    def test_fr_01_main(): ...
+    ```
+    Without these annotations compute_trace_dimension 4c = 0% and
+    Gate 2 blocks. NFR-99 placeholder is excluded (do not annotate).
+
+- **[P3-MIRROR]** Verify the RED test mirrors TEST_SPEC.md (P3 only implements — correctness was locked in P2; on FAIL fix the TEST, not TEST_SPEC):
+  ```bash
+  python3 harness_cli.py check-test-mirrors-spec --project . --fr-id FR-01 \
+    --test-file 03-development/tests/test_fr01.py
+  ```
+  → trigger_mismatch / assertion_missing / param drift = test diverged from spec.
+
+- **[ORCH-GREEN]** Dispatch TDD-GREEN sub-agent for FR-01:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-01 --step TDD-GREEN \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `pytest 03-development/tests/test_fr01.py -q` all pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-IMPROVE]** Dispatch TDD-IMPROVE sub-agent for FR-01:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-01 --step TDD-IMPROVE \
+    --project .
+  ```
+  → Verify: `pytest 03-development/tests/test_fr01.py -q` still pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-GATE1]** Dispatch GATE1 evaluator sub-agent for FR-01:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-01 --step GATE1 \
+    --project .
+  ```
+  → Verify: `git log --oneline -1` shows `feat(FR-01): Gate1 PASS`
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1 --fr-id FR-01` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1 PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-01
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+> 💡 **Crash recovery**: `python3 harness_cli.py resume-fr-phase --phase 3 --project .`
+> prints the next pending step (idempotent on re-run).
+
+#### FR-02: 任務執行器
+**Task**: taskq run <id> / run --all via subprocess.run(shlex.split, capture_output, text, timeout=TASKQ_TASK_TIMEOUT) + ThreadPoolExecutor; status machine pending→running→done|failed|timeout per SPEC.md §3 FR-02
+**Forbidden**:
+- app/infrastructure/ (deprecated)
+- @covers: L1 Error
+- @type: edge
+
+**TDD — FR-02** (Orchestrator dispatches sub-agents · push after each step):
+
+- **[ORCH-RED]** Dispatch TDD-RED sub-agent for FR-02:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-02 --step TDD-RED \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `git log --oneline -1` shows `test(RED): failing test for FR-02`
+  → GitHub push: ✅ auto-done by run-fr-step
+
+  → **NFR annotation (4c gate dim — F-2.3)**: the new test file
+    `03-development/tests/test_fr02.py` MUST include `# NFR-XX` annotations
+    for every NFR associated with FR-02 in `01-requirements/SRS.md §2`
+    `NFR Association` column. Example:
+    ```python
+    # NFR-01 perf: submit+status p95 < 50ms
+    # NFR-04 sec: redaction hit rate = 100%
+    def test_fr_02_main(): ...
+    ```
+    Without these annotations compute_trace_dimension 4c = 0% and
+    Gate 2 blocks. NFR-99 placeholder is excluded (do not annotate).
+
+- **[P3-MIRROR]** Verify the RED test mirrors TEST_SPEC.md (P3 only implements — correctness was locked in P2; on FAIL fix the TEST, not TEST_SPEC):
+  ```bash
+  python3 harness_cli.py check-test-mirrors-spec --project . --fr-id FR-02 \
+    --test-file 03-development/tests/test_fr02.py
+  ```
+  → trigger_mismatch / assertion_missing / param drift = test diverged from spec.
+
+- **[ORCH-GREEN]** Dispatch TDD-GREEN sub-agent for FR-02:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-02 --step TDD-GREEN \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `pytest 03-development/tests/test_fr02.py -q` all pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-IMPROVE]** Dispatch TDD-IMPROVE sub-agent for FR-02:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-02 --step TDD-IMPROVE \
+    --project .
+  ```
+  → Verify: `pytest 03-development/tests/test_fr02.py -q` still pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-GATE1]** Dispatch GATE1 evaluator sub-agent for FR-02:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-02 --step GATE1 \
+    --project .
+  ```
+  → Verify: `git log --oneline -1` shows `feat(FR-02): Gate1 PASS`
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1 --fr-id FR-02` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1 PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-02
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+> 💡 **Crash recovery**: `python3 harness_cli.py resume-fr-phase --phase 3 --project .`
+> prints the next pending step (idempotent on re-run).
+
+#### FR-03: 重試與斷路器
+**Task**: Retry with exponential backoff (TASKQ_BACKOFF_BASE * 2^n) up to TASKQ_RETRY_LIMIT; circuit breaker CLOSED/OPEN/HALF_OPEN state machine with TASKQ_BREAKER_THRESHOLD/COOLDOWN; persisted to breaker.json per SPEC.md §3 FR-03
+**Forbidden**:
+- app/infrastructure/ (deprecated)
+- @covers: L1 Error
+- @type: edge
+
+**TDD — FR-03** (Orchestrator dispatches sub-agents · push after each step):
+
+- **[ORCH-RED]** Dispatch TDD-RED sub-agent for FR-03:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-03 --step TDD-RED \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `git log --oneline -1` shows `test(RED): failing test for FR-03`
+  → GitHub push: ✅ auto-done by run-fr-step
+
+  → **NFR annotation (4c gate dim — F-2.3)**: the new test file
+    `03-development/tests/test_fr03.py` MUST include `# NFR-XX` annotations
+    for every NFR associated with FR-03 in `01-requirements/SRS.md §2`
+    `NFR Association` column. Example:
+    ```python
+    # NFR-01 perf: submit+status p95 < 50ms
+    # NFR-04 sec: redaction hit rate = 100%
+    def test_fr_03_main(): ...
+    ```
+    Without these annotations compute_trace_dimension 4c = 0% and
+    Gate 2 blocks. NFR-99 placeholder is excluded (do not annotate).
+
+- **[P3-MIRROR]** Verify the RED test mirrors TEST_SPEC.md (P3 only implements — correctness was locked in P2; on FAIL fix the TEST, not TEST_SPEC):
+  ```bash
+  python3 harness_cli.py check-test-mirrors-spec --project . --fr-id FR-03 \
+    --test-file 03-development/tests/test_fr03.py
+  ```
+  → trigger_mismatch / assertion_missing / param drift = test diverged from spec.
+
+- **[ORCH-GREEN]** Dispatch TDD-GREEN sub-agent for FR-03:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-03 --step TDD-GREEN \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `pytest 03-development/tests/test_fr03.py -q` all pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-IMPROVE]** Dispatch TDD-IMPROVE sub-agent for FR-03:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-03 --step TDD-IMPROVE \
+    --project .
+  ```
+  → Verify: `pytest 03-development/tests/test_fr03.py -q` still pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-GATE1]** Dispatch GATE1 evaluator sub-agent for FR-03:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-03 --step GATE1 \
+    --project .
+  ```
+  → Verify: `git log --oneline -1` shows `feat(FR-03): Gate1 PASS`
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1 --fr-id FR-03` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1 PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-03
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+> 💡 **Crash recovery**: `python3 harness_cli.py resume-fr-phase --phase 3 --project .`
+> prints the next pending step (idempotent on re-run).
+
+#### FR-04: 結果 TTL 快取
+**Task**: Cache signature = sha256(command); run --cached replays done result within TASKQ_CACHE_TTL; atomic + thread-safe read/write per SPEC.md §3 FR-04
+**Forbidden**:
+- app/infrastructure/ (deprecated)
+- @covers: L1 Error
+- @type: edge
+
+**TDD — FR-04** (Orchestrator dispatches sub-agents · push after each step):
+
+- **[ORCH-RED]** Dispatch TDD-RED sub-agent for FR-04:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-04 --step TDD-RED \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `git log --oneline -1` shows `test(RED): failing test for FR-04`
+  → GitHub push: ✅ auto-done by run-fr-step
+
+  → **NFR annotation (4c gate dim — F-2.3)**: the new test file
+    `03-development/tests/test_fr04.py` MUST include `# NFR-XX` annotations
+    for every NFR associated with FR-04 in `01-requirements/SRS.md §2`
+    `NFR Association` column. Example:
+    ```python
+    # NFR-01 perf: submit+status p95 < 50ms
+    # NFR-04 sec: redaction hit rate = 100%
+    def test_fr_04_main(): ...
+    ```
+    Without these annotations compute_trace_dimension 4c = 0% and
+    Gate 2 blocks. NFR-99 placeholder is excluded (do not annotate).
+
+- **[P3-MIRROR]** Verify the RED test mirrors TEST_SPEC.md (P3 only implements — correctness was locked in P2; on FAIL fix the TEST, not TEST_SPEC):
+  ```bash
+  python3 harness_cli.py check-test-mirrors-spec --project . --fr-id FR-04 \
+    --test-file 03-development/tests/test_fr04.py
+  ```
+  → trigger_mismatch / assertion_missing / param drift = test diverged from spec.
+
+- **[ORCH-GREEN]** Dispatch TDD-GREEN sub-agent for FR-04:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-04 --step TDD-GREEN \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `pytest 03-development/tests/test_fr04.py -q` all pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-IMPROVE]** Dispatch TDD-IMPROVE sub-agent for FR-04:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-04 --step TDD-IMPROVE \
+    --project .
+  ```
+  → Verify: `pytest 03-development/tests/test_fr04.py -q` still pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-GATE1]** Dispatch GATE1 evaluator sub-agent for FR-04:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-04 --step GATE1 \
+    --project .
+  ```
+  → Verify: `git log --oneline -1` shows `feat(FR-04): Gate1 PASS`
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1 --fr-id FR-04` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1 PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-04
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+> 💡 **Crash recovery**: `python3 harness_cli.py resume-fr-phase --phase 3 --project .`
+> prints the next pending step (idempotent on re-run).
+
+#### FR-05: CLI 整合
+**Task**: argparse subcommands submit / run / status / list / clear + global --json flag + 5 exit codes per SPEC.md §3 FR-05 + §7
+**Forbidden**:
+- app/infrastructure/ (deprecated)
+- @covers: L1 Error
+- @type: edge
+
+**TDD — FR-05** (Orchestrator dispatches sub-agents · push after each step):
+
+- **[ORCH-RED]** Dispatch TDD-RED sub-agent for FR-05:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-05 --step TDD-RED \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `git log --oneline -1` shows `test(RED): failing test for FR-05`
+  → GitHub push: ✅ auto-done by run-fr-step
+
+  → **NFR annotation (4c gate dim — F-2.3)**: the new test file
+    `03-development/tests/test_fr05.py` MUST include `# NFR-XX` annotations
+    for every NFR associated with FR-05 in `01-requirements/SRS.md §2`
+    `NFR Association` column. Example:
+    ```python
+    # NFR-01 perf: submit+status p95 < 50ms
+    # NFR-04 sec: redaction hit rate = 100%
+    def test_fr_05_main(): ...
+    ```
+    Without these annotations compute_trace_dimension 4c = 0% and
+    Gate 2 blocks. NFR-99 placeholder is excluded (do not annotate).
+
+- **[P3-MIRROR]** Verify the RED test mirrors TEST_SPEC.md (P3 only implements — correctness was locked in P2; on FAIL fix the TEST, not TEST_SPEC):
+  ```bash
+  python3 harness_cli.py check-test-mirrors-spec --project . --fr-id FR-05 \
+    --test-file 03-development/tests/test_fr05.py
+  ```
+  → trigger_mismatch / assertion_missing / param drift = test diverged from spec.
+
+- **[ORCH-GREEN]** Dispatch TDD-GREEN sub-agent for FR-05:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-05 --step TDD-GREEN \
+    --project . --srs 01-requirements/SRS.md
+  ```
+  → Verify: `pytest 03-development/tests/test_fr05.py -q` all pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-IMPROVE]** Dispatch TDD-IMPROVE sub-agent for FR-05:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-05 --step TDD-IMPROVE \
+    --project .
+  ```
+  → Verify: `pytest 03-development/tests/test_fr05.py -q` still pass
+  → GitHub push: ✅ auto-done by run-fr-step
+
+- **[ORCH-GATE1]** Dispatch GATE1 evaluator sub-agent for FR-05:
+  ```bash
+  python3 harness_cli.py run-fr-step --phase 3 --fr-id FR-05 --step GATE1 \
+    --project .
+  ```
+  → Verify: `git log --oneline -1` shows `feat(FR-05): Gate1 PASS`
+  → GitHub push: ✅ auto-done by run-fr-step
+  → GATE1 FAIL: auto-dispatches CODE-FIX sub-agent → retries (max 3 rounds)
+  → exit 2 = BLOCKED: human intervention required before continuing
+  → Human fix → re-run `run-fr-step --step GATE1 --fr-id FR-05` → exit 0 required before continuing.
+
+- **[ORCH-POST]** After GATE1 PASS — orchestrator runs directly:
+  ```bash
+  python3 harness_cli.py spec-coverage-check --project . --threshold 40.0 --fr-id FR-05
+  python3 harness/scripts/generate_sab.py --project .
+  # Note: if SAB.json exists, append --overwrite to regenerate
+  ```
+
+> 💡 **Crash recovery**: `python3 harness_cli.py resume-fr-phase --phase 3 --project .`
+> prints the next pending step (idempotent on re-run).
 
 ### NFR Coverage
 
 > ⚠️  NFR sections could not be parsed from SRS.md.
 > Verify NFR compliance manually against `01-requirements/SRS.md` §3.
+
+### P3 Milestone Pushes (10-Push Strategy ③④⑤)
+
+> Per-FR steps push automatically via `run-fr-step`. The milestone pushes below
+> also write `HANDOVER.md` with phase/FR/status summary and push to origin.
+> **Note**: A `[WARN] post-push dirty tree` message may appear if local files were updated. This is non-blocking; do NOT attempt to self-correct.
+> All FR IDs in this project: FR-01,FR-02,FR-03,FR-04,FR-05
+
+- **PUSH ③ — P3-mid** (trigger when ≥2/5 FRs have Gate 1 PASS):
+  ```bash
+  python3 harness_cli.py push-milestone --type p3-mid --project . \
+    --fr-done 2 --fr-total 5 --fr-ids FR-01,FR-02
+  ```
+  > `--fr-ids` lists the FRs with Gate 1 PASS so far. Replace `FR-01,FR-02` with actual.
+  > Writes HANDOVER.md + commits + pushes. Next session reads HANDOVER.md to resume.
+
+- **PUSH ④ — P3-pre-gate2** (trigger when all 5 FRs Gate 1 PASS, before Gate 2):
+  ```bash
+  python3 harness_cli.py push-milestone --type p3-pre-gate2 --project . \
+    --fr-ids FR-01,FR-02,FR-03,FR-04,FR-05
+  ```
+  > Last stable snapshot before Gate 2 evaluation. HANDOVER.md + push.
+
+- **PUSH ⑤ — P3-post-gate2** (trigger when Gate 2 PASSes, all 5 FRs Gate 1 PASS — formal P3 exit):
+  ```bash
+  python3 harness_cli.py push-milestone --type p3-post-gate2 --project . \
+    --fr-ids FR-01,FR-02,FR-03,FR-04,FR-05
+  ```
+  > **v2.9.1 B.2** -- replaces label-only `chore(P3-exit): ...` commits.
+  > Pre-flight (enforced) checks:
+  >   1. `.methodology/gate2_result.json` composite ≥ phase threshold
+  >   2. Per-FR Gate 1 sentinel `.sessi-work/sentinels/g1_<fr>.flag` exists for every FR in `--fr-ids`
+  > If either fails the push is BLOCKED with a clear error list (exit 1).
+  > On success: writes HANDOVER.md with `resume_phase=4` + commits + pushes.
 
 
 ### 🔒 CHECKPOINT-GATE-2: Phase 3 Exit
@@ -97,7 +494,7 @@ To fix: update SRS.md format and re-run `plan-phase --phase 3`.
   Read the evaluation prompt printed above.
 
 - **G2b** Evaluate all Gate 2 dimensions inline:
-  - Follow `harness/ssi/prompts/evaluate_dimension.md`
+  - Follow `harness/harness/ssi/prompts/evaluate_dimension.md`
   - Write result to `.sessi-work/gate2_result.json`
   - Failing dim: fix code → re-evaluate → re-score
   > Failing dims: fix the root cause in code, then re-evaluate → re-score.
