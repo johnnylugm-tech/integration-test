@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "477d459de43c8f8ea7fa2eafba6fb5ae094d7246",
-  "content_sha256": "1909d79440c806aead060efc6c229ff87abd23bf27a3b52cfb85cb0870c3394f",
+  "git_sha": "1db36de16d60abe73f858db1525061b6db84f064",
+  "content_sha256": "6948205a10c15498de72b08c4c0de66bbc6156535c962adf3334aeb149f2cc6e",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -14,7 +14,7 @@
       "code_coverage": "83.3%",
       "test_coverage": "83.3%",
       "verification_rate": "83.3%",
-      "total_links": 18,
+      "total_links": 24,
       "missing_mappings": {
         "fr_without_srs": [
           "FR-06"
@@ -57,9 +57,11 @@
         "status": "verified",
         "srs_section": "SAD.md",
         "code_files": [
-          "03-development/src/taskq/executor.py"
+          "03-development/src/taskq/executor.py",
+          "03-development/tests/integration/test_e2e_workflow.py"
         ],
         "test_files": [
+          "tests/integration/test_e2e_workflow.py",
           "tests/test_fr02.py"
         ],
         "sad_module": "executor.py",
@@ -71,9 +73,11 @@
         "srs_section": "SAD.md",
         "code_files": [
           "03-development/src/taskq/breaker.py",
-          "03-development/src/taskq/executor.py"
+          "03-development/src/taskq/executor.py",
+          "03-development/tests/integration/test_e2e_workflow.py"
         ],
         "test_files": [
+          "tests/integration/test_e2e_workflow.py",
           "tests/test_fr03.py"
         ],
         "sad_module": "executor.py",
@@ -99,9 +103,11 @@
         "srs_section": "SAD.md",
         "code_files": [
           "03-development/src/taskq/__main__.py",
-          "03-development/src/taskq/cli.py"
+          "03-development/src/taskq/cli.py",
+          "03-development/tests/integration/test_e2e_workflow.py"
         ],
         "test_files": [
+          "tests/integration/test_e2e_workflow.py",
           "tests/test_fr05.py"
         ],
         "sad_module": "cli.py",
