@@ -1,14 +1,50 @@
 {
   "summary": {
-    "total": 6,
+    "total": 12,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 6,
+    "orphaned": 12,
     "critical": 0,
     "major": 0,
-    "minor": 6
+    "minor": 12
   },
   "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'check_and_record' has no corresponding specification in SPEC.md",
+      "action": "Add spec for check_and_record or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'signature' has no corresponding specification in SPEC.md",
+      "action": "Add spec for signature or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'CacheEntry' has no corresponding specification in SPEC.md",
+      "action": "Add spec for CacheEntry or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'Cache' has no corresponding specification in SPEC.md",
+      "action": "Add spec for Cache or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'get' has no corresponding specification in SPEC.md",
+      "action": "Add spec for get or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'put' has no corresponding specification in SPEC.md",
+      "action": "Add spec for put or remove if unnecessary"
+    },
     {
       "type": "ORPHANED",
       "severity": "minor",
