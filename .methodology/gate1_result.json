@@ -1,31 +1,31 @@
 {
   "gate": 1,
   "phase": 4,
-  "fr_id": "FR-01",
-  "overall_score": 100.0,
+  "fr_id": "FR-03",
+  "overall_score": 97.67,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "ruff check 03-development/src/ --extend-ignore RUF001,RUF002,RUF003\nexit=0\nAll checks passed!\n[full output saved at .sessi-work/round_1/tools/linting.txt — 7 files in 03-development/src/ checked, zero violations]"
+      "tool_evidence": "All checks passed!\nEXIT: 0"
     },
     "type_safety": {
-      "score": 100,
+      "score": 95,
       "threshold": 85,
-      "tool_evidence": "pyright 03-development/src/ --outputjson\nConfig contains unrecognized setting \"pythonPath\".\n{\"version\":\"1.1.409\",\"time\":\"1783359020381\",\"generalDiagnostics\":[],\"summary\":{\"filesAnalyzed\":7,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.301}}\nexit=0\n[full output saved at .sessi-work/round_1/tools/type_safety.txt — pyright settings.json has stale pythonPath key warning, summary reports 0 errors and 0 warnings across all 7 files in 03-development/src/]"
+      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1783381058217\",\n    \"generalDiagnostics\": [\n        {\n            \"file\": \"/Users/johnny/projects/integration-test/03-development/src/taskq/cli.py\",\n            \"severity\": \"error\",\n            \"message\": \"Argument of type \\\"list[dict[Unknown, Unknown]]\\\" cannot be assigned to parameter \\\"payload\\\" of type \\\"dict[Unknown, Unknown]\\\" in function \\\"_emit\\\"\",\n            \"range\": {\n                \"start\": {\n                    \"line\": 254,\n                    \"character\": 8\n                },\n                \"end\": {\n                    \"line\": 254,\n                    \"character\": 13\n                }\n            },\n            \"rule\": \"reportArgumentType\"\n        }\n    ],\n    \"summary\": {\n        \"filesAnalyzed\": 7,\n        \"errorCount\": 1,\n        \"warningCount\": 0,\n        \"informationCount\": 0,\n        \"timeInSec\": 0.307\n    }\n}\n\nEXIT: 0"
     },
     "test_coverage": {
-      "score": 100,
+      "score": 98,
       "threshold": 80,
-      "tests_passed": 6,
+      "tests_passed": 8,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "PYTHONPATH=. python3 -m pytest 03-development/tests/test_fr01.py --cov=03-development/src --cov-report=term-missing\ncollected 6 items\n03-development/tests/test_fr01.py ......                                 [100%]\n============================== 6 passed in 0.07s ===============================\nName                                   Stmts   Miss  Cover   Missing\n--------------------------------------------------------------------\n03-development/src/taskq/__init__.py       3      0   100%\n03-development/src/taskq/__main__.py       0      0   100%\n03-development/src/taskq/breaker.py       73     56    23%   49-52, 62-73, 83-84, 111-117, 133-182\n03-development/src/taskq/cache.py         67     38    43%   48, 70-73, 79-86, 98-99, 123-127, 156-170, 197-210\n03-development/src/taskq/cli.py          164    164     0%   29-316\n03-development/src/taskq/executor.py      84     84     0%   21-301\n03-development/src/taskq/store.py         58      0   100%\n--------------------------------------------------------------------\nTOTAL                                    449    342    24%\n\n[Coverage analysis]\n- spec_cov_pct = 6/6 (100%) — all required test functions for FR-01 exist and pass (test_fr01_add_task_success_atomic_write, test_fr01_add_task_empty_rejected, test_fr01_add_task_whitespace_rejected, test_fr01_add_task_too_long_rejected, test_fr01_add_task_injection_chars_rejected, test_fr01_add_task_name_conflict_rejected).\n- FR-01 implementation lives in store.py per GREEN contract (test_fr01.py imports `from taskq import store`), therefore coverage_pct on store.py = 100% (58/58 stmts covered). cli.py is registered as the FR-01 source heuristic but is exercised by FR-05 tests, not FR-01.\n- Score formula: score = min(coverage_pct, spec_cov_pct) = min(100, 100) = 100.\n- All 6 tests pass; spec coverage 6/6.\n[full output saved at .sessi-work/round_1/tools/test_coverage.txt]"
+      "tool_evidence": "============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-8.4.2, pluggy-1.6.0\nbenchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)\nrootdir: /Users/johnny/projects/integration-test\nconfigfile: setup.cfg\nplugins: benchmark-7.1.0, anyio-4.14.1\ncollected 8 items\n\n03-development/tests/test_fr03.py ........                               [100%]\n\n============================== 8 passed in 2.10s ===============================\n\nCoverage: 03-development/src/taskq/breaker.py 98% (80 stmts, 2 miss)"
     }
   },
-  "composite_score": 100.0,
+  "composite_score": 97.67,
   "verdict": "PASS",
   "passed": true
 }

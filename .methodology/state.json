@@ -2,8 +2,8 @@
   "state": "RUNNING",
   "current_phase": 4,
   "last_gate": 1,
-  "last_fr": "FR-05",
-  "last_update": "2026-07-07T07:30:00Z",
+  "last_fr": "FR-03",
+  "last_update": "2026-07-06T23:37:58.608943+00:00",
   "phase_truth_passed": true,
   "last_milestone_command": "advance-phase --completed-phase 3",
   "phase_completed": {
@@ -16,5 +16,9 @@
   "last_push_checkpoint_phase": 2,
   "last_milestone_at": "2026-07-06T15:50:19.071528+00:00",
   "p4_restart_note": "2026-07-07 clean restart: removed 04-testing/, .sessi-work/, P4 state files; phase truth preserved; fr_progress.json keeps Gate 1 results",
-  "p4_restart_baseline_block": ["ASPICE_PHASE_TRACE", "ASPICE_COMPLETE", "TRACEABILITY_COMPLETE"]
+  "p4_restart_baseline_block": [
+    "ASPICE_PHASE_TRACE",
+    "ASPICE_COMPLETE",
+    "TRACEABILITY_COMPLETE"
+  ]
 }
