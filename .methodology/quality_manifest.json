@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at_phase": 2,
+  "generated_at_phase": 4,
   "fr_ids": [
     "FR-01",
     "FR-02",
@@ -128,17 +128,8 @@
       "fr_scope": "all",
       "overall_score": 96.75
     },
-    "gate3": {
-      "score": 96.05,
-      "quality_complete": true,
-      "rounds_used": 2,
-      "open_critical": 0,
-      "open_high": 0,
-      "phase": 4,
-      "gate": 3,
-      "fr_scope": "all",
-      "overall_score": 96.05
-    },
+    "gate3": null,
     "gate4": null
-  }
+  },
+  "_rebuild_note": "2026-07-07 P4 clean restart: rebuilt from gate2_result.json (96.75 PASS) + fr_progress.json (Gate 1 5/5 FR PASS). gate3/gate4 reset to null — clean restart baseline. Source data preserved in .methodology/gate{1,2}_result.json + fr_progress.json."
 }
