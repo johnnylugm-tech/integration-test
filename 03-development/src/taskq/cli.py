@@ -239,11 +239,8 @@ def _cmd_status(args: argparse.Namespace, *, use_json: bool) -> int:
         print(f"unknown task: {task_id}", file=sys.stderr)
         return EXIT_VALIDATION
     record = tasks[task_id]
-    if use_json:
-        print(json.dumps(record, ensure_ascii=False))
-    else:
-        for key, value in record.items():
-            print(f"{key}: {value}")
+    payload = {k: v for k, v in record.items()}
+    _emit(payload, "\n".join(f"{k}: {v}" for k, v in record.items()), use_json=use_json)
     return EXIT_OK
 
 
@@ -254,11 +251,11 @@ def _cmd_list(args: argparse.Namespace, *, use_json: bool) -> int:
         rec for rec in tasks.values()
         if args.status is None or rec.get("status") == args.status
     ]
-    if use_json:
-        print(json.dumps(items, ensure_ascii=False))
-    else:
-        for rec in items:
-            print(f"{rec.get('id')}\t{rec.get('status')}\t{rec.get('command')}")
+    _emit(
+        items,
+        "\n".join(f"{rec.get('id')}\t{rec.get('status')}\t{rec.get('command')}" for rec in items),
+        use_json=use_json,
+    )
     return EXIT_OK
 
 

@@ -114,17 +114,25 @@ def test_nfr03_atomic_write_kill9_recovery(home):
     # Each writer MUST use tempfile + os.replace so partial writes never
     # corrupt the on-disk file. Verify the file is valid JSON OR absent
     # (first-write case) — both are acceptable; invalid JSON is a bug.
+    validated = 0
     for fn in ("tasks.json", "breaker.json", "cache.json"):
         path = home / fn
         if path.exists():
             raw = path.read_bytes()
             try:
-                json.loads(raw)
-            except json.JSONDecodeError:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError as exc:
                 pytest.fail(
                     f"NFR-03 violated: {fn} left invalid JSON on disk — "
-                    f"atomic_write contract broken"
+                    f"atomic_write contract broken: {exc}"
                 )
+            assert parsed is not None or parsed == [], (
+                f"NFR-03: {fn} decoded to falsy value"
+            )
+            validated += 1
+    assert validated >= 1, (
+        "NFR-03: no JSON files were written — fixture failed to populate state"
+    )
 
 
 def test_nfr03_open_to_closed_within_cooldown_plus_1s(home, monkeypatch):

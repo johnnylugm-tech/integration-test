@@ -155,7 +155,6 @@ def check_and_record(
         data = _load_breaker()
         state = data.get("state", "CLOSED")
         count = int(data.get("failure_count", 0))
-        opened_at = data.get("opened_at")
         now = now_fn()
 
         if state == "OPEN":
