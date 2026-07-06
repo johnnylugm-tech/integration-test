@@ -1,14 +1,32 @@
 {
   "summary": {
-    "total": 3,
+    "total": 6,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 3,
+    "orphaned": 6,
     "critical": 0,
     "major": 0,
-    "minor": 3
+    "minor": 6
   },
   "gaps": [
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'ExecutionResult' has no corresponding specification in SPEC.md",
+      "action": "Add spec for ExecutionResult or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'execute' has no corresponding specification in SPEC.md",
+      "action": "Add spec for execute or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'run_all' has no corresponding specification in SPEC.md",
+      "action": "Add spec for run_all or remove if unnecessary"
+    },
     {
       "type": "ORPHANED",
       "severity": "minor",
