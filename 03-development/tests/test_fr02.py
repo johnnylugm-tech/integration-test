@@ -59,7 +59,6 @@ def test_fr02_subprocess_shlex_split_no_shell_true(home):
 
     result = executor.execute(command=command, timeout=10.0)
     result_exit_code = result.exit_code
-    result_status = result.status
 
     if command == "echo hi":
         # AC-FR02-01-exit-0
