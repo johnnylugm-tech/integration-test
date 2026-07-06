@@ -260,11 +260,11 @@ def test_nfr06_env_var_defaults(monkeypatch):
     text = env_example.read_text(encoding="utf-8")
     # Per NFR-06: TASKQ_HOME default = .taskq
     assert re.search(r"^TASKQ_HOME=\.taskq\b", text, re.MULTILINE), (
-        f"NFR-06 violation: .env.example missing TASKQ_HOME=.taskq default"
+        "NFR-06 violation: .env.example missing TASKQ_HOME=.taskq default"
     )
     # TASKQ_CACHE_TTL default = 3600 per SPEC §5.1
     assert re.search(r"^TASKQ_CACHE_TTL=3600\b", text, re.MULTILINE), (
-        f"NFR-06 violation: .env.example missing TASKQ_CACHE_TTL=3600 default"
+        "NFR-06 violation: .env.example missing TASKQ_CACHE_TTL=3600 default"
     )
 
 
