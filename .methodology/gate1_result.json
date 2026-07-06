@@ -1,8 +1,8 @@
 {
   "gate": 1,
   "phase": 3,
-  "fr_id": "FR-02",
-  "overall_score": 99.34,
+  "fr_id": "FR-03",
+  "overall_score": 96.26,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
@@ -14,18 +14,18 @@
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "{\"version\":\"1.1.409\",\"summary\":{\"filesAnalyzed\":3,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.238},\"generalDiagnostics\":[]}\n(command: pyright 03-development/src/ --outputjson)"
+      "tool_evidence": "{\"version\":\"1.1.409\",\"summary\":{\"filesAnalyzed\":4,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.255},\"generalDiagnostics\":[]}\n(command: pyright 03-development/src/ --outputjson)"
     },
     "test_coverage": {
-      "score": 98,
+      "score": 89,
       "threshold": 80,
-      "tests_passed": 6,
+      "tests_passed": 8,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "pytest: 6 passed, 0 failed in 2.20s\ncoverage report --include=03-development/src/taskq/executor.py:\n  Stmts: 45, Miss: 1, Cover: 98%\nspec_cov_pct = 6/6 required tests present and passing = 100%\nscore = min(98, 100) = 98"
+      "tool_evidence": "pytest: 8 passed, 0 failed in 2.07s\ncoverage json --include=03-development/src/taskq/breaker.py:\n  covered_lines: 80, num_statements: 90, percent_covered: 88.89\nspec_cov_pct = 8/8 required tests present and passing = 100%\nscore = min(89, 100) = 89"
     }
   },
-  "composite_score": 99.34,
+  "composite_score": 96.26,
   "verdict": "PASS",
   "passed": true
 }
