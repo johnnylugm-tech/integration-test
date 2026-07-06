@@ -160,10 +160,7 @@ def _name_conflict(tasks: dict[str, dict], name: str) -> bool:
     """Return True iff an active task already uses ``name``."""
 
     for record in tasks.values():
-        if (
-            record.get("name") == name
-            and record.get("status") in _ACTIVE_STATUSES
-        ):
+        if record.get("name") == name and record.get("status") in _ACTIVE_STATUSES:
             return True
     return False
 
