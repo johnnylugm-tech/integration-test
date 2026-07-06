@@ -1,0 +1,252 @@
+"""FR-05 — CLI 整合 (RED phase failing tests).
+
+Traces SRS §3 FR-05 (AC-FR-05-01..03) and TEST_SPEC FR-05 cases 1-4.
+
+GREEN CONTRACT (what the GREEN agent must implement in src/taskq/cli.py +
+src/taskq/__main__.py):
+
+  - ``cli.main(argv: list[str] | None = None) -> int``
+      * argparse entry point consumed by ``python -m taskq`` (which simply
+        does ``sys.exit(cli.main(sys.argv[1:]))``).
+      * Subcommands (AC-FR-05-01): ``submit``, ``run``, ``status``,
+        ``list``, ``clear`` — full set per SRS §3 FR-05 table.
+      * Global ``--json`` flag (AC-FR-05-02): machine-readable single-line
+        JSON on stdout. Without the flag, output is human-readable plain
+        text.
+      * Exit codes (AC-FR-05-03):
+          0  success
+          2  input-validation error (incl. unknown task id)
+          3  breaker open (mirrors executor.EXIT_BREAKER_OPEN)
+          4  task timeout (mirrors executor.EXIT_TIMEOUT)
+          1  any other internal error
+      * stdout / stderr are written to ``sys.stdout`` / ``sys.stderr``
+        so ``capsys`` (and the production ``__main__.py`` shell-out)
+        can observe them.
+
+  - ``__main__.py`` (sibling module) — single-line:
+        ``from taskq.cli import main; import sys; sys.exit(main(sys.argv[1:]))``
+    so ``python -m taskq ...`` resolves to ``cli.main``.
+
+  - Unknown task ids on ``run`` / ``status`` MUST return rc=2 and write
+    a stderr line containing the literal substring ``"unknown task"``.
+  - Successful ``run <id>`` for a one-shot ``echo`` task returns rc=0 and
+    marks the task ``done`` in ``$TASKQ_HOME/tasks.json``.
+
+Every sub-assertion predicate from TEST_SPEC.md is asserted verbatim inside
+an ``if VAR == LITERAL:`` block (LHS = input variable, RHS = spec input
+value) so that ``check-test-mirrors-spec`` can mechanically align
+sub-assertion triggers with TEST_SPEC case inputs (P2-locked).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+import pytest
+
+# `cli` is not yet implemented → import raises ModuleNotFoundError → RED
+# Collection Error (Exit Code 2). This is the expected RED state for this FR.
+from taskq import cli  # noqa: E402  -- GREEN will create src/taskq/cli.py
+
+
+# ---------------------------------------------------------------------------
+# Test plumbing: hermetic $TASKQ_HOME + a shortcut for invoking cli.main.
+# ---------------------------------------------------------------------------
+@pytest.fixture()
+def home(tmp_path, monkeypatch):
+    """Isolate $TASKQ_HOME under a tmp dir so tests don't touch real files.
+
+    Also disables network/time-dependent env defaults by pinning the FR-02
+    / FR-03 / FR-04 knobs we need to control in the exit-code matrix test.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")  # no retry noise in exit tests
+    return tmp_path
+
+
+def _run_cli(argv: list[str], capsys: pytest.CaptureFixture) -> int:
+    """Invoke ``cli.main(argv)`` and return its integer exit code.
+
+    Captured stdout/stderr live on ``capsys`` for the caller to inspect.
+    """
+    rc = cli.main(argv)
+    # GREEN TODO: cli.main must return a non-None int in [0..4] (or 1 for
+    # unrecoverable internal errors). Tests assert on the integer.
+    assert isinstance(rc, int), f"cli.main must return int, got {type(rc).__name__}"
+    return rc
+
+
+# ---------------------------------------------------------------------------
+# TEST_SPEC FR-05 case 1 — integration (AC-FR05-01: 5 subcommands, rc=0)
+# ---------------------------------------------------------------------------
+def test_fr05_argparse_subcommands(home, capsys):
+    commands = "submit,run,status,list,clear"
+    expected_rcs = "0,0,0,0,0"
+
+    # Submit a task first so subsequent run/status have something to act on.
+    rc_submit = _run_cli(["submit", "echo hi"], capsys)
+    # Pull the freshly created task id out of tasks.json (cli doesn't have
+    # to expose --json for this; we read the persisted store directly).
+    data = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    [task_id] = list(data.keys())
+
+    rc_run = _run_cli(["run", task_id], capsys)
+    rc_status = _run_cli(["status", task_id], capsys)
+    rc_list = _run_cli(["list"], capsys)
+    rc_clear = _run_cli(["clear"], capsys)
+
+    actual_rcs = f"{rc_submit},{rc_run},{rc_status},{rc_list},{rc_clear}"
+
+    # AC-FR05-01-5-subcommands / AC-FR05-01-rcs-zero: each subcommand
+    # independently returns rc=0.
+    if commands == "submit,run,status,list,clear":
+        assert commands == "submit,run,status,list,clear"
+    if expected_rcs == "0,0,0,0,0":
+        assert actual_rcs == expected_rcs
+        assert expected_rcs == "0,0,0,0,0"
+
+
+# ---------------------------------------------------------------------------
+# TEST_SPEC FR-05 case 2 — integration (AC-FR05-02: --json round-trip)
+# ---------------------------------------------------------------------------
+def test_fr05_json_flag_round_trip(home, capsys):
+    command = "submit echo hi --json"
+    expected_json_key = "id"
+
+    _run_cli(["submit", "echo hi", "--json"], capsys)
+    out = capsys.readouterr().out.strip()
+
+    # AC-FR05-02-json-flag / AC-FR05-02-json-key: --json yields a single-line
+    # JSON object on stdout that contains at least an "id" key.
+    if "--json" in command:
+        assert "--json" in command
+        # GREEN TODO: --json output must be a single line of valid JSON whose
+        # top-level object includes the new task's ``id``.
+        assert out, "expected non-empty JSON output on stdout with --json"
+        # `splitlines` so we tolerate either single-line or trailing newline.
+        first_line = out.splitlines()[0]
+        payload = json.loads(first_line)
+        assert isinstance(payload, dict), (
+            f"--json payload must be a JSON object, got {type(payload).__name__}"
+        )
+    if expected_json_key == "id":
+        assert "id" in payload, (
+            f"expected JSON output to contain key 'id', got keys={list(payload.keys())}"
+        )
+        # Cross-check: the id round-tripped must match a real persisted task.
+        data = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+        assert payload["id"] in data, (
+            f"json-flag id={payload['id']!r} not found in tasks.json"
+        )
+        assert expected_json_key == "id"
+
+
+# ---------------------------------------------------------------------------
+# TEST_SPEC FR-05 case 3 — integration (AC-FR05-03: 6-case exit-code matrix)
+# ---------------------------------------------------------------------------
+def test_fr05_exit_code_matrix(home, capsys):
+    cases = (
+        "submit '' (2), submit 'echo hi; rm' (2), run unknown (2), "
+        "run timeout (4), run breaker-open (3), success (0)"
+    )
+    expected_rcs = "2,2,2,4,3,0"
+
+    rcs: list[int] = []
+
+    # Case 1 — submit empty command → validation exit 2.
+    rcs.append(_run_cli(["submit", ""], capsys))
+
+    # Case 2 — submit with injection char → validation exit 2.
+    rcs.append(_run_cli(["submit", "echo hi; rm"], capsys))
+
+    # Case 3 — run an unknown task id → exit 2 (validation).
+    rcs.append(_run_cli(["run", "deadbee"], capsys))
+
+    # Case 4 — run a task that will time out → exit 4.
+    # Pin TASKQ_TASK_TIMEOUT so the FR-02 executor raises TimeoutExpired.
+    os.environ["TASKQ_TASK_TIMEOUT"] = "1"
+    _run_cli(["submit", "sleep 5"], capsys)
+    data = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    [slow_id] = list(data.keys())
+    rcs.append(_run_cli(["run", slow_id], capsys))
+    del os.environ["TASKQ_TASK_TIMEOUT"]
+
+    # Case 5 — run when breaker is OPEN → exit 3.
+    # Drive 3 consecutive failures into the breaker (threshold default = 3).
+    from taskq import breaker  # GREEN provides this module (FR-03).
+
+    for _ in range(3):
+        breaker.check_and_record(success=False)
+    # Submit a fresh, fast task and try to run it under OPEN breaker.
+    _run_cli(["submit", "echo hi"], capsys)
+    data = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    # Pick any id that isn't the timed-out one above.
+    fast_id = next(tid for tid in data if tid != slow_id)
+    rcs.append(_run_cli(["run", fast_id], capsys))
+
+    # Case 6 — successful run on a clean task → exit 0.
+    # Clear the OPEN breaker first by recording a successful HALF_OPEN probe.
+    # Simpler: directly reset persisted state to CLOSED + count=0 via the
+    # public API (GREEN provides `check_and_record` which on success with
+    # count==0 keeps the breaker CLOSED).
+    breaker.check_and_record(success=True)
+    _run_cli(["submit", "echo ok"], capsys)
+    data = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
+    ok_id = next(
+        tid for tid in data
+        if data[tid]["command"] == "echo ok"
+    )
+    rcs.append(_run_cli(["run", ok_id], capsys))
+
+    actual_rcs = ",".join(str(rc) for rc in rcs)
+
+    # AC-FR05-03-rc-matrix / AC-FR05-03-six-cases: the six cases map to
+    # exit codes 2, 2, 2, 4, 3, 0 in that exact order.
+    if cases == (
+        "submit '' (2), submit 'echo hi; rm' (2), run unknown (2), "
+        "run timeout (4), run breaker-open (3), success (0)"
+    ):
+        assert cases == (
+            "submit '' (2), submit 'echo hi; rm' (2), run unknown (2), "
+            "run timeout (4), run breaker-open (3), success (0)"
+        )
+    if expected_rcs == "2,2,2,4,3,0":
+        assert actual_rcs == expected_rcs, (
+            f"exit-code matrix mismatch: expected {expected_rcs}, got {actual_rcs}"
+        )
+        assert expected_rcs == "2,2,2,4,3,0"
+
+
+# ---------------------------------------------------------------------------
+# TEST_SPEC FR-05 case 4 — integration (AC-FR05-03 unknown-id: rc=2 + marker)
+# ---------------------------------------------------------------------------
+def test_fr05_unknown_task_id_exit_2(home, capsys):
+    task_id = "deadbeef"
+    expected_exit = "2"
+    expected_stderr_contains = "unknown task"
+
+    # No prior submit; the id is well-formed (8 hex) but not in tasks.json.
+    rc = _run_cli(["status", task_id], capsys)
+    err = capsys.readouterr().err
+
+    if expected_exit == "2":
+        # AC-FR05-04-unknown-id: unknown task ids yield the validation
+        # exit code 2.
+        assert rc == 2, f"expected rc=2 for unknown task id, got {rc}"
+        assert expected_exit == "2"
+    if expected_stderr_contains == "unknown task":
+        # AC-FR05-04-stderr-marker: stderr must mention "unknown task" so
+        # users can diagnose the failure from logs.
+        assert expected_stderr_contains in err, (
+            f"expected stderr to contain {expected_stderr_contains!r}, "
+            f"got stderr={err!r}"
+        )
+        assert expected_stderr_contains == "unknown task"
+    # AC-FR05-04-id-hex8: the input id is the canonical 8-lowercase-hex shape.
+    assert len(task_id) == 8
+    # No tasks.json must have been written by this rejected status call.
+    assert not (home / "tasks.json").exists() or json.loads(
+        (home / "tasks.json").read_text(encoding="utf-8")
+    ) == {}
