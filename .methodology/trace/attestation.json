@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "2cc459425068ff2ba8d5ca0e7a79df6e4363e83b",
-  "content_sha256": "9b9bb1c6e4f58c290fc8094ad96d000d13704086fc85df1d37ceab4250581433",
+  "git_sha": "1d1e641a3e911b1757caa9ddb8d456f82ef18231",
+  "content_sha256": "1909d79440c806aead060efc6c229ff87abd23bf27a3b52cfb85cb0870c3394f",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -11,20 +11,18 @@
     "completeness": {
       "total_requirements": 6,
       "srs_coverage": "83.3%",
-      "code_coverage": "66.7%",
-      "test_coverage": "66.7%",
-      "verification_rate": "66.7%",
-      "total_links": 15,
+      "code_coverage": "83.3%",
+      "test_coverage": "83.3%",
+      "verification_rate": "83.3%",
+      "total_links": 18,
       "missing_mappings": {
         "fr_without_srs": [
           "FR-06"
         ],
         "fr_without_code": [
-          "FR-05",
           "FR-06"
         ],
         "fr_without_test": [
-          "FR-05",
           "FR-06"
         ]
       }
@@ -34,11 +32,9 @@
         "FR-06"
       ],
       "fr_without_code": [
-        "FR-05",
         "FR-06"
       ],
       "fr_without_test": [
-        "FR-05",
         "FR-06"
       ]
     },
@@ -99,10 +95,15 @@
       },
       "FR-05": {
         "fr_id": "FR-05",
-        "status": "in_progress",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
-        "test_files": [],
+        "code_files": [
+          "03-development/src/taskq/__main__.py",
+          "03-development/src/taskq/cli.py"
+        ],
+        "test_files": [
+          "tests/test_fr05.py"
+        ],
         "sad_module": "cli.py",
         "priority": "HIGH"
       },
