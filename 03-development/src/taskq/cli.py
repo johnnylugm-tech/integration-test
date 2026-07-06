@@ -245,9 +245,11 @@ def _cmd_clear(args: argparse.Namespace, *, use_json: bool) -> int:
     removed = 0
     for name in ("tasks.json", "breaker.json", "cache.json"):
         path = os.path.join(home, name)
-        if os.path.exists(path):
+        try:
             os.remove(path)
             removed += 1
+        except FileNotFoundError:
+            pass
     _emit({"cleared": removed}, f"cleared {removed} file(s)", use_json=use_json)
     return EXIT_OK
 

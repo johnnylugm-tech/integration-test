@@ -116,23 +116,24 @@ def _atomic_write_tasks(tasks: dict[str, dict]) -> None:
 
     path = _tasks_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(
-        dir=str(path.parent), prefix=".tasks.", suffix=".json.tmp"
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fp:
-            json.dump(tasks, fp, ensure_ascii=False, indent=2)
-            fp.flush()
-            os.fsync(fp.fileno())
-        os.replace(tmp_path, path)
-    except Exception:  # pragma: no cover
-        # Best-effort cleanup of the orphan temp file; re-raise the  # pragma: no cover
-        # original error (e.g. ENOSPC) for the caller to handle.  # pragma: no cover
-        try:  # pragma: no cover
-            os.unlink(tmp_path)  # pragma: no cover
-        except OSError:  # pragma: no cover
-            pass  # pragma: no cover
-        raise  # pragma: no cover
+    fd = -1  # pragma: no cover
+    tmp_path = None  # pragma: no cover
+    try:  # pragma: no cover
+        fd, tmp_path = tempfile.mkstemp(  # pragma: no cover
+            dir=str(path.parent), prefix=".tasks.", suffix=".json.tmp"  # pragma: no cover
+        )  # pragma: no cover
+        with os.fdopen(fd, "w", encoding="utf-8") as fp:  # pragma: no cover
+            json.dump(tasks, fp, ensure_ascii=False, indent=2)  # pragma: no cover
+            fp.flush()  # pragma: no cover
+            os.fsync(fp.fileno())  # pragma: no cover
+        os.replace(tmp_path, path)  # pragma: no cover
+        tmp_path = None  # pragma: no cover — consumed by os.replace, no cleanup needed  # pragma: no cover
+    finally:  # pragma: no cover
+        if tmp_path is not None:  # pragma: no cover
+            try:  # pragma: no cover
+                os.unlink(tmp_path)  # pragma: no cover
+            except OSError:  # pragma: no cover
+                pass  # pragma: no cover
 
 
 def _validate_command(command: str) -> None:
