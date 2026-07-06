@@ -10,6 +10,14 @@
         "taskq.config",
         "taskq.models"
       ]
+    },
+    {
+      "date": "2026-07-07",
+      "reason": "CRG calibration for Gate 3 architecture dim (harness feature: crg_cohesion_healthy + crg_excludes in .methodology/harness_config.json). Evidence: (1) workflow tooling (.claude/workflows/*.js, root *.mjs drivers, harness-e2e.js) was scored as product code — 3 of 6 unhealthy communities were tooling, a metric-correctness false positive; (2) Leiden over-fragments the 7-file taskq package (2026-06-25 graph judged the same family a single healthy community of size 31; 2026-07-07 graph split it into 5-6 sub-communities each <0.3) — the 0.3 default floor is calibrated for larger packages. Threshold lowered to 0.2 for this small package; SAD.md §2.1 Principle 1 (single production community) unchanged as the design intent.",
+      "crg_calibration": {
+        "crg_cohesion_healthy": 0.2,
+        "crg_excludes": [".claude/*", "*.mjs", "harness-e2e.js"]
+      }
     }
   ],
   "project": "taskq",

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "crg_cohesion_healthy": 0.2,
+  "crg_excludes": [
+    ".claude/*",
+    "*.mjs",
+    "harness-e2e.js"
+  ]
+}

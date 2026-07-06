@@ -53,19 +53,25 @@
 
 **Design for high cohesion from the start — 6 Universal CRG Design Principles:**
 
+> **Amendment 2026-07-07** (aligned with `.methodology/SAB.json` amendments):
+> `config.py` and `models.py` were planned here in P2 but never implemented in P3
+> (P2 phantom planning). All references below are updated to the as-built 7-file
+> package: env vars are read in-place by their consumer modules; task/breaker/cache
+> records are plain dicts. NFR-05/06 owners re-pointed to `taskq.cli`.
+
 **Principle 1 — Use subdirectories to control CRG community boundaries.** CRG assigns one community per directory. The project has two source-bearing directories:
-- `src/taskq/` — single production community (8 production modules = 9 files incl. `__init__.py` + `__main__.py`, ≤50 nodes).
+- `src/taskq/` — single production community (5 production modules = 7 files incl. `__init__.py` + `__main__.py`, ≤50 nodes).
 - `tests/` — single test community (per-FR test files; not a scored source community).
 
 **Principle 2 — Hub-and-spoke inside `src/taskq/`.** `store.py` is the I/O hub (≥4 functions, called from every other module body). `cli.py` is the orchestration hub (calls every other module). Together they generate the internal-edge budget required for cohesion ≥ 0.3 (see §2.3 budget table).
 
 **Principle 3 — Entry point inside hub dir.** `__main__.py` lives inside `src/taskq/` and only re-exports `cli.main()`; the real entry hub is `cli.py` (calls `store / executor / breaker / cache` directly).
 
-**Principle 4 — Every function body calls the hub.** Per-function-body calls to `store.atomic_write_json` (or `store.read_json`) appear in `cli.py`, `executor.py`, `breaker.py`, `cache.py` to multiply internal edges. Pure modules (`config.py`, `models.py`) are leaf utilities — they must be imported and called from siblings to avoid dilution.
+**Principle 4 — Every function body calls the hub.** Per-function-body calls to `store.atomic_write_json` (or `store.read_json`) appear in `cli.py`, `executor.py`, `breaker.py`, `cache.py` to multiply internal edges.
 
 **Principle 5 — CRG edge detection rules respected.** All cross-module calls use `from .store import atomic_write_json` then `atomic_write_json(...)` standalone assignment — no lazy imports, no nested-arg calls, no `__getattr__` re-exports.
 
-**Principle 6 — Community size ≤ 50 nodes.** `src/taskq/` plan: 8 files × ~4 functions average = ~32 nodes (under cap).
+**Principle 6 — Community size ≤ 50 nodes.** `src/taskq/` plan: 7 files × ~4 functions average = ~28 nodes (under cap).
 
 ### 2.2 Directory Tree (per SPEC §6)
 
@@ -74,8 +80,6 @@ integration-test/
 ├── src/taskq/                    # production community (≤50 nodes)
 │   ├── __init__.py               # package marker + version
 │   ├── __main__.py               # python -m taskq 入口 (entry)
-│   ├── config.py                 # TASKQ_* env 讀取 [NFR-06]
-│   ├── models.py                 # Task / Status / BreakerState dataclasses
 │   ├── store.py                  # tasks.json atomic I/O + Lock [FR-01/02, NFR-03]  (I/O HUB)
 │   ├── executor.py               # subprocess + retry [FR-02/03, NFR-02/04]      (HIGH-RISK)
 │   ├── breaker.py                # circuit breaker [FR-03]                        (state file I/O)
@@ -102,8 +106,8 @@ integration-test/
 
 | FR | Title | Primary module(s) | Supporting module(s) |
 |----|-------|-------------------|----------------------|
-| FR-01 | 任務提交與驗證 | `cli.py` (validation rules + exit 2) | `models.py` (Task dataclass), `store.py` (atomic write tasks.json) |
-| FR-02 | 任務執行器 | `executor.py` (subprocess.run + state machine) | `store.py` (status transitions + Lock), `config.py` (TASKQ_TASK_TIMEOUT / TASKQ_MAX_WORKERS) |
+| FR-01 | 任務提交與驗證 | `cli.py` (validation rules + exit 2) | `store.py` (atomic write tasks.json; task records are plain dicts) |
+| FR-02 | 任務執行器 | `executor.py` (subprocess.run + state machine; reads TASKQ_TASK_TIMEOUT / TASKQ_MAX_WORKERS in-place) | `store.py` (status transitions + Lock) |
 | FR-03 | 重試與斷路器 | `executor.py` (retry/backoff, sleep injectable) + `breaker.py` (state machine + persistence) | `store.py` (breaker.json atomic write) |
 | FR-04 | 結果 TTL 快取 | `cache.py` (sha256 sign + TTL check) | `store.py` (cache.json atomic write) |
 | FR-05 | CLI 整合 | `cli.py` (argparse subcommands + exit codes) | `__main__.py` (entry), all of the above |
@@ -112,32 +116,23 @@ integration-test/
 
 | NFR | Title | Owner module(s) | Mechanism |
 |-----|-------|-----------------|-----------|
-| NFR-01 | performance (submit+status p95 < 50ms) | `cli.py`, `store.py`, `models.py` | Hot path has zero subprocess; single `read_json` per call; no regex compilation in inner loop. Validated via `tests/test_nfr01_perf.py` (pytest-benchmark). |
+| NFR-01 | performance (submit+status p95 < 50ms) | `cli.py`, `store.py` | Hot path has zero subprocess; single `read_json` per call; no regex compilation in inner loop. Validated via `tests/test_nfr01_perf.py` (pytest-benchmark). |
 | NFR-02 | security (no `shell=True`) | `executor.py` (sole subprocess caller) + repo-wide CI gate | `subprocess.run(shlex.split(cmd), ..., shell=False)` enforced at exactly one call site; `grep -rE "shell\s*=\s*True"` wired into `make shell-audit`. |
 | NFR-03 | reliability (atomic writes, breaker recovery) | `store.py` (atomic_write_json), `breaker.py` (cooldown) | `tmp + os.replace` for all 3 JSON files; breaker `now()` injectable to test cooldown ≤ `TASKQ_BREAKER_COOLDOWN + 1s`. |
 | NFR-04 | security (secret redaction) | `executor.py` (post-exec redact step) | Regex `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` applied to `stdout_tail` / `stderr_tail` **before** store write; 100% line replacement with `[REDACTED]`. |
 | NFR-05 | maintainability (docstring `[FR-XX]`) | all public functions in `src/taskq/` | Convention: every public `def` / `class` docstring contains `[FR-XX]` tag for ≥1 owning FR. Gate 1 inspect via `tests/test_nfr05_docstrings.py`. |
-| NFR-06 | deployability (env-only config) | `config.py` (sole reader), `.env.example` (declaration) | 8 `TASKQ_*` env vars; `config.py` exposes typed getters (`get_task_timeout() -> float`) with defaults from SPEC §5.1; no hard-coded paths. |
+| NFR-06 | deployability (env-only config) | consumer modules (`store.py` TASKQ_HOME, `executor.py` timeout/workers, `breaker.py` TASKQ_BREAKER_*, `cache.py` TTL), `.env.example` (declaration) | 8 `TASKQ_*` env vars read in-place with defaults from SPEC §5.1; no hard-coded paths. (Amendment 2026-07-07: centralized `config.py` never built; a config extraction is a P3+ extension item.) |
 
 ### 2.5 Module Specifications
 
-#### 2.5.1 `config.py` — Environment Reader
+#### 2.5.1 ~~`config.py`~~ / 2.5.2 ~~`models.py`~~ — removed by Amendment 2026-07-07
 
-| Attribute | Value |
-|-----------|-------|
-| Responsibility | Single source for all 8 `TASKQ_*` env vars; typed getters with defaults (SPEC §5.1) |
-| External Interface | `get_home() -> Path`, `get_max_workers() -> int`, `get_task_timeout() -> float`, `get_retry_limit() -> int`, `get_backoff_base() -> float`, `get_breaker_threshold() -> int`, `get_breaker_cooldown() -> float`, `get_cache_ttl() -> int` |
-| Dependencies | stdlib only (`os`, `pathlib`) |
-| Logical Constraints | Read once per call (no global cache that would defeat testability); missing var → return default; non-numeric → `ValueError` → CLI exit 1 |
-
-#### 2.5.2 `models.py` — Data Types
-
-| Attribute | Value |
-|-----------|-------|
-| Responsibility | Frozen dataclasses: `Task`, `TaskStatus` (enum: `pending` / `running` / `done` / `failed` / `timeout`), `BreakerState` (enum: `CLOSED` / `OPEN` / `HALF_OPEN`), `CacheEntry` |
-| External Interface | `Task.from_dict(d)`, `Task.to_dict()`, `TaskStatus.transition_to(new)` (validates FR-02 state machine) |
-| Dependencies | stdlib (`dataclasses`, `enum`, `time`) |
-| Logical Constraints | All fields immutable post-create except via explicit transition methods; status transitions enforce `pending → running → {done,failed,timeout}` only |
+Planned in P2, never implemented in P3 (phantom modules, removed from SAB.json).
+As built: the 8 `TASKQ_*` env vars are read in-place by their consumer modules
+(`store.py` / `executor.py` / `breaker.py` / `cache.py`) with SPEC §5.1 defaults;
+task / breaker / cache records are plain dicts validated at the write sites.
+Status enums are string literals enforced by the FR-02 state-machine logic in
+`executor.py`.
 
 #### 2.5.3 `store.py` — Atomic JSON Store (I/O HUB)
 
@@ -200,27 +195,23 @@ integration-test/
                          │
                          ▼
                        cli.py  ◄────────── (orchestration hub)
-                    ┌────┴────┬────────┬────────┐
-                    ▼         ▼        ▼        ▼
-                executor   breaker   cache   config
+                    ┌────┴────┬────────┐
+                    ▼         ▼        ▼
+                executor   breaker   cache
                     │         │        │
                     └────┬────┴────────┘
                          ▼
                       store.py  ◄────────── (I/O hub)
-                         │
-                         ▼
-                     models.py
 ```
 
 **Cycle audit** (per harness constraint `no_circular_dependencies`):
-- `cli → {executor, breaker, cache, config, store, models}` — fan-out, no return edges
-- `executor → {breaker, cache, store, models, config}` — fan-out, no return edge
-- `breaker → {store, models, config}` — fan-out, no return edge
-- `cache → {store, models, config}` — fan-out, no return edge
-- `store → models` — single edge
+- `cli → {executor, breaker, cache, store}` — fan-out, no return edges
+- `executor → {breaker, cache, store}` — fan-out, no return edge
+- `breaker → {store}` — single edge
+- `cache → {store}` — single edge
 - `__main__ → cli` — single edge
 
-**Result**: zero cycles. DAG direction: `cli` (top) → `store`/`models` (bottom).
+**Result**: zero cycles. DAG direction: `cli` (top) → `store` (bottom).
 
 ### 2.7 CRG Internal-Edge Budget
 
@@ -233,7 +224,6 @@ Per Principle 4, every function body in non-leaf modules calls `store.atomic_wri
 | `breaker.py` | ~4 | ~4 | `atomic_write_json`, `read_json` | ~8 |
 | `cache.py` | ~4 | ~4 | `atomic_write_json`, `read_json` | ~8 |
 | `store.py` | ~4 | (hub itself) | self | 0 (self-edges not counted) |
-| `models.py` / `config.py` | ~6 | called by siblings | — | 0 (leaves, but imported by 5+ siblings — caller-side edges) |
 
 Estimated internal edges ≥ 55; external edges from stdlib imports ≈ ~30. Cohesion ≈ 55/(55+30) ≈ 0.65 — safely above 0.3 threshold.
 
@@ -241,7 +231,7 @@ Estimated internal edges ≥ 55; external edges from stdlib imports ≈ ~30. Coh
 
 | Directory | Files | Limit | Status |
 |-----------|-------|-------|--------|
-| `src/taskq/` | 8 | ≤15 | OK; largest module `cli.py` ≤ ~150 LOC (no god-module) |
+| `src/taskq/` | 7 | ≤15 | OK; largest module `cli.py` ≤ ~150 LOC (no god-module) |
 | `tests/` | 11 | ≤15 | OK; one test file per FR + one per NFR |
 
 ---
@@ -407,8 +397,8 @@ User → cli.run(id | --all)
 
 | Concern | Architectural Choice |
 |---------|----------------------|
-| Single reader | `config.py` is the only module reading `os.environ`; all other modules call `config.get_*()` getters |
-| Typed accessors | 8 getters return typed values (`Path`, `int`, `float`); defaults from SPEC §5.1; non-numeric env → `ValueError` → CLI exit 1 |
+| Env access | 8 `TASKQ_*` env vars read in-place by their consumer modules (`store.py` / `executor.py` / `breaker.py` / `cache.py`) with SPEC §5.1 defaults (Amendment 2026-07-07: planned `config.py` single-reader was never built) |
+| Typed coercion | Each read site coerces to its typed value (`Path`, `int`, `float`); non-numeric env → `ValueError` → CLI exit 1 |
 | Declaration | `.env.example` lists all 8 vars with comment annotations matching SPEC §5.1 verbatim |
 | Test coverage | `tests/test_nfr06_env.py` — env override, default fallback, type coercion, missing file |
 
@@ -431,54 +421,34 @@ sab:
   project: "taskq"
 
   layers:  # api/service/store-style from SAD §2.6 (modules are plain strings, not dicts)
+    # Amendment 2026-07-07: config/models layers removed (P2 phantom planning —
+    # taskq.config / taskq.models were never implemented; see .methodology/SAB.json amendments).
     - name: api  # entry + orchestration: CLI surface + python -m taskq dispatcher
       modules:
         - "taskq.cli"
         - "taskq.__main__"
-      allowed_dependencies: ["service", "store", "config", "models"]
+      allowed_dependencies: ["service", "store"]
     - name: service  # runtime logic: subprocess exec, retry, breaker, TTL cache
       modules:
         - "taskq.executor"
         - "taskq.breaker"
         - "taskq.cache"
-      allowed_dependencies: ["store", "config", "models"]
-    - name: config  # single env reader for all 8 TASKQ_* vars (NFR-06)
-      modules:
-        - "taskq.config"
-      allowed_dependencies: ["models"]
+      allowed_dependencies: ["store"]
     - name: store  # I/O HUB — atomic JSON writes + shared Lock (FR-01/02, NFR-03)
       modules:
         - "taskq.store"
-      allowed_dependencies: ["models"]
-    - name: models  # frozen dataclasses (Task / TaskStatus / BreakerState / CacheEntry)
-      modules:
-        - "taskq.models"
       allowed_dependencies: []
 
   allowed_dependencies:
-    # DAG per SAD §2.6 (no cycles; cli top, models bottom).
-    # api → service, store, config, models
+    # DAG per SAD §2.6 (no cycles; cli top, store bottom).
+    # api → service, store
     - from: api
       to: service
     - from: api
       to: store
-    - from: api
-      to: config
-    - from: api
-      to: models
-    # service → store, config, models
+    # service → store
     - from: service
       to: store
-    - from: service
-      to: config
-    - from: service
-      to: models
-    # config → models
-    - from: config
-      to: models
-    # store → models
-    - from: store
-      to: models
 
   quality_targets:
     max_complexity: 15
@@ -508,11 +478,14 @@ sab:
       type: maintainability
       target: "docstring [FR-XX] coverage = 100% of public funcs/classes in src/taskq/"
       # Cross-cutting convention — applies to every public def/class in src/taskq/.
-      module: taskq.models
+      # Amendment 2026-07-07: was taskq.models (phantom); re-pointed to taskq.cli.
+      module: taskq.cli
     NFR-06:
       type: deployability
       target: "8 TASKQ_* env vars exposed via typed getters in config.py"
-      module: taskq.config
+      # Amendment 2026-07-07: was taskq.config (phantom, never built); env vars are
+      # read in-place by consumer modules. Re-pointed to taskq.cli per SAB.json.
+      module: taskq.cli
 
   advisory_only: []  # AUTO-FILLED by parser from nfr_traceability advisory types — omit or leave []
 
