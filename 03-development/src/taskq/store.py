@@ -166,6 +166,22 @@ def _name_conflict(tasks: dict[str, dict], name: str) -> bool:
     return False
 
 
+def _make_record(command: str, name: str | None, task_id: str) -> dict:
+    """[FR-01] Build the on-disk task ``record`` dict for a freshly created task.
+
+    Centralises the schema (id + command + name + status + created_at) so
+    ``add_task`` and any future helper that materialises a record stay in
+    sync on field naming and the UTC timestamp format.
+    """
+    return {
+        "id": task_id,
+        "command": command,
+        "name": name,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def add_task(command: str, name: str | None = None) -> Task:
     """[FR-01] Validate, persist, and return a new FR-01 task.
 
@@ -183,13 +199,7 @@ def add_task(command: str, name: str | None = None) -> Task:
         raise ValidationError(f"name {name!r} conflicts with an existing task")
 
     task_id = uuid4().hex[:8]
-    record = {
-        "id": task_id,
-        "command": command,
-        "name": name,
-        "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
+    record = _make_record(command, name, task_id)
     tasks[task_id] = record
     _atomic_write_tasks(tasks)
 

@@ -100,6 +100,49 @@ def _result_exit_code(result: executor.ExecutionResult) -> int:
     return EXIT_INTERNAL  # pragma: no cover
 
 
+def _run_subprocess(command: str) -> executor.ExecutionResult:
+    """[FR-05/FR-02] Single-task wrapper around ``executor.execute``.
+
+    Centralises the timeout-resolution call so ``_cmd_run`` (and any future
+    single-task path) shares one definition of the per-task timeout policy.
+    """
+    return executor.execute(command, timeout=_task_timeout())
+
+
+def _finalize_run(command: str, result: executor.ExecutionResult) -> int:
+    """[FR-05] Persist post-execute side-effects and map the outcome to an exit code.
+
+    Centralises the cache.Cache().put + breaker.check_and_record + exit-code
+    mapping that closes out a single subprocess invocation, so ``_cmd_run``
+    (and any future per-task path) shares one definition of "what counts as
+    a successful run". Returns the CLI exit code for the outcome.
+    """
+    if result.status == "done":
+        cache.Cache().put(
+            command,
+            status="done",
+            exit_code=result.exit_code,
+            stdout_tail=result.stdout_tail,
+            stderr_tail=result.stderr_tail,
+        )
+    # FR-03 record the terminal outcome so the breaker counter advances/resets.
+    try:
+        breaker.check_and_record(success=(result.status == "done"))
+    except Exception:  # breaker errors must never mask the user-visible result  # pragma: no cover
+        pass  # pragma: no cover
+    return _result_exit_code(result)
+
+
+def _mark_running(tasks: dict, task_id: str) -> None:
+    """[FR-05] Flip a task's status to 'running' and persist the new state.
+
+    Centralises the in-memory + atomic-write pair so the running-marker
+    lives in exactly one place (mirrors cache.py / breaker.py patterns).
+    """
+    tasks[task_id]["status"] = "running"
+    store._atomic_write_tasks(tasks)
+
+
 def _cmd_submit(args: argparse.Namespace, *, use_json: bool) -> int:
     """[FR-05/FR-01] Handle ``taskq submit`` — validate + persist a new task."""
     try:
@@ -147,34 +190,17 @@ def _cmd_run(args: argparse.Namespace, *, use_json: bool) -> int:
         print("breaker open", file=sys.stderr)
         return EXIT_BREAKER_OPEN
 
-    record["status"] = "running"
-    store._atomic_write_tasks(tasks)
+    _mark_running(tasks, task_id)
 
-    result = executor.execute(command, timeout=_task_timeout())
+    result = _run_subprocess(command)
 
     _apply_result(record, result)
     store._atomic_write_tasks(tasks)
 
-    # FR-03 record the terminal outcome so the breaker counter advances/resets.
-    try:
-        breaker.check_and_record(success=(result.status == "done"))
-    except Exception:  # breaker errors must never mask the user-visible result  # pragma: no cover
-        pass  # pragma: no cover
-
-    rc = _result_exit_code(result)
+    rc = _finalize_run(command, result)
     if rc == EXIT_BREAKER_OPEN:
         print("breaker open", file=sys.stderr)  # pragma: no cover
         return rc  # pragma: no cover
-
-    # FR-04 cache successful results for later --cached replay.
-    if result.status == "done":
-        cache.Cache().put(
-            command,
-            status="done",
-            exit_code=result.exit_code,
-            stdout_tail=result.stdout_tail,
-            stderr_tail=result.stderr_tail,
-        )
 
     _emit(
         {"id": task_id, "status": result.status, "exit_code": result.exit_code},

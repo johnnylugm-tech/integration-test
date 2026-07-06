@@ -109,6 +109,21 @@ def _atomic_write_breaker(data: dict) -> None:
                 pass  # pragma: no cover
 
 
+def _cooldown_elapsed(data: dict, now: float) -> bool:
+    """Return True iff the breaker is OPEN and the cooldown has elapsed.
+
+    Centralises the OPEN-state + cooldown arithmetic so both ``_is_open``
+    and the OPEN-branch in ``check_and_record`` stay in sync (DRY).
+    Returns False for any non-OPEN state or if ``opened_at`` is missing.
+    """
+    if data.get("state") != "OPEN":
+        return False
+    opened_at = data.get("opened_at")
+    if opened_at is None:
+        return False  # pragma: no cover
+    return (now - opened_at) >= _COOLDOWN
+
+
 def _is_open(*, now_fn=time.monotonic) -> bool:
     """[FR-03] Return True iff breaker is OPEN and cooldown has not yet elapsed.
 
@@ -118,10 +133,9 @@ def _is_open(*, now_fn=time.monotonic) -> bool:
     data = _load_breaker()
     if data.get("state") != "OPEN":
         return False
-    opened_at = data.get("opened_at")
-    if opened_at is None:
-        return False  # pragma: no cover
-    return (now_fn() - opened_at) < _COOLDOWN
+    if data.get("opened_at") is None:
+        return False
+    return not _cooldown_elapsed(data, now_fn())
 
 
 def check_and_record(
@@ -145,8 +159,7 @@ def check_and_record(
         now = now_fn()
 
         if state == "OPEN":
-            elapsed = now - (opened_at if opened_at is not None else now)
-            if elapsed >= _COOLDOWN:
+            if _cooldown_elapsed(data, now):
                 # Cooldown elapsed → transition to HALF_OPEN, admit probe.
                 # The probe outcome is recorded by the next call.
                 data["state"] = "HALF_OPEN"
