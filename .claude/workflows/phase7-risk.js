@@ -245,7 +245,7 @@ const fastProbe = await agent(
   'YOU ARE THE GATE1-DELTA FAST-PATH PROBE. Classify each FR — fix NOTHING.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\nFRs: ' + JSON.stringify(frIds) + '\n\n'
   + 'For EACH FR in order, substituting <FR> with the FR id:\n'
-  + '1. `timeout 180 ' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 7 --fr-id <FR> --step GATE1-DELTA --project ' + REPO + ' 2>&1 | tail -5`\n'
+  + '1. `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 7 --fr-id <FR> --step GATE1-DELTA --project ' + REPO + ' 2>&1 | tail -5`\n'
   + '2. Authoritative verdict (manifest qc AND a phase-7 gate-1 timestamp for <FR>): `' + PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'<FR>\',{}) or {}; ts=any(e.get(\'phase\')==7 and e.get(\'gate\')==1 and e.get(\'fr_id\')==\'<FR>\' for e in (json.loads(l) for l in open(\'' + REPO + '/.methodology/gate_timestamps.jsonl\') if l.strip())); print(bool(g.get(\'quality_complete\')) and ts)"`\n'
   + '   stdout `True` → pass_fr_ids; anything else (False/None/timeout/error/missing file) → fail_fr_ids.\n\n'
   + 'HARD RULES:\n- DO NOT fix code, edit files, or run TDD steps.\n- DO NOT retry a failing FR — classify it and move on (the full loop handles it).\n- DO NOT run advance-phase / push-milestone / generate risk docs.\n- DO NOT modify harness/.\n\n'
