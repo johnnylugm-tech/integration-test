@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Literal
@@ -39,6 +40,12 @@ Decision = Literal["allow", "probe", "reject"]
 # Defaults read from env on first import so operators can re-tune without code change.
 _THRESHOLD = int(os.environ.get("TASKQ_BREAKER_THRESHOLD", "3"))
 _COOLDOWN = float(os.environ.get("TASKQ_BREAKER_COOLDOWN", "5"))
+
+# Module-level lock serialises every read-modify-write of breaker.json so that
+# concurrent callers (e.g. ``run --all`` fan-out) never observe a stale
+# failure_count or trip the threshold on partial reads (NFR-04 thread-safety
+# contract for breaker.json, mirroring cache.py pattern).
+_breaker_lock = threading.Lock()
 
 
 def _breaker_path() -> Path:
@@ -130,53 +137,54 @@ def check_and_record(
     * ``"reject"`` — breaker is OPEN and cooldown has not elapsed; caller
       should short-circuit (executor maps this to exit-code 3).
     """
-    data = _load_breaker()
-    state = data.get("state", "CLOSED")
-    count = int(data.get("failure_count", 0))
-    opened_at = data.get("opened_at")
-    now = now_fn()
+    with _breaker_lock:
+        data = _load_breaker()
+        state = data.get("state", "CLOSED")
+        count = int(data.get("failure_count", 0))
+        opened_at = data.get("opened_at")
+        now = now_fn()
 
-    if state == "OPEN":
-        elapsed = now - (opened_at if opened_at is not None else now)
-        if elapsed >= _COOLDOWN:
-            # Cooldown elapsed → transition to HALF_OPEN, admit probe.
-            # The probe outcome is recorded by the next call.
-            data["state"] = "HALF_OPEN"
-            data["failure_count"] = count
+        if state == "OPEN":
+            elapsed = now - (opened_at if opened_at is not None else now)
+            if elapsed >= _COOLDOWN:
+                # Cooldown elapsed → transition to HALF_OPEN, admit probe.
+                # The probe outcome is recorded by the next call.
+                data["state"] = "HALF_OPEN"
+                data["failure_count"] = count
+                _atomic_write_breaker(data)
+                return "probe"
+            # Still cooling down → reject.
+            _atomic_write_breaker(data)
+            return "reject"
+
+        if state == "HALF_OPEN":
+            # The caller is recording the outcome of an admitted probe.
+            if success:
+                data["state"] = "CLOSED"
+                data["failure_count"] = 0
+                data["opened_at"] = None
+            else:
+                data["state"] = "OPEN"
+                data["failure_count"] = count + 1
+                data["opened_at"] = now
             _atomic_write_breaker(data)
             return "probe"
-        # Still cooling down → reject.
-        _atomic_write_breaker(data)
-        return "reject"
 
-    if state == "HALF_OPEN":
-        # The caller is recording the outcome of an admitted probe.
+        # CLOSED
         if success:
-            data["state"] = "CLOSED"
-            data["failure_count"] = 0
-            data["opened_at"] = None
-        else:
+            # Reset failure counter on any success (caller usually only calls
+            # this on terminal-non-failure outcomes; reset-on-success keeps the
+            # schema noise-free).
+            if count != 0:
+                data["failure_count"] = 0  # pragma: no cover
+            _atomic_write_breaker(data)
+            return "allow"
+
+        # CLOSED + failure
+        count += 1
+        data["failure_count"] = count
+        if count >= _THRESHOLD:
             data["state"] = "OPEN"
-            data["failure_count"] = count + 1
             data["opened_at"] = now
         _atomic_write_breaker(data)
-        return "probe"
-
-    # CLOSED
-    if success:
-        # Reset failure counter on any success (caller usually only calls
-        # this on terminal-non-failure outcomes; reset-on-success keeps the
-        # schema noise-free).
-        if count != 0:
-            data["failure_count"] = 0  # pragma: no cover
-        _atomic_write_breaker(data)
         return "allow"
-
-    # CLOSED + failure
-    count += 1
-    data["failure_count"] = count
-    if count >= _THRESHOLD:
-        data["state"] = "OPEN"
-        data["opened_at"] = now
-    _atomic_write_breaker(data)
-    return "allow"
