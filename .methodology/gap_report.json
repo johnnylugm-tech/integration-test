@@ -1,12 +1,12 @@
 {
   "summary": {
-    "total": 12,
+    "total": 13,
     "missing": 0,
     "incomplete": 0,
-    "orphaned": 12,
+    "orphaned": 13,
     "critical": 0,
     "major": 0,
-    "minor": 12
+    "minor": 13
   },
   "gaps": [
     {
@@ -44,6 +44,12 @@
       "severity": "minor",
       "reason": "'put' has no corresponding specification in SPEC.md",
       "action": "Add spec for put or remove if unnecessary"
+    },
+    {
+      "type": "ORPHANED",
+      "severity": "minor",
+      "reason": "'main' has no corresponding specification in SPEC.md",
+      "action": "Add spec for main or remove if unnecessary"
     },
     {
       "type": "ORPHANED",
