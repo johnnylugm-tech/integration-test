@@ -27,12 +27,12 @@ shell-audit:
 	@$(PYTHON) scripts/shell_audit.py $(SRC_DIR)
 
 smoke:
-	PYTHONPATH=$(SRC_DIR) $(PYTHON) -m taskq --help >/dev/null
+	PYTHONPATH=$(SRC_DIR) TASKQ_HOME=.taskq $(PYTHON) -m taskq --help >/dev/null
 	# Idempotent: clear any leftover smoke task before re-submit.
-	PYTHONPATH=$(SRC_DIR) $(PYTHON) -m taskq clear >/dev/null 2>&1 || true
-	PYTHONPATH=$(SRC_DIR) $(PYTHON) -m taskq submit "echo ok" --name smoke >/dev/null
-	PYTHONPATH=$(SRC_DIR) $(PYTHON) -m taskq run --all >/dev/null
-	PYTHONPATH=$(SRC_DIR) $(PYTHON) -m taskq list >/dev/null
+	PYTHONPATH=$(SRC_DIR) TASKQ_HOME=.taskq $(PYTHON) -m taskq clear >/dev/null 2>&1 || true
+	PYTHONPATH=$(SRC_DIR) TASKQ_HOME=.taskq $(PYTHON) -m taskq submit "echo ok" --name smoke >/dev/null
+	PYTHONPATH=$(SRC_DIR) TASKQ_HOME=.taskq $(PYTHON) -m taskq run --all >/dev/null
+	PYTHONPATH=$(SRC_DIR) TASKQ_HOME=.taskq $(PYTHON) -m taskq list >/dev/null
 	@echo "smoke: OK"
 
 lint:

@@ -39,7 +39,7 @@ __all__ = ["ValidationError", "Task", "add_task"]
 
 
 class ValidationError(ValueError):
-    """Raised when a task submission violates an FR-01 validation rule.
+    """[FR-01] Raised when a task submission violates an FR-01 validation rule.
 
     Inherits from ``ValueError`` so generic ``except ValueError`` handlers
     continue to work for callers that haven't imported the alias.
@@ -48,7 +48,7 @@ class ValidationError(ValueError):
 
 @dataclass
 class Task:
-    """In-memory view of a persisted task record.
+    """[FR-01] In-memory view of a persisted task record.
 
     Only ``.id`` and ``.status`` are required by the FR-01 GREEN test
     contract; the rest are exposed so downstream FRs (FR-02 executor,
@@ -166,7 +166,7 @@ def _name_conflict(tasks: dict[str, dict], name: str) -> bool:
 
 
 def add_task(command: str, name: str | None = None) -> Task:
-    """Validate, persist, and return a new FR-01 task.
+    """[FR-01] Validate, persist, and return a new FR-01 task.
 
     On any validation failure raises :class:`ValidationError` *before*
     touching storage (the FR-01 test cases assert that no tasks.json file
