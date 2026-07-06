@@ -40,12 +40,14 @@
     "NFR-05": {
       "type": "maintainability",
       "target": "docstring [FR-XX] coverage = 100% of public funcs/classes in src/taskq/",
-      "module": "taskq.models"
+      "module": "taskq.cli",
+      "note": "Was taskq.models under P2 phantom planning (amended 2026-07-07 in SAB.json commit 07069ba + this manifest)."
     },
     "NFR-06": {
       "type": "deployability",
       "target": "8 TASKQ_* env vars exposed via typed getters in config.py",
-      "module": "taskq.config"
+      "module": "taskq.cli",
+      "note": "Was taskq.config under P2 phantom planning (amended 2026-07-07). config.py was never built; env vars read in-place by consumer modules."
     }
   },
   "quality_targets": {
@@ -126,7 +128,13 @@
       "fr_scope": "all",
       "overall_score": 96.75
     },
-    "gate3": null,
+    "gate3": {
+      "score": 93.38860215053761,
+      "quality_complete": false,
+      "rounds_used": 1,
+      "open_critical": 0,
+      "open_high": 0
+    },
     "gate4": null
   }
 }

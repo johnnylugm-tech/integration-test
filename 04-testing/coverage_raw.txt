@@ -1,0 +1,16 @@
+.....................................................                    [100%]
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.11.15-final-0 _______________
+
+Name                                   Stmts   Miss  Cover   Missing
+--------------------------------------------------------------------
+03-development/src/taskq/__init__.py       3      0   100%
+03-development/src/taskq/__main__.py       0      0   100%
+03-development/src/taskq/breaker.py       73      0   100%
+03-development/src/taskq/cache.py         67      0   100%
+03-development/src/taskq/cli.py          164      2    99%   251-252
+03-development/src/taskq/executor.py      84      0   100%
+03-development/src/taskq/store.py         58      0   100%
+--------------------------------------------------------------------
+TOTAL                                    449      2    99%
+53 passed in 7.30s
