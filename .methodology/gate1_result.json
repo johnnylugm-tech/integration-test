@@ -1,8 +1,8 @@
 {
   "gate": 1,
   "phase": 4,
-  "fr_id": "FR-03",
-  "overall_score": 100.0,
+  "fr_id": "FR-04",
+  "overall_score": 99.66,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
@@ -14,18 +14,18 @@
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "pyright 03-development/src/ --outputjson\nConfig contains unrecognized setting \"pythonPath\".\n{\"version\":\"1.1.409\",\"time\":\"1783357524981\",\"generalDiagnostics\":[],\"summary\":{\"filesAnalyzed\":7,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.303}}\nexit=0\n[full output saved at .sessi-work/round_1/tools/type_safety.txt — pyright settings.json has stale pythonPath key warning, summary reports 0 errors and 0 warnings across all 7 files in 03-development/src/]"
+      "tool_evidence": "pyright 03-development/src/ --outputjson\nConfig contains unrecognized setting \"pythonPath\".\n{\"version\":\"1.1.409\",\"time\":\"1783357574345\",\"generalDiagnostics\":[],\"summary\":{\"filesAnalyzed\":7,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.305}}\nexit=0\n[full output saved at .sessi-work/round_1/tools/type_safety.txt — pyright settings.json has stale pythonPath key warning, summary reports 0 errors and 0 warnings across all 7 files in 03-development/src/]"
     },
     "test_coverage": {
-      "score": 100,
+      "score": 99,
       "threshold": 80,
-      "tests_passed": 8,
+      "tests_passed": 4,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "coverage run -m pytest 03-development/tests/test_fr03.py\ncollected 8 items\n03-development/tests/test_fr03.py ........ [100%]\n============================== 8 passed in 2.07s ===============================\ncoverage report --include=\"03-development/src/taskq/breaker.py\"\nName                                  Stmts   Miss  Cover\n03-development/src/taskq/breaker.py      73      0   100%\nTOTAL                                    73      0   100%\n\n[Coverage analysis]\n- spec_cov_pct = 8/8 (100%) — all required test functions for FR-03 exist and pass (test_fr03_exponential_backoff_injectable_sleep, test_fr03_retry_limit_cap, test_fr03_timeout_triggers_retry, test_fr03_threshold_opens_breaker, test_fr03_open_refuses_with_exit_3, test_fr03_half_open_probe_success_closes, test_fr03_half_open_probe_failure_reopens, test_fr03_state_persisted_atomically).\n- coverage_pct on breaker.py = 100% (73 stmts, 0 missed).\n- Score formula: score = min(coverage_pct, spec_cov_pct) = min(100, 100) = 100.\n- All 8 required tests pass; coverage exceeds 80% threshold."
+      "tool_evidence": "coverage run -m pytest 03-development/tests/test_fr04.py\ncollected 4 items\n03-development/tests/test_fr04.py ....                                   [100%]\n============================== 4 passed in 0.03s ===============================\ncoverage report --include=\"03-development/src/taskq/cache.py\"\nName                                Stmts   Miss  Cover\n03-development/src/taskq/cache.py      67      1    99%\nTOTAL                                  67      1    99%\n\n[Coverage analysis]\n- spec_cov_pct = 4/4 (100%) — all required test functions for FR-04 exist and pass (test_fr04_signature_sha256, test_fr04_cached_replay_no_subprocess, test_fr04_expiry_normal_execution, test_fr04_atomic_thread_safe_write).\n- coverage_pct on cache.py = 99% (67 stmts, 1 missed).\n- Score formula: score = min(coverage_pct, spec_cov_pct) = min(99, 100) = 99.\n- All 4 required tests pass; coverage exceeds 80% threshold."
     }
   },
-  "composite_score": 100.0,
+  "composite_score": 99.66,
   "verdict": "PASS",
   "passed": true
 }
