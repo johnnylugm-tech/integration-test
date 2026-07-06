@@ -1,7 +1,7 @@
 {
   "gate": 1,
   "phase": 4,
-  "fr_id": "FR-01",
+  "fr_id": "FR-05",
   "overall_score": 98.01,
   "quality_complete": true,
   "rounds_used": 1,
@@ -19,10 +19,10 @@
     "test_coverage": {
       "score": 99,
       "threshold": 80,
-      "tests_passed": 6,
+      "tests_passed": 11,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "pytest 03-development/tests/test_fr01.py → 6 passed, 0 failed, 0 skipped. Spec coverage = 6/6 required tests present (test_fr01_add_task_success_atomic_write, _empty_rejected, _whitespace_rejected, _too_long_rejected, _injection_chars_rejected, _name_conflict_rejected) → spec_cov_pct=100. Coverage on harness-detected FR-01 source (cli.py per quality_manifest.json FR-01 module mapping): cli.py = 99% (165 stmts, 2 miss). Score = min(99, 100) = 99."
+      "tool_evidence": "pytest 03-development/tests/test_fr05.py → 11 passed, 0 failed, 0 skipped. Spec coverage = 4/4 required tests present (test_fr05_argparse_subcommands, _json_flag_round_trip, _exit_code_matrix, _unknown_task_id_exit_2) → spec_cov_pct=100. Coverage on FR-05 source cli.py: cli.py = 99% (165 stmts, 2 miss). Score = min(99, 100) = 99."
     }
   },
   "composite_score": 98.01,
