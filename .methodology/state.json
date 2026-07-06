@@ -1,9 +1,9 @@
 {
   "state": "RUNNING",
   "current_phase": 3,
-  "last_gate": 1,
-  "last_fr": "FR-05",
-  "last_update": "2026-07-06T15:51:09.660351+00:00",
+  "last_gate": 2,
+  "last_fr": null,
+  "last_update": "2026-07-06T15:51:42.493083+00:00",
   "phase_truth_passed": true,
   "last_milestone_command": "push-milestone --type p3-post-gate2",
   "phase_completed": {

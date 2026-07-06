@@ -162,18 +162,12 @@
   },
   "crg_review_context": {
     "status": "ok",
-    "summary": "Review context for 30 changed file(s):\n  - Risk: high\n  - 242 impacted nodes in 35 files",
-    "risk": "high",
-    "changed_file_count": 30,
-    "impacted_file_count": 35,
-    "key_entities": [
-      "/Users/johnny/projects/integration-test/03-development/src/taskq/store.py",
-      "StoreCorruptedError",
-      "append_task",
-      "atomic_write_tasks",
-      "load_tasks_or_die"
-    ],
-    "test_gaps": 6,
+    "summary": "Review context for 7 changed file(s):\n  - Risk: low\n  - 0 impacted nodes in 0 files",
+    "risk": "low",
+    "changed_file_count": 7,
+    "impacted_file_count": 0,
+    "key_entities": [],
+    "test_gaps": 0,
     "next_tool_suggestions": [
       "detect_changes",
       "get_affected_flows",
@@ -181,26 +175,20 @@
     ],
     "context_savings": {
       "estimated": true,
-      "saved_tokens": 17602,
-      "saved_percent": 99
+      "saved_tokens": 4357,
+      "saved_percent": 98
     }
   },
   "crg_impact_radius": {
     "status": "ok",
-    "summary": "Blast radius for 30 changed file(s):\n  - 30 nodes directly changed\n  - 242 nodes impacted (within 2 hops)\n  - 35 additional files affected",
-    "risk": "high",
-    "impacted_file_count": 35,
-    "key_entities": [
-      "/Users/johnny/projects/integration-test/.claude/workflows/phase1-requirements.js",
-      "extractLastJson",
-      "/Users/johnny/projects/integration-test/.claude/workflows/phase2-architecture.js",
-      "extractLastJson",
-      "loadFileViaBash"
-    ],
+    "summary": "Blast radius for 7 changed file(s):\n  - 0 nodes directly changed\n  - 0 nodes impacted (within 2 hops)\n  - 0 additional files affected",
+    "risk": "low",
+    "impacted_file_count": 0,
+    "key_entities": [],
     "truncated": false,
     "context_savings": {
       "estimated": true,
-      "saved_tokens": 17599,
+      "saved_tokens": 4370,
       "saved_percent": 99
     }
   },
