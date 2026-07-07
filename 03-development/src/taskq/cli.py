@@ -71,7 +71,7 @@ def _max_workers() -> int:
     return max(1, int(raw))  # pragma: no cover
 
 
-def _emit(payload: dict, human: str, *, use_json: bool) -> None:
+def _emit(payload: dict | list, human: str, *, use_json: bool) -> None:
     """[FR-05] Write ``payload`` as single-line JSON, or ``human`` text, to stdout."""
     if use_json:
         print(json.dumps(payload, ensure_ascii=False))
@@ -125,11 +125,13 @@ def _finalize_run(command: str, result: executor.ExecutionResult) -> int:
             stdout_tail=result.stdout_tail,
             stderr_tail=result.stderr_tail,
         )
-    # FR-03 record the terminal outcome so the breaker counter advances/resets.
-    try:
-        breaker.check_and_record(success=(result.status == "done"))
-    except Exception:  # breaker errors must never mask the user-visible result  # pragma: no cover
-        pass  # pragma: no cover
+        # FR-03 reset the breaker on success. Failure-side recording is owned
+        # by executor.execute (one record per terminal outcome — retry attempts
+        # inside the loop must not double-count).
+        try:
+            breaker.check_and_record(success=True)
+        except Exception:  # breaker errors must never mask the user-visible result  # pragma: no cover
+            pass  # pragma: no cover
     return _result_exit_code(result)
 
 
