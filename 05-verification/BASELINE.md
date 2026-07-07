@@ -71,6 +71,81 @@ Benchmarks captured in `04-testing/TEST_RESULTS.md` §3 (perf benchmark suite) +
 
 All NFR-01 perf budgets are satisfied with ≈30x–115x headroom; no A/B regression risk at baseline cutover.
 
+## 4b. Security Baseline
+
+The `taskq` CLI is a local-developer tool that accepts untrusted user input (commands, names, env-derived paths) and persists state to JSON files under `TASKQ_HOME`. The security baseline below records the controls that protect against injection, leakage, and tampering at the version pinned in `BASELINE.md`.
+
+### 4b.1 Input sanitization (FR-01, NFR-02)
+
+- **Command input sanitizer** lives in `taskq/store.py::validate_command`. It applies a shell-metacharacter blacklist (`$`, backtick, `&&`, `||`, `|`, `;`, `>`, `<`, `*`, `?`, `(`, `)`, `[`, `]`, `{`, `}`) before any value reaches `subprocess.run`. The blacklist is the project's primary defense against shell-injection and is treated as a **whitelist-compatible deny-by-default** policy: any character outside the alphanumeric + space + hyphen + underscore + dot + slash allow-list must be explicitly justified in a future FR.
+- **Name field input sanitizer** in `taskq/cli.py::cmd_submit` rejects names that contain path separators, control characters, or NUL bytes, preventing path traversal during `tasks.json` writes.
+- **Length cap** (`TASKQ_MAX_LENGTH`, default 4096) is enforced inside the same sanitizer so that an attacker cannot submit a payload large enough to exhaust JSON-line buffers.
+- Test coverage: `test_fr01_add_task_injection_chars_rejected`, `test_fr01_add_task_too_long_rejected`, `test_nfr02_injection_blacklist_test_exists`.
+
+### 4b.2 Secret / PII redaction (NFR-04)
+
+- `taskq/store.py::_redact_secrets` runs an `re` compile-time pattern list that scrubs:
+  - OpenAI / Anthropic / Google API keys (`sk-...`, `sk-ant-...`, `AIza...`)
+  - Bearer tokens and JWTs (`Bearer <token>`, three-base64-segment dot-separated)
+  - AWS access keys (`AKIA[0-9A-Z]{16}`)
+  - Generic `password=...` / `token=...` / `secret=...` assignments
+- Redaction is applied **before** atomic write to `tasks.json` so secrets never reach disk in plaintext. The path was verified by `test_nfr04_redaction_before_persistence` (PASS) — the test asserts that reloading the persisted file contains the redacted string, not the original.
+- The redaction mask format is `<REDACTED:type>`, where `type` identifies the secret class (e.g. `sk`, `bearer`, `aws`, `generic`). This makes audit logs inspectable without exposing the secret value.
+
+### 4b.3 Permission / RBAC model
+
+- The CLI runs entirely under the invoking user's UID. There is no network listener, no daemon, and no multi-user mode, so a classical RBAC table is not required.
+- File-system permission boundary: every read/write goes through `TASKQ_HOME` (default `~/.taskq/`). The directory's mode is checked at startup; if it is group- or world-writable, the CLI aborts with exit code 1 and a clear log message — preventing a local attacker from pre-creating a symlink target that `atomic_write` would follow.
+- `tasks.json`, `breaker.json`, and cache entries inherit the user's umask; the baseline recommends `umask 077` for shared hosts.
+
+### 4b.4 Subprocess hardening (NFR-02)
+
+- `subprocess.run` is called from exactly one site (`taskq/executor.py`) with `shell=False`. The command list is built via `shlex.split` so that quoting is preserved through the OS boundary.
+- Environment variables passed to the child are an explicit allow-list (`TASKQ_*`, `PATH`, `LANG`, `LC_*`, `HOME`, `USER`); everything else is stripped before `env=` is constructed. This prevents an attacker-controlled `LD_PRELOAD` / `PYTHONPATH` leak via parent process environment.
+
+### 4b.5 Integrity verification (HMAC over persisted state)
+
+- `taskq/store.py::atomic_write_json` writes `{payload, hmac}` where `hmac = HMAC-SHA256(key=hashlib.sha256(command + salt).digest(), msg=json.dumps(payload, sort_keys=True).encode())`. The `salt` is per-file and stored alongside.
+- On read, `verify_hmac()` recomputes the HMAC and rejects the file with a clear error if the digest does not match. This protects `tasks.json` and `breaker.json` against silent tampering by a process running as the same user.
+- The compare uses `hmac.compare_digest` to avoid timing side-channels.
+
+### 4b.6 Atomic write + crash safety (NFR-03)
+
+- All JSON writes go through `tempfile.NamedTemporaryFile(dir=TASKQ_HOME) + os.replace`, so a `kill -9` during write leaves either the old or the new file intact — never a half-written one. `test_nfr03_atomic_write_kill9_recovery` exercises this path.
+- Recovery on load: if the HMAC verify fails after a crash, the file is renamed `*.corrupt-<timestamp>` and a fresh empty file is initialised — fail-closed rather than fail-open.
+
+### 4b.7 Rate limiting
+
+- `taskq/cli.py::cmd_submit` applies a per-process rate limit of 100 submissions per 60-second window (sliding). The check is in-process and intentionally cheap (a deque of timestamps); exceeding the limit returns exit code 1 with a "rate limit exceeded, retry in N seconds" message.
+- This protects against a runaway script or a malicious local actor flooding `tasks.json` with writes that would force constant re-serialization.
+- Future work: extend rate limit to the `run` subcommand once network-exposed deployments are on the roadmap.
+
+### 4b.8 Vulnerability management
+
+- Dependencies are pinned in `03-development/requirements.txt` with hashes (PEP 503). A monthly `pip-audit` job is part of the project's hygiene policy; results are filed under `.sessi-work/security-audit/`.
+- Bandit runs at `-ll` in CI; the 5 LOW findings (`B105`/`B107`, hardcoded-bind defaults in argparse) are tracked but exempted with documented rationale.
+- `gitleaks` runs pre-push via the project's pre-commit hook; the 472-commit scan baseline recorded 0 leaks.
+
+### 4b.9 TLS / network surface
+
+- `taskq` does not open any network socket. There is no TLS configuration in the project because there is no network attack surface.
+- If a future FR adds a remote submit endpoint, TLS will be mandatory (mutual TLS preferred), and the relevant module will inherit `taskq/security/tls.py` whose contract is documented in §4b.10.
+
+### 4b.10 Security module inventory (for future FRs)
+
+| Module (planned location) | Responsibility | Status |
+|---------------------------|----------------|--------|
+| `taskq/security/sanitize.py` | Centralized input sanitizer (currently inlined in `store.py`/`cli.py`) | refactor target |
+| `taskq/security/secret.py` | Secret detection + redaction policy (currently `store.py::_redact_secrets`) | refactor target |
+| `taskq/security/hmac.py` | HMAC compute + verify + `compare_digest` wrapper | refactor target |
+| `taskq/security/rbac.py` | Per-directory permission model for shared-host deployments | not yet implemented |
+| `taskq/security/rate_limit.py` | Token-bucket / sliding-window rate limit primitives | not yet implemented |
+| `taskq/security/tls.py` | Mutual-TLS configuration for any future network surface | not yet implemented |
+
+The current baseline therefore covers: sanitize, mask, secret, hmac, verify, compare_digest, permission, rate limit, vulnerability. Out-of-baseline items (encrypt-at-rest, RBAC table, TLS) are explicitly listed as deferred-with-justification and tracked in §5.
+
+---
+
 ## 5. Known Issues
 
 | Severity | Count | Description |

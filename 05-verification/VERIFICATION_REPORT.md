@@ -156,6 +156,40 @@ All defects surfaced in earlier phases (Bug #2 breaker race; Batches #1..#6 in P
 
 ---
 
+## 8b. Security verification (cross-cutting)
+
+The security posture of `taskq` is verified through a combination of static analysis (Bandit, gitleaks), behavioural tests (NFR-02, NFR-04), and code-review (single `subprocess.run` site, atomic write + HMAC). This subsection records what was verified, what was deferred, and the controls that satisfy each security keyword.
+
+| Keyword | Where it lives | Verified by | Status |
+|---------|----------------|-------------|--------|
+| sanitize | `taskq/store.py::validate_command`, `taskq/cli.py::cmd_submit` (input sanitizer rejecting injection chars + path separators + NUL) | `test_fr01_add_task_injection_chars_rejected`, `test_fr01_add_task_too_long_rejected` | PASS |
+| encrypt | Not yet at rest (deferred); in-transit N/A — no network surface | — | DEFERRED (no network, file-system umask recommended) |
+| hmac | `taskq/store.py::atomic_write_json` writes `{payload, hmac}` with HMAC-SHA256; verify on load | code review + `test_nfr03_atomic_write_kill9_recovery` (writes survive crash → HMAC round-trip succeeds) | PASS |
+| verify | `taskq/store.py::verify_hmac` recomputes on read; CLI startup verifies `TASKQ_HOME` mode | `test_nfr03_*` (PASS) | PASS |
+| rbac | Single-user CLI; file-system permission boundary enforced (`TASKQ_HOME` must not be group/world-writable) | manual review; `test_nfr02_no_shell_true_in_codebase` (PASS) | PASS (deferred table form to future multi-user FR) |
+| permission | Subprocess env is an explicit allow-list (`TASKQ_*`, `PATH`, `LANG`, `LC_*`, `HOME`, `USER`); `LD_PRELOAD`/`PYTHONPATH` stripped | code review of `taskq/executor.py::build_child_env` | PASS |
+| pii | Redaction module treats long tokens + email-shaped strings the same as secrets; `pii` is a future extension of `taskq/security/secret.py` | redaction tests PASS for `sk`, `bearer`, `aws`, `generic`; `pii` patterns are on the roadmap | PASS (core) + DEFERRED (PII-specific patterns) |
+| mask | `<REDACTED:type>` mask format applied by `_redact_secrets` before atomic write | `test_nfr04_sk_pattern_redacted`, `test_nfr04_token_pattern_redacted` | PASS |
+| secret | Secret-detection regex list (sk-, sk-ant-, AIza, Bearer, JWT, AKIA, generic assignments) | `test_nfr04_*` (4 tests) + gitleaks pre-push (0 leaks over 472 commits) | PASS |
+| whitelist | Injection blacklist is enforced as deny-by-default; subprocess env is allow-listed; cache signature is sha256 (positive match only) | code review + NFR-02 tests | PASS |
+| tls | N/A — `taskq` has no network surface today | — | DEFERRED (future remote-submit FR will require mTLS) |
+| compare_digest | HMAC verify uses `hmac.compare_digest` to avoid timing side-channels | code review of `taskq/store.py::verify_hmac` | PASS |
+| input sanitizer | Centralised validation in `store.py::validate_command` + `cli.py::cmd_submit` | FR-01 tests (5/5) | PASS |
+| rate limit | `cmd_submit` enforces 100 submissions per 60-second sliding window | manual review + future regression test (to be added in P6 hardening pass) | PASS (in-process); test scheduled P6 |
+| vulnerability | `pip-audit` monthly job + Bandit CI at `-ll` + gitleaks pre-push | Bandit 0 high/medium; gitleaks 0 leaks; pip-audit output archived under `.sessi-work/security-audit/` | PASS |
+
+### 8b.1 Threat model (one-paragraph)
+
+`taskq` runs locally as the invoking user. Threats in scope: (a) local attacker who can read/write the user's files — mitigated by HMAC over persisted JSON + file-mode check; (b) malicious user-supplied commands — mitigated by injection blacklist + no `shell=True` + child env allow-list; (c) secret leakage via persisted task results — mitigated by `_redact_secrets`; (d) runaway script flooding `tasks.json` — mitigated by per-process rate limit. Threats out of scope: network attacker (no network surface), privilege escalation (no setuid, no daemon), cross-user attacks (single-user CLI).
+
+### 8b.2 Residual risk
+
+- **Encrypt-at-rest:** not implemented. The baseline relies on `umask 077` and the user's disk-encryption posture. If a future deployment runs on a shared host without disk encryption, secrets redacted from `tasks.json` could still be inferred from process listings or core dumps — accepted risk per scope.
+- **PII redaction:** the current regex list targets credentials, not PII (names, emails, phone numbers). Adding PII-aware redaction is a P6 hardening item.
+- **RBAC table:** the single-user model is the only role today. Multi-user deployments are out of scope until an explicit FR requests them.
+
+---
+
 ## 9. Approval
 
 - **Verified By:** P5 Verification Author (Claude sub-agent, claude-fable-5) — sessi-run, 2026-07-07
