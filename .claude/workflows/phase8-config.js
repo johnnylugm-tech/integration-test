@@ -25,6 +25,7 @@ export const meta = {
     { title: 'Load FRs' },
     { title: 'Per-FR Delta' },
     { title: 'Config Docs' },
+    { title: 'Artifacts Commit' },
     { title: 'Archive' },
     { title: 'Final Push' },
   ],
@@ -327,6 +328,23 @@ const docsReport = await agent(
 if (!(docsReport && docsReport.pass === true)) {
   return { error: 'Phase 8 config docs did not PASS', reason: docsReport ? String(docsReport.reason ?? '').slice(-500) : 'agent returned null' }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase: Artifacts Commit (commit config docs BEFORE Archive)
+// ════════════════════════════════════════════════════════════════════════
+// Mirrors phase4 d4f4724 + phase5/7 carry-over. Commit CONFIG_RECORDS.md +
+// RELEASE_CHECKLIST.md before Archive creates .methodology-archive/ (which
+// the Archive phase itself commits). Explicit path allowlist, never
+// `git add -A`. Idempotent (`|| true`).
+phase('Artifacts Commit')
+log('Committing phase-8 config docs (explicit paths) so a verify-handoff FAIL exit leaves a clean tree')
+await agent(
+  'Run ONE bash command and report its stdout/stderr:\n'
+  + '`git -C ' + REPO + ' add 08-config/CONFIG_RECORDS.md 08-config/RELEASE_CHECKLIST.md .methodology && git -C ' + REPO + ' commit -m "chore(p8): config-records + release-checklist artifacts" || true`\n\n'
+  + 'Report: the verbatim stdout/stderr of that command. "nothing to commit" is a valid outcome.\n\n'
+  + 'SCOPE RULES:\n- DO NOT run any code, tests, gates, or phase transitions.\n- DO NOT stage any path other than the three listed above.\n- ONLY the git command above.',
+  { label: 'artifacts-commit', phase: 'Artifacts Commit', agentType: 'general-purpose' },
+)
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Archive (P8-ARCHIVE + P8-HANDOVER-CHECK — required by CI p8-archive-check)

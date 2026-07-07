@@ -26,6 +26,7 @@ export const meta = {
     { title: 'Load FRs' },
     { title: 'Per-FR Delta' },
     { title: 'Verification Docs' },
+    { title: 'Artifacts Commit' },
     { title: 'Milestone' },
     { title: 'Advance' },
   ],
@@ -335,6 +336,24 @@ const docsReport = await agent(
 if (!(docsReport && docsReport.pass === true)) {
   return { error: 'Phase 5 verification docs did not PASS', reason: docsReport ? String(docsReport.reason ?? '').slice(-500) : 'agent returned null' }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase: Artifacts Commit (commit verification artifacts BEFORE p5-baseline push)
+// ════════════════════════════════════════════════════════════════════════
+// Milestone push sweeps the tree via commit_and_push_gate (git add -A), but
+// verify-handoff FAIL exits this workflow early with the verification
+// artifacts still dirty. Commit the already-final deterministic artifacts NOW
+// with an explicit path list (allowlist philosophy, mirrors phase4 d4f4724 —
+// never `git add -A` here, mid-workflow trees can carry unrelated noise).
+phase('Artifacts Commit')
+log('Committing phase-5 artifacts (explicit paths) so a verify-handoff FAIL exit leaves a clean tree')
+await agent(
+  'Run ONE bash command and report its stdout/stderr:\n'
+  + '`git -C ' + REPO + ' add 05-verification .methodology && git -C ' + REPO + ' commit -m "chore(p5): baseline + verification-report artifacts" || true`\n\n'
+  + 'Report: the verbatim stdout/stderr of that command. "nothing to commit" is a valid outcome.\n\n'
+  + 'SCOPE RULES:\n- DO NOT run any code, tests, gates, or phase transitions.\n- DO NOT stage any path other than the two listed above.\n- ONLY the git command above.',
+  { label: 'artifacts-commit', phase: 'Artifacts Commit', agentType: 'general-purpose' },
+)
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Milestone (p5-baseline push)

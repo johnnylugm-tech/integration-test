@@ -21,6 +21,7 @@ export const meta = {
     { title: 'Load FRs' },
     { title: 'Per-FR Delta' },
     { title: 'Risk Docs' },
+    { title: 'Artifacts Commit' },
     { title: 'Milestone' },
     { title: 'Advance' },
   ],
@@ -321,6 +322,23 @@ const docsReport = await agent(
 if (!(docsReport && docsReport.pass === true)) {
   return { error: 'Phase 7 risk docs did not PASS', reason: docsReport ? String(docsReport.reason ?? '').slice(-500) : 'agent returned null' }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase: Artifacts Commit (commit risk artifacts BEFORE p7 push)
+// ════════════════════════════════════════════════════════════════════════
+// Mirrors phase4 d4f4724 + phase5 carry-over: explicit path allowlist (never
+// `git add -A`), idempotent (`|| true`). Ensures a verify-handoff FAIL exit
+// doesn't leave RISK_REGISTER.md / MITIGATION_PLANS.md / STATUS_REPORT.md
+// dirty on the working tree.
+phase('Artifacts Commit')
+log('Committing phase-7 artifacts (explicit paths) so a verify-handoff FAIL exit leaves a clean tree')
+await agent(
+  'Run ONE bash command and report its stdout/stderr:\n'
+  + '`git -C ' + REPO + ' add 07-risk .methodology && git -C ' + REPO + ' commit -m "chore(p7): risk-register artifacts" || true`\n\n'
+  + 'Report: the verbatim stdout/stderr of that command. "nothing to commit" is a valid outcome.\n\n'
+  + 'SCOPE RULES:\n- DO NOT run any code, tests, gates, or phase transitions.\n- DO NOT stage any path other than the two listed above.\n- ONLY the git command above.',
+  { label: 'artifacts-commit', phase: 'Artifacts Commit', agentType: 'general-purpose' },
+)
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Milestone (p7 push)
