@@ -18,8 +18,6 @@ Each test cleans after itself via pytest's tmp_path fixture (auto-removed).
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 import sys
 import time
 from pathlib import Path

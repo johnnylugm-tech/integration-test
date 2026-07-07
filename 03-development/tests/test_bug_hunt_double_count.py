@@ -65,7 +65,9 @@ def _submit_one(home, command: str) -> str:
     data = json.loads((home / "tasks.json").read_text(encoding="utf-8"))
     # Pick the latest task by created_at to handle test fixtures that
     # don't fully isolate between tests.
-    return max(data.items(), key=lambda kv: kv[1].get("created_at", ""))[0] if data else None
+    if not data:
+        raise RuntimeError(f"submit succeeded (rc={rc}) but tasks.json is empty: {data!r}")
+    return max(data.items(), key=lambda kv: kv[1].get("created_at", ""))[0]
 
 
 def _run_one(home, task_id: str) -> int:

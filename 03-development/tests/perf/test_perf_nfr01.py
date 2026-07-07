@@ -10,9 +10,7 @@ dimension while leaving the rest of the suite untouched.
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -55,7 +53,6 @@ def test_bench_status_p95_under_50ms(benchmark, perf_state_dir: Path) -> None:
 def test_bench_list_p95_under_50ms(benchmark, perf_state_dir: Path) -> None:
     """[NFR-01] list with 10 tasks; mean latency target < 50 ms (proxy for p95)."""
     from taskq import cli
-    import json as _json
 
     for i in range(10):
         cli.main(["submit", f"echo perf-list-{i}"])

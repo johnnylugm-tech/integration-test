@@ -1,13 +1,14 @@
 """Run pytest with coverage via Python API and dump the report."""
-import coverage
 import sys
 from io import StringIO
+
+import coverage
+import pytest
 
 cov = coverage.Coverage(source=["03-development/src"])
 cov.start()
 
 # Run pytest programmatically
-import pytest
 sys.argv = [
     "pytest",
     "03-development/tests/test_fr01.py",

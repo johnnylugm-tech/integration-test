@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P4-pre-gate3-20260707`  
-**Phase**: P4 — Testing  
-**Generated**: 2026-07-07T00:47:00Z
+**Checkpoint**: `P5-entry-20260707`  
+**Phase**: P5 — Review Baseline  
+**Generated**: 2026-07-07T00:58:20Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -14,8 +14,8 @@
 # 1. Clone (if working directory cleared)
 git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-test && cd integration-test
 
-# 2. Read plan and continue Phase 4
-cat .methodology/phase4_plan.md
+# 2. Read plan and continue Phase 5
+cat .methodology/phase5_plan.md
 # Follow the active plan and continue from where you left off
 ```
 
@@ -31,73 +31,39 @@ git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-te
 git log --oneline -3
 
 # Confirm FSM state
-cat .methodology/state.json   # expected: phase=4 state=RUNNING last_gate=3
+cat .methodology/state.json   # expected: phase=5 state=RUNNING last_gate=3 last_fr=FR-05
 
 # Read active plan
-cat .methodology/phase4_plan.md
+cat .methodology/phase5_plan.md
 ```
 
 | 欄位 | 值 |
 |------|----|
 | Remote | `https://github.com/johnnylugm-tech/integration-test` |
 | Branch | `main` |
-| State | `phase=4 state=RUNNING last_gate=3` |
-| Plan | `.methodology/phase4_plan.md` |
+| State | `phase=5 state=RUNNING last_gate=3 last_fr=FR-05` |
+| Plan | `.methodology/phase5_plan.md` |
 
 ---
 
 ## 任務背景
 
-P4 Testing complete. Gate 3 not yet executed.
+Phase 4 complete (5/5 FRs Gate 1 PASS). Gate 3 (score=100.0). Advancing to Phase 5.
 
 ## 目前執行狀況
 
-All 5 FR(s) Gate 1 re-eval PASS [FR-01,FR-02,FR-03,FR-04,FR-05]. Gate 3 (14 dims) not yet started.
-
-**A/B Session Results:**
-  - FR-03 / developer: **complete**
-  - FR-01 / developer: **complete**
-  - FR-05 / developer: **complete**
-  - FR-02 / developer: **complete**
-  - FR-04 / developer: **complete**
-
-**Recently Committed Files:**
-  - `.methodology/decision_logs/2026-07-07/GATE_4_139094a5.yaml`
-  - `.methodology/decision_logs/2026-07-07/GATE_4_8c501604.yaml`
-  - `.methodology/decision_logs/2026-07-07/GATE_4_f28edefb.yaml`
-  - `.methodology/effort_metrics.db`
-  - `.methodology/gate3_result.json`
-  - `.methodology/gate_timestamps.jsonl`
-  - `.methodology/quality_manifest.json`
-  - `.methodology/state.json`
-  - `00-summary/Phase4_STAGE_PASS.md`
-  - `01-requirements/TRACEABILITY_MATRIX.md`
-  - `03-development/.audit/bug-report-2026-07-07-round2.md`
-  - `03-development/src/taskq/cli.py`
-  - `03-development/tests/test_bug_hunt_double_count.py`
-  - `CLAUDE.md`
-  - `HANDOVER.md`
-  - `.methodology/bug_hunt_report.json`
-  - `.methodology/bug_hunt_targets.json`
-  - `.methodology/trace/attestation.json`
-  - `04-testing/COVERAGE_REPORT.md`
-  - `04-testing/TEST_RESULTS.md`
+Phase 4: 5/5 FRs Gate 1 PASS. Gate 3 (score=100.0) — quality_complete. Ready to begin Phase 5.
 
 ## 接下來的工作
 
-1. Run Gate 3 evaluation (14 dims, target score ≥ 80)
-2. Fix any failures during evaluation
-3. On Gate 3 PASS → `finalize-gate --gate 3` handles push + HANDOVER
+1. Follow SKILL.md §0.1 Phase 5 entry checklist
+2. Read the Phase 5 plan and execute
 
 ## 注意事項
 
 - 100% follow SKILL.md
 - Do NOT commit `.sessi-work/` or `.methodology/` runtime artifacts
 - Git failures are warnings — they never block the pipeline
-
-## 附加資訊
-
-- **fr_count**: 5
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*

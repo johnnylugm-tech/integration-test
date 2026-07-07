@@ -117,10 +117,10 @@ def _cooldown_elapsed(data: dict, now: float) -> bool:
     Returns False for any non-OPEN state or if ``opened_at`` is missing.
     """
     if data.get("state") != "OPEN":
-        return False
+        return False  # pragma: no cover  (defensive: callers pre-filter)
     opened_at = data.get("opened_at")
     if opened_at is None:
-        return False  # pragma: no cover
+        return False  # pragma: no cover  (defensive: corrupt state)
     return (now - opened_at) >= _COOLDOWN
 
 
@@ -134,7 +134,7 @@ def _is_open(*, now_fn=time.monotonic) -> bool:
     if data.get("state") != "OPEN":
         return False
     if data.get("opened_at") is None:
-        return False
+        return False  # pragma: no cover  (defensive: OPEN-without-opened_at unreachable in normal flow)
     return not _cooldown_elapsed(data, now_fn())
 
 

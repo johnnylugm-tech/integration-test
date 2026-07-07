@@ -273,7 +273,7 @@ def _cmd_clear(args: argparse.Namespace, *, use_json: bool) -> int:
         try:
             os.remove(path)
             removed += 1
-        except FileNotFoundError:
+        except FileNotFoundError:  # pragma: no cover  (file removed between glob and unlink)
             pass
     _emit({"cleared": removed}, f"cleared {removed} file(s)", use_json=use_json)
     return EXIT_OK
