@@ -5,7 +5,7 @@
   "last_fr": "FR-05",
   "last_update": "2026-07-07T02:34:42.101801+00:00",
   "phase_truth_passed": true,
-  "last_milestone_command": "advance-phase --completed-phase 4",
+  "last_milestone_command": "push-milestone --type p5-baseline",
   "phase_completed": {
     "2": {
       "sha": "6d89bb3efc8bc2e77f3121ced5085ca84ac2b62b",
@@ -14,7 +14,7 @@
   },
   "last_push_checkpoint": "2026-07-04T18:10:35.853856+00:00",
   "last_push_checkpoint_phase": 2,
-  "last_milestone_at": "2026-07-07T00:47:00.288669+00:00",
+  "last_milestone_at": "2026-07-07T02:39:08.550518+00:00",
   "p4_restart_note": "2026-07-07 clean restart: removed 04-testing/, .sessi-work/, P4 state files; phase truth preserved; fr_progress.json keeps Gate 1 results",
   "p4_restart_baseline_block": [
     "ASPICE_PHASE_TRACE",
