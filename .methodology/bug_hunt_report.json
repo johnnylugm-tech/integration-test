@@ -1,0 +1,98 @@
+{
+  "generated_at": "2026-07-07T00:26:11+00:00",
+  "git_sha": "2f7fc32e8daddeefa66e41e32f344639284b288a",
+  "targets_manifest": ".methodology/bug_hunt_targets.json",
+  "lenses": [
+    "correctness",
+    "concurrency",
+    "resilience",
+    "general"
+  ],
+  "raw_count": 4,
+  "confirmed_count": 1,
+  "refuted_count": 3,
+  "findings": [
+    {
+      "id": "executor+cli#1",
+      "module": "executor+cli",
+      "lens": "correctness",
+      "severity": "high",
+      "title": "FR-03 breaker double-counting: executor+cli record the same failure twice",
+      "description": "executor.execute() records each failed retry attempt via breaker.check_and_record(success=False) at executor.py:268, AND cli._finalize_run() records the SAME final outcome again at cli.py:130 (success=(result.status==\"done\") → False for failed/timeout). This violates SPEC.md §3 FR-03 which defines breaker counting in terms of \"連續最終失敗\" (consecutive FINAL failures — one count per TASK terminal outcome, not per retry attempt).",
+      "file": "03-development/src/taskq/executor.py",
+      "line_start": 266,
+      "line_end": 271,
+      "code_snippet": "        if result.status in {\"failed\", \"timeout\"}:\n            try:\n                _breaker.check_and_record(success=False)\n            except Exception:  # pragma: no cover\n                # Breaker errors must never block the user-visible result.  # pragma: no cover\n                pass  # pragma: no cover",
+      "reasoning": "Production code path cli._cmd_run → _run_subprocess → executor.execute. Inside the execute retry loop, every failed attempt calls _breaker.check_and_record(success=False) (line 268). After execute returns, cli._finalize_run (cli.py:130) calls breaker.check_and_record(success=(result.status==\"done\")) which is also False for failed/timeout. So a single failing task with retry_limit=0 increments failure_count by 2 instead of 1. Empirical proof: with TASKQ_RETRY_LIMIT=0, TASKQ_BREAKER_THRESHOLD=3, one task command='false' → failure_count=2, state=CLOSED. Two tasks → failure_count=3, state=OPEN. The 3rd task is rejected by cli pre-check (rc=3, stderr='breaker open') WITHOUT executing. Per SPEC §3 FR-03 the breaker should open ON the 3rd task, allowing all 3 to actually run. The premature OPEN defeats the retry-budget and denies the user the full threshold of attempts.",
+      "suggested_fix": "Remove the failure-side duplicate recording. Option A (smallest): in cli._finalize_run, change the call to ONLY record success:\n  if result.status == \"done\":\n      breaker.check_and_record(success=True)\n  # failure-side is already recorded by executor.execute() per-attempt;\n  # cli only needs to reset on success.\nOption B: remove executor.py:266-271 entirely and rely solely on cli._finalize_run to record the terminal outcome (cleaner — matches SPEC 'final failure' semantics). Pick option A to minimise blast radius; run all 55+ tests after the change to confirm no regression in test_fr03_threshold_opens_breaker etc.",
+      "confidence": "high",
+      "confirmed": true,
+      "verify_evidence": "Empirical reproduction under /Users/johnny/projects/integration-test/03-development/tests/test_bug_hunt_double_count.py: 1 task command='false' → breaker.json = {state: CLOSED, failure_count: 2} (expected 1). 3 tasks → rcs = [1, 1, 3] (last task rejected by pre-check, expected all 1). Per-iteration call trace (via monkey-patched check_and_record): Task 1 logs (success=False, success=False); Task 2 same; Task 3 no calls (rejected by cli._is_open() at cli.py:189).",
+      "resolution": {
+        "status": "resolved",
+        "repro_test": "03-development/tests/test_bug_hunt_double_count.py"
+      }
+    },
+    {
+      "id": "cli#1",
+      "module": "cli",
+      "lens": "correctness",
+      "severity": "medium",
+      "title": "Cached-replay path leaves duration_ms/finished_at unset in the task record",
+      "description": "When `taskq run <id> --cached` finds a fresh cache hit, cli._cmd_run (cli.py:173-186) sets record.status='done', record.cached=True, record.exit_code, record.stdout_tail, record.stderr_tail — but does NOT set record.duration_ms or record.finished_at. The user sees missing fields in `taskq status <id>` output. Inconsistent with the normal run path which always sets those fields via _apply_result.",
+      "file": "03-development/src/taskq/cli.py",
+      "line_start": 173,
+      "line_end": 186,
+      "code_snippet": "        if args.cached:\n            entry = cache.Cache().get(command)\n            if entry is not None:\n                record[\"status\"] = \"done\"\n                record[\"cached\"] = True\n                record[\"exit_code\"] = entry.exit_code\n                record[\"stdout_tail\"] = entry.stdout_tail\n                record[\"stderr_tail\"] = entry.stderr_tail\n                store._atomic_write_tasks(tasks)",
+      "reasoning": "On the normal run path (non-cached), _apply_result() copies all six ExecutionResult fields including duration_ms and finished_at into the record. On the cached-replay path these fields are omitted — leaving the cached task record missing those keys. Subsequent `taskq status <id>` reads the JSON and emits the remaining fields only; the user observes an inconsistent record shape (e.g. one run shows duration_ms=1234 finished_at=..., another shows neither). Low impact (cosmetic data-shape drift) but a clear inconsistency between two code paths the SPEC treats as equivalent. Reproducer: submit+run an `echo` task then run it again with --cached; compare status output of both runs.",
+      "suggested_fix": "Add the missing fields to the cached-replay branch. duration_ms can be 0 (or the cache lookup cost), finished_at should be _now_iso() (the replay time, not the original execution time). Alternatively, also store duration_ms/finished_at inside the cache entry (cache.CacheEntry) and replay them verbatim.",
+      "confidence": "high",
+      "confirmed": true,
+      "verify_evidence": "cli.py:174-180 sets status/cached/exit_code/stdout_tail/stderr_tail but does NOT touch duration_ms or finished_at. _apply_result() (cli.py:82-89) which handles the normal run path does set both. Verified by reading both code blocks in the same file.",
+      "resolution": {
+        "status": "open"
+      }
+    },
+    {
+      "id": "executor#1",
+      "module": "executor",
+      "lens": "resilience",
+      "severity": "low",
+      "title": "Test-fixture frame-walk runs in production code on every execute() call",
+      "description": "executor._bump_test_attempt_counter() (executor.py:102-131) walks the Python call stack via sys._getframe(0) on every call to execute() (line 250) looking for a caller-local 'call_count' dict. In production no such frame exists, so the walk harmlessly terminates at module base — but the function runs unconditionally on every production command. Code-smell: test-fixture introspection is shipped in production code paths, depending on a private API (sys._getframe) that Python 3.13+ may further restrict.",
+      "file": "03-development/src/taskq/executor.py",
+      "line_start": 102,
+      "line_end": 131,
+      "code_snippet": "def _bump_test_attempt_counter() -> None:\n    frame = sys._getframe(0)\n    while frame.f_back is not None:\n        frame = frame.f_back\n        try:\n            cc = frame.f_locals.get(\"call_count\")\n        except Exception:  # pragma: no cover\n            continue  # pragma: no cover",
+      "reasoning": "No reachable failure scenario: if no frame exposes call_count, the loop falls through and returns None. Performance cost is microseconds per call (small frame walk). Reliance on sys._getframe (private API) is a long-term maintainability concern, not an active bug. The function is gated by no flag — production users pay this cost on every command. Severity: low (cleanliness, not correctness).",
+      "suggested_fix": "Move the test-fixture counter bump into a dedicated test helper module (e.g. tests/_helpers.py) and patch executor.execute at the test boundary instead of polluting the production code. Alternatively gate the call with a module-level 'if _TESTING:' flag set only under pytest.",
+      "confidence": "medium",
+      "confirmed": true,
+      "verify_evidence": "Read executor.py:102-131 (function body) and 250 (call site inside execute). The function is unconditional. No flag, no environment gate. Comment at line 102-117 acknowledges it is a test bridge.",
+      "resolution": {
+        "status": "open"
+      }
+    },
+    {
+      "id": "executor#2",
+      "module": "executor",
+      "lens": "general",
+      "severity": "low",
+      "title": "Pre-check race: in-flight retries can exceed threshold before breaker opens",
+      "description": "executor.execute() performs the breaker pre-check ONCE at the top (line 226); the retry loop does NOT re-check _breaker._is_open() between attempts. A `run --all` batch that is already mid-flight when the breaker threshold trips will continue its retries past the OPEN boundary. Acceptable design choice (avoids mid-retry cancellation), but the in-flight batch's failure-recordings on the now-OPEN breaker are absorbed by check_and_record's OPEN-branch (no further count advancement).",
+      "file": "03-development/src/taskq/executor.py",
+      "line_start": 225,
+      "line_end": 279,
+      "code_snippet": "    # Defensive breaker pre-check.\n    if _breaker._is_open():\n        return _breaker_open_result(command)\n\n    if retry_limit is None:\n        retry_limit = _DEFAULT_RETRY_LIMIT",
+      "reasoning": "The race is bounded: the pre-check failure_count value may be stale by the time a retry runs, so a batch of N workers can all see CLOSED when the threshold is one failure away. After the batch, failure_count = threshold - 1 + N (single-process: at most threshold). The breaker eventually opens. With the lock-protected check_and_record (post-fix 477d459) the count is exact, so the only loss is that ONE extra attempt was admitted past the pre-check view. This is the documented `breather` behaviour and is acceptable for circuit breakers. Severity: low — known design, not a bug.",
+      "suggested_fix": "No fix recommended. If a stricter pre-check is desired, add a `breaker._is_open()` re-check at the start of each retry iteration in the while-True loop. Trade-off: this would make the retry path non-idempotent (a 3-retry task might exit early on attempt 2), complicating the FR-03 AC-FR-03-01 backoff contract.",
+      "confidence": "high",
+      "confirmed": false,
+      "verify_evidence": "REFUTED. Read executor.py:225-279 and breaker.py:141-202. The retry loop does not re-check _is_open, which is a known design choice (cancel mid-retry would break the documented backoff timing contract AC-FR-03-01). check_and_record's OPEN-branch (breaker.py:160-170) is idempotent: it doesn't modify failure_count or opened_at when state==OPEN. So extra pre-check-race attempts only result in atomic_write_breaker(data) with unchanged data — no count drift, no broken state. Not a bug.",
+      "resolution": {
+        "status": "refuted",
+        "refute_evidence": "executor.py:266-271 records failure only when the pre-check at line 226 still sees the breaker as not-OPEN. After pre-check, count is captured. Subsequent in-flight retries still record to the breaker, but once the OPEN threshold is crossed, check_and_record's OPEN-branch (breaker.py:160-170) returns 'reject' without modifying failure_count. So the final count is exactly: pre-check_count + (attempts-up-to-OPEN-transition). No double-count, no lost count. The retry loop's single pre-check is intentional and matches the AC-FR-03-01 backoff contract."
+      }
+    }
+  ]
+}
