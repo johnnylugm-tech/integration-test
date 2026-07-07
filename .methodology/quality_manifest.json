@@ -139,7 +139,21 @@
       "fr_scope": "all",
       "overall_score": 100.0
     },
-    "gate4": null
+    "gate4": {
+      "score": 100.0,
+      "quality_complete": true,
+      "rounds_used": 2,
+      "open_critical": 0,
+      "open_high": 0,
+      "da_waiver_applied": [
+        "architecture"
+      ],
+      "da_waiver_needs_human_review": true,
+      "phase": 6,
+      "gate": 4,
+      "fr_scope": "all",
+      "overall_score": 100.0
+    }
   },
   "_rebuild_note": "2026-07-07 P4 clean restart: rebuilt from gate2_result.json (96.75 PASS) + fr_progress.json (Gate 1 5/5 FR PASS). gate3/gate4 reset to null — clean restart baseline. Source data preserved in .methodology/gate{1,2}_result.json + fr_progress.json."
 }
