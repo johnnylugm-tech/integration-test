@@ -1,11 +1,11 @@
 {
   "state": "RUNNING",
-  "current_phase": 5,
-  "last_gate": 1,
+  "current_phase": 6,
+  "last_gate": 3,
   "last_fr": "FR-05",
-  "last_update": "2026-07-07T02:34:42.101801+00:00",
+  "last_update": "2026-07-07T02:58:11.072835+00:00",
   "phase_truth_passed": true,
-  "last_milestone_command": "push-milestone --type p5-baseline",
+  "last_milestone_command": "advance-phase --completed-phase 5",
   "phase_completed": {
     "2": {
       "sha": "6d89bb3efc8bc2e77f3121ced5085ca84ac2b62b",
