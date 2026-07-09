@@ -567,19 +567,38 @@ let adrContent = adr.content, adrB2 = adr.b2
 
 // ---- Constitution Check — ADR (single-file, per phase2_plan.md CONSTITUTION-CHECK-ADR) ----
 phase('Constitution Check — ADR')
-log('check-constitution --file ADR.md (catches stub/low-density before TEST_SPEC depends on it)')
+log('check-constitution --file ADR.md + check-artifact-consistency (catches stub/low-density AND NFR→ADR coverage gaps before TEST_SPEC/Push depend on it)')
 const adrConstReport = await agent(
   'YOU ARE THE ADR CONSTITUTION CHECKER. Run bash, fix if needed, report.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py check-constitution --phase 2 --project ' + REPO + ' --file 02-architecture/adr/ADR.md`\n'
-  + '- PASS → report "ADR-CONSTITUTION: PASS".\n'
+  + '- PASS → proceed to the next command below.\n'
   + '- FAIL → the output lists `missing: <keywords>` on each sub-threshold dimension. Add substantive content covering those exact terms (e.g. a traceability table linking each decision to the SRS FR-IDs and specification it satisfies), remove any template-stub markers, re-run until PASS. Do NOT keyword-stuff — fold the terms into real decision context.\n'
   + '- File missing ([SKIP] exit 0) → report "ADR-CONSTITUTION: FAIL — ADR.md missing" (escalate).\n\n'
-  + 'SCOPE RULES:\n- DO NOT touch SAD/TEST_SPEC.\n- DO NOT run phase-transition commands.\n- ONLY check-constitution on ADR.md and fix it.',
+  + 'After check-constitution PASSes, ALSO run: `' + PY + ' ' + REPO + '/harness_cli.py check-artifact-consistency --project ' + REPO + '`\n'
+  + '- PASS → report "ADR-CONSTITUTION: PASS".\n'
+  + '- FAIL on nfr_not_traced → the output names the missing NFR-ID. Read the corresponding SRS.md NFR section, then add a genuine traceability-table row for it (a real owning decision, or — if the NFR is cross-cutting with no single owning decision — a short honest ADR entry saying so). Do NOT invent test file paths, benchmark designs, gate numbers, or phase-mechanics that are not already documented elsewhere in this project (SRS.md / SAD.md / SPEC.md) — cite only what those files actually say. Re-run both commands until both PASS.\n'
+  + '- FAIL on illegal_forward_ref → remove/correct the invented filename reference. Re-run both commands until both PASS.\n\n'
+  + 'SCOPE RULES:\n- DO NOT touch SAD/TEST_SPEC.\n- DO NOT run phase-transition commands.\n- ONLY check-constitution + check-artifact-consistency on ADR.md and fix it.',
   { label: 'constitution-adr', phase: 'Constitution Check — ADR', agentType: 'general-purpose' },
 )
 if (!(typeof adrConstReport === 'string' && /ADR-CONSTITUTION:\s*PASS/.test(adrConstReport))) {
   return { error: 'ADR constitution check did not PASS', raw: String(adrConstReport ?? '').slice(-500) }
+}
+// Structural gate (2026-07-10 fix): don't just trust the agent's self-report — the
+// original bug was discovered because a P2-produced ADR.md silently lacked NFR-01
+// coverage all the way until the Sync-phase git push (after Push+Advance already
+// succeeded). Verify check-artifact-consistency independently here so a false
+// "PASS" claim can't slip through to Push/Advance.
+{
+  const aciVerify = await agent(
+    'Run: `' + PY + ' ' + REPO + '/harness_cli.py check-artifact-consistency --project ' + REPO + '`\n'
+    + 'Report ONLY: "ACI: PASS" if exit code 0, else "ACI: FAIL — <first FAIL line>".',
+    { label: 'aci-verify', phase: 'Constitution Check — ADR', agentType: 'general-purpose' },
+  )
+  if (!(typeof aciVerify === 'string' && /ACI:\s*PASS/.test(aciVerify))) {
+    return { error: 'check-artifact-consistency did not PASS after ADR constitution check', raw: String(aciVerify ?? '').slice(-500) }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════
