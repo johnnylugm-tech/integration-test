@@ -1,8 +1,12 @@
 """taskq.config — $TASKQ_HOME resolution + canonical data-file paths.
 
+[FR-01] centralises the `TASKQ_HOME` env-var resolution so every other module
+reads the data directory from a single place (SPEC §5.1 + §5.2).
+
 Citations:
 - SPEC.md §5.1 line 138: `TASKQ_HOME` env var, default `.taskq`
 - SPEC.md §5.2 line 147: `tasks.json` / `breaker.json` / `cache.json` layout
+- [FR-01] store path resolution for submit writes
 """
 from __future__ import annotations
 

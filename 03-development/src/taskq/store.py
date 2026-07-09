@@ -1,8 +1,15 @@
 """taskq.store — atomic `$TASKQ_HOME/tasks.json` load/save (NFR-03).
 
+[FR-01] provides the persistence layer for FR-01 submit: `add_task` writes a
+new pending task under a process-wide `_LOCK`, then `save_tasks` re-emits the
+file atomically (tmp + `os.replace`). `find_active_by_name` enforces the FR-01
+`--name` collision rule (Q2).
+
 Citations:
 - SPEC.md §3 FR-01 line 71: atomic write of `tasks.json`
+- SPEC.md §3 FR-01 line 66: `--name` collision against pending/running
 - SPEC.md §5.2 line 151: `tasks.json` is `id → full record` map
+- [NFR-03] atomic write (tmp + os.replace) + threading.Lock for NP-13
 - SAD: store.py line 166 — `threading.Lock` for concurrent writers
 - SAD: store.py line 187 — corrupt JSON detected at boot → exit 1
 """

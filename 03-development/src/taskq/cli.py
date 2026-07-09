@@ -1,5 +1,13 @@
 """taskq.cli — argv-driven entry point. Current scope: FR-01 `submit`.
 
+This module exposes the argparse-based entry point. The FR-01 surface
+(`taskq submit "<cmd>" [--name N] [--json]`) validates 4 rules and writes a
+pending task to `$TASKQ_HOME/tasks.json` per SPEC §3.
+
+FR coverage:
+  - [FR-01] submit command + 4-rule validation + atomic write via store
+  - [FR-05] argparse subcommand dispatcher scaffold (full surface in later FRs)
+
 Citations:
 - SPEC.md §3 FR-01 lines 55-72: submit syntax + 4-rule validation
 - SPEC.md §3 FR-01 line 72: stdout prints id; `--json` prints single-line JSON

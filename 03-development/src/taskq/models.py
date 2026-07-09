@@ -1,6 +1,11 @@
 """taskq.models — Task record dataclass.
 
+[FR-01] Task and `new_pending` factory — the on-disk row shape written by
+`taskq.cli.submit` (SPEC §3 FR-01 line 70: command, name, created_at, id).
+Result-side fields below are scaffolded for the FR-02 executor (lines 81).
+
 Citations:
+- SPEC.md §3 FR-01 line 69: id = first 8 hex of `uuid4()`
 - SPEC.md §3 FR-01 line 70: pending task records `command`, `name`, `created_at`, `id`
 - SPEC.md §3 FR-02 line 79: state machine `pending → running → done | failed | timeout`
 - SPEC.md §3 FR-02 line 81: result fields `exit_code`, `stdout_tail`, `stderr_tail`,

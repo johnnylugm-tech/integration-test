@@ -30,15 +30,49 @@ export const meta = {
   ],
 }
 
-// ---- args / REPO / PY ----
-// REPO precedence: args.repo override wins, then DEFAULT_REPO canonical path.
-// process.env.HARNESS_REPO cannot be read here — playbook §4 forbids process.*
-// in workflow JS. Caller scripts (run-e2e.mjs / harness-e2e.js /
-// phase1-workflow.mjs) read HARNESS_REPO and inject it via args.repo.
-const DEFAULT_REPO = '.'
-let REPO = DEFAULT_REPO
-if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
-if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
+// ---- REPO auto-resolver (canonical pattern — keep verbatim across phase*.js) ----
+// CWD-INDEPENDENT detection: sub-agents inherit arbitrary CWDs from the
+// Workflow tool launcher, so a `./` default is fragile (see 2026-07-10
+// silent-fail bug). This resolver walks up from any CWD via a sub-agent
+// round-trip to find the project root by its markers (harness_cli.py +
+// .methodology/), then returns the absolute path. args.repo is accepted as
+// an absolute-path override (escape hatch) — relative args.repo is rejected
+// loudly. Single round-trip per workflow run (~10-30s) for guaranteed
+// correctness across CWD drift, integration-test path changes, and CI clones.
+async function resolveRepo() {
+  if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
+  let argRepo = ''
+  if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) argRepo = args.repo
+  if (argRepo) {
+    if (!argRepo.startsWith('/')) {
+      throw new Error(
+        '[phase3-implementation] args.repo must be an absolute path (got: "' + argRepo + '").\n'
+        + '  Workflow tool sub-agents inherit arbitrary CWDs — relative paths break silently.'
+      )
+    }
+    log('  REPO: from args.repo override = ' + argRepo)
+    return argRepo
+  }
+  const r = await agent(
+    'You are the REPO RESOLVER. Find the project root by walking up from your current CWD until a directory contains BOTH `harness_cli.py` AND `.methodology/`.\n'
+    + 'Run EXACTLY this command via Bash (single line, copy-paste verbatim):\n'
+    + 'cd "$(pwd)"; while [ "$(pwd)" != "/" ] && ! { [ -f harness_cli.py ] && [ -d .methodology ]; }; do cd ..; done; '
+    + 'if [ -f harness_cli.py ] && [ -d .methodology ]; then echo "REPO=$(pwd)"; else echo "REPO_NOT_FOUND cwd=$(pwd)"; fi\n'
+    + 'Report the literal stdout as your final message (no commentary, no transformation).',
+    { label: 'resolve-repo', agentType: 'general-purpose' }
+  )
+  const text = String(r ?? '').trim()
+  const match = text.match(/REPO=(\S+)/)
+  if (match && match[1].startsWith('/')) {
+    log('  REPO: auto-detected via walk-up = ' + match[1])
+    return match[1]
+  }
+  throw new Error(
+    '[phase3-implementation] REPO not auto-detected (resolver returned: "' + text.slice(0, 200) + '")\n'
+    + '  Either pass args.repo = absolute path, or run from inside the project repo so harness_cli.py is reachable.'
+  )
+}
+const REPO = await resolveRepo()
 const PY = REPO + '/.venv/bin/python'
 log('REPO = ' + REPO + ' | PY = ' + PY)
 
