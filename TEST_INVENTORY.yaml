@@ -9,6 +9,50 @@
 # Source: SRS.md (approved), TRACEABILITY_MATRIX.md (approved).
 # Agent A, Sub-Task 4/4, Round 1.
 
+# Top-level fr_tests section: P1 naming authority mapping each FR to its
+# test function names. Required by harness validate-handoff --from-phase 1.
+# Sub-section keys are layer labels (unit / integration / performance / static).
+fr_tests:
+  FR-01:
+    unit:
+      - test_fr01_empty_command_exit2
+      - test_fr01_command_too_long_exit2
+      - test_fr01_injection_char_exit2
+      - test_fr01_duplicate_name_exit2
+      - test_fr01_valid_submit_pending
+      - test_fr01_json_output_single_line
+  FR-02:
+    unit:
+      - test_fr02_no_shell_true
+      - test_fr02_status_transitions
+      - test_fr02_result_fields_present
+      - test_fr02_single_timeout_exit4
+    integration:
+      - test_fr02_run_all_concurrent_lock
+  FR-03:
+    unit:
+      - test_fr03_retry_up_to_limit
+      - test_fr03_breaker_opens_at_threshold
+      - test_fr03_open_rejects_exit3
+      - test_fr03_breaker_atomic_write
+    integration:
+      - test_fr03_half_open_recovery
+  FR-04:
+    unit:
+      - test_fr04_cache_signature_sha256
+      - test_fr04_cache_replay_no_subprocess
+      - test_fr04_cache_miss_writes_on_success
+      - test_fr04_cache_atomic_thread_safe
+  FR-05:
+    integration:
+      - test_fr05_subcommands_registered
+      - test_fr05_status_all_fields
+      - test_fr05_list_filter_by_status
+      - test_fr05_clear_all_data_files
+      - test_fr05_global_json_flag
+      - test_fr05_exit_code_matrix
+      - test_fr05_unknown_id_exit2
+
 test_inventory:
   meta:
     project: taskq
