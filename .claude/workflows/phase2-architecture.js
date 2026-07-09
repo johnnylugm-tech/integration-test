@@ -14,7 +14,7 @@
 //
 // Usage:
 //   Workflow({ scriptPath: '.claude/workflows/phase2-architecture.js',
-//              args: { repo: '/Users/johnny/projects/integration-test' } })
+//              args: { repo: '.' } })
 
 export const meta = {
   name: 'phase2-architecture',
@@ -39,7 +39,7 @@ export const meta = {
 // process.env.HARNESS_REPO cannot be read here — playbook §4 forbids process.*
 // in workflow JS. Caller scripts (run-e2e.mjs / harness-e2e.js /
 // phase1-workflow.mjs) read HARNESS_REPO and inject it via args.repo.
-const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+const DEFAULT_REPO = '.'
 let REPO = DEFAULT_REPO
 if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
 if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
@@ -352,8 +352,8 @@ async function persistApproval(deliverableId, b2) {
   // See phase1-requirements.js persistApproval for full rationale.
   const cliPath = REPO + '/harness/harness_cli.py'
   const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
-  const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
-    JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
+  const cmd = PY + ' ' + cliPath + ' write-approval --project ' + REPO +
+    ' --fr-id ' + JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
 
   let lastErr = null
   for (let attempt = 1; attempt <= MAX_OUTER_ATTEMPTS; attempt++) {
@@ -464,6 +464,7 @@ for (let attempt = 1; attempt <= MAX_PREFLIGHT_ATTEMPTS; attempt++) {
     + '4. HANDOFF: `' + PY + ' ' + REPO + '/harness_cli.py validate-handoff --from-phase 1 --project ' + REPO + '`. Must exit 0; if exit 1, read errors, fix upstream P1 deliverable, re-run.\n'
     + '5. PREFLIGHT-CI: confirm `' + REPO + '/.github/workflows/harness_quality_gate.yml` (CI workflow) + `' + REPO + '/.git/hooks/prepare-commit-msg` (git hook) both exist; confirm state.json current_phase=2. If stale: `' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 2 --project ' + REPO + ' --overwrite`.\n'
     + '6. LOAD-CONTEXT: `mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 2 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase2_ctx.json`.\n\n'
+    + '7. READ THE LESSONS BLOCK: after step 6, Bash `cat ' + REPO + '/.sessi-work/phase2_ctx.json` and READ the `lessons` field (compact markdown, "" if none). DO NOT repeat those past failure modes in this preflight or any follow-up P2 work. (Direction C — past lessons injection)\n\n'
     + 'Report plain text: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <one-line reason>".\n\n'
     + 'SCOPE RULES:\n'
     + '- DO NOT write any P2 deliverable (SAD/ADR/TEST_SPEC).\n'
@@ -572,7 +573,7 @@ const adrConstReport = await agent(
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
   + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py check-constitution --phase 2 --project ' + REPO + ' --file 02-architecture/adr/ADR.md`\n'
   + '- PASS → report "ADR-CONSTITUTION: PASS".\n'
-  + '- FAIL → expand decision/rationale/consequences, remove template-stub markers, re-run until PASS.\n'
+  + '- FAIL → the output lists `missing: <keywords>` on each sub-threshold dimension. Add substantive content covering those exact terms (e.g. a traceability table linking each decision to the SRS FR-IDs and specification it satisfies), remove any template-stub markers, re-run until PASS. Do NOT keyword-stuff — fold the terms into real decision context.\n'
   + '- File missing ([SKIP] exit 0) → report "ADR-CONSTITUTION: FAIL — ADR.md missing" (escalate).\n\n'
   + 'SCOPE RULES:\n- DO NOT touch SAD/TEST_SPEC.\n- DO NOT run phase-transition commands.\n- ONLY check-constitution on ADR.md and fix it.',
   { label: 'constitution-adr', phase: 'Constitution Check — ADR', agentType: 'general-purpose' },
@@ -662,7 +663,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     'YOU ARE THE PHASE-2 CONSTITUTION CHECKER. Run bash, fix, report.\n'
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
     + 'Command: `' + PY + ' ' + REPO + '/harness_cli.py check-constitution --phase 2 --project ' + REPO + '`\n'
-    + 'If PASS: report "CONSTITUTION: PASS". If FAIL: read which docs miss keywords, surgically add them (do NOT remove content), re-run until PASS.\n\n'
+    + 'If PASS: report "CONSTITUTION: PASS". If FAIL: the output lists `missing: <keywords>` on each sub-threshold dimension — surgically fold those exact terms into the relevant P2 doc as real content (e.g. a traceability table to SRS FR-IDs), do NOT remove content or keyword-stuff, re-run until PASS.\n\n'
     + 'SCOPE RULES:\n- DO NOT run advance-phase/push/run-gate.\n- ONLY check-constitution + edit P2 deliverables to fix.',
     { label: 'constitution-' + attempt, phase: 'Constitution Check', agentType: 'general-purpose' },
   )
@@ -792,6 +793,7 @@ for (let attempt = 1; attempt <= 5; attempt++) {
   pushReport = await agent(
     'YOU ARE THE PHASE-2 PUSH ORCHESTRATOR.\n'
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
+    + 'Step 0 (TRACE-PRECHECK, ALWAYS run before Step 1): `' + PY + ' ' + REPO + '/harness_cli.py build-trace-attestation --project ' + REPO + ' --write 2>&1 | tail -4`. If output contains "wrote canonical", commit immediately: `git -C ' + REPO + ' add .methodology/trace/attestation.json && git -C ' + REPO + ' commit -m "trace: regen attestation before Phase 2 push"`. Prevents _trace_dirty_state / cmd_pre_commit_check from blocking the push on SAD.md mtime drift. Mirror phase3/4/6 TRACE-PRECHECK pattern.\n'
     + 'Step 1 (Bash): `' + PY + ' ' + REPO + '/harness_cli.py push-checkpoint --phase 2 --project ' + REPO + '`\n'
     + '  - If blocked by a hook error: reword commit message to start with `chore(harness):` (documented bypass; NOT --no-verify), re-run. Retry until success.\n'
     + 'Step 2: Read ' + REPO + '/HANDOVER.md and confirm it exists.\n'
@@ -825,6 +827,23 @@ const advanceReport = await agent(
 // (<90%); do NOT report "complete" when P3 was never entered.
 if (!/ADVANCE:\s*PASS/.test(String(advanceReport ?? ''))) {
   return { error: 'advance-phase --completed 2 did not PASS', raw: String(advanceReport ?? '').slice(-600) }
+}
+
+// Bug A fix (2026-07-07): advance-phase intentionally commits the handover
+// locally without pushing (harness/cli/phase_cmds.py: "next milestone push
+// publishes to origin"). This workflow ends right after Advance with no
+// next-phase push queued, so the handover commit was left stranded on
+// local until whatever runs next happened to push it. Publish it now.
+phase('Sync')
+log('git push origin main (publish advance handover commit)')
+const syncReport = await agent(
+  'Run EXACTLY this command via Bash:\n'
+  + 'git -C ' + REPO + ' push origin main\n\n'
+  + 'Report final outcome as plain text: "SYNC: PASS" or "SYNC: FAIL — <one-line reason>".',
+  { label: 'sync', phase: 'Sync', agentType: 'general-purpose' },
+)
+if (!/SYNC:\s*PASS/.test(String(syncReport ?? ''))) {
+  return { error: 'post-advance push did not PASS', raw: String(syncReport ?? '').slice(-500) }
 }
 
 log('Phase 2 workflow complete. Open .methodology/phase3_plan.md to continue.')

@@ -31,7 +31,7 @@ export const meta = {
 // process.env.HARNESS_REPO cannot be read here — playbook §4 forbids process.*
 // in workflow JS. Caller scripts (run-e2e.mjs / harness-e2e.js /
 // phase1-workflow.mjs) read HARNESS_REPO and inject it via args.repo.
-const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+const DEFAULT_REPO = '.'
 let REPO = DEFAULT_REPO
 if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
 if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
@@ -64,8 +64,8 @@ async function writeApprovalJson(deliverableId, obj) {
   })
   const cliPath = REPO + '/harness/harness_cli.py'
   const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
-  const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
-    JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
+  const cmd = PY + ' ' + cliPath + ' write-approval --project ' + REPO +
+    ' --fr-id ' + JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
   const MAX = 3
   let lastErr = null
   for (let attempt = 1; attempt <= MAX; attempt++) {
@@ -186,7 +186,8 @@ const preflightReport = await agent(
   + '4. HANDOFF: `' + PY + ' ' + REPO + '/harness_cli.py validate-handoff --from-phase 5 --project ' + REPO + '`. Must exit 0.\n'
   + '5. PREFLIGHT-CI: confirm `' + REPO + '/.github/workflows/harness_quality_gate.yml` (CI workflow) + `' + REPO + '/.git/hooks/prepare-commit-msg` (git hook) both exist; confirm state.json current_phase=6. If stale: `init-project --phase 6 --project ' + REPO + ' --overwrite`.\n'
   + '6. PHASE-CONTEXT (load-context): `mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 6 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase6_ctx.json`.\n\n'
-  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if ALL 6 steps succeeded; reason = one-line summary (on FAIL: which step + verbatim error tail).\n\n'
+  + '7. READ THE LESSONS BLOCK (advisory, not a gate): Bash `cat ' + REPO + '/.sessi-work/phase6_ctx.json` and READ the `lessons` field (compact markdown, "" if none). DO NOT repeat those past failure modes in this preflight or any follow-up P6 work. (Direction C — past lessons injection)\n\n'
+  + 'Verdict: report via the StructuredOutput tool — pass=true ONLY if ALL 6 must-succeed steps succeeded; step 7 is read-only advisory. reason = one-line summary (on FAIL: which step + verbatim error tail).\n\n'
   + 'SCOPE RULES:\n- DO NOT run run-gate / generate release docs / peer review.\n- DO NOT run advance-phase / git tag.\n- DO NOT modify harness/.\n- ONLY preflight commands + load-context + spec-coverage fixes.',
   { label: 'preflight', phase: 'Entry & Preflight', agentType: 'general-purpose', schema: VERDICT_SCHEMA },
 )
@@ -241,7 +242,7 @@ for (let round = 1; round <= 3; round++) {
     + '   "devil_advocate": {"architecture":true,"readability":true,"error_handling":true,"documentation":true,"performance":true},\n'
     + '   "devil_advocate_evidence": {"<dim>": {"challenger_model":"claude","challenge":"<≥120 chars actual critique>","response":"<≥120 chars defence>"}, ...}.\n'
     + '   A bare boolean is NOT accepted. If architecture/error_handling score 0 due to Orchestrator hub-and-spoke: also add "da_waiver": {"architecture": true} (requires the matching evidence artifact).\n'
-    + '3. G4b: Evaluate all 14 dims inline per ' + REPO + '/harness/ssi/prompts/evaluate_dimension.md → .sessi-work/gate4_result.json.\n'
+    + '3. G4b: Evaluate all 14 dims inline per ' + REPO + '/harness/harness/ssi/prompts/evaluate_dimension.md → .sessi-work/gate4_result.json.\n'
     + '   Dims: linting(90) type_safety(85) test_coverage(80) security(80) secrets_scanning(100) license_compliance(100) architecture(80) readability(80) error_handling(80) documentation(75) performance(75) integration_coverage(75) test_assertion_quality(70).\n'
     + '   NOTE: mutation_testing is disabled by default via .methodology/harness_config.json (mutation_testing=false). If enabled, the harness auto-includes it and re-normalises the composite score.\n'
     + '   FRAMEWORK-OWNED (do NOT self-score): traceability + architecture (CRG override). Fix failing dims at ROOT CAUSE in code.\n'
@@ -433,6 +434,24 @@ for (let round = 1; round <= ADVANCE_MAX_ROUNDS; round++) {
 if (!advancePass) {
   return { error: 'Tag & Advance did not PASS in ' + ADVANCE_MAX_ROUNDS + ' rounds — check HANDOVER.md + state.json + the last [BLOCKED] message below. If Phase 7 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-600) }
 }
+
+// Bug A fix (2026-07-07): advance-phase intentionally commits the handover
+// locally without pushing (harness/cli/phase_cmds.py: "next milestone push
+// publishes to origin"). This workflow ends right after Advance with no
+// next-phase push queued, so the handover commit was left stranded on
+// local until whatever runs next happened to push it. Publish it now.
+phase('Sync')
+log('git push origin main (publish advance handover commit)')
+const syncReport = await agent(
+  'Run EXACTLY this command via Bash:\n'
+  + 'git -C ' + REPO + ' push origin main\n\n'
+  + 'Report final outcome as plain text: "SYNC: PASS" or "SYNC: FAIL — <one-line reason>".',
+  { label: 'sync', phase: 'Sync', agentType: 'general-purpose' },
+)
+if (!/SYNC:\s*PASS/.test(String(syncReport ?? ''))) {
+  return { error: 'post-advance push did not PASS', raw: String(syncReport ?? '').slice(-500) }
+}
+
 log('Phase 6 workflow complete. Open .methodology/phase7_plan.md to continue.')
 return {
   phase: 6,

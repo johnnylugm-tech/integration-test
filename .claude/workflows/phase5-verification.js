@@ -26,6 +26,7 @@ export const meta = {
     { title: 'Load FRs' },
     { title: 'Per-FR Delta' },
     { title: 'Verification Docs' },
+    { title: 'Artifacts Commit' },
     { title: 'Milestone' },
     { title: 'Advance' },
   ],
@@ -36,7 +37,7 @@ export const meta = {
 // process.env.HARNESS_REPO cannot be read here — playbook §4 forbids process.*
 // in workflow JS. Caller scripts (run-e2e.mjs / harness-e2e.js /
 // phase1-workflow.mjs) read HARNESS_REPO and inject it via args.repo.
-const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+const DEFAULT_REPO = '.'
 let REPO = DEFAULT_REPO
 if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
 if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
@@ -252,8 +253,12 @@ let deltaTodo = frIds
 const fastProbe = await agent(
   'YOU ARE THE GATE1-DELTA FAST-PATH PROBE. Classify each FR — fix NOTHING.\n'
   + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\nFRs: ' + JSON.stringify(frIds) + '\n\n'
+  + 'Direction C (past lessons): BEFORE classifying, Bash `cat ' + REPO + '/.sessi-work/phase5_ctx.json` and READ the `lessons` field (compact markdown, "" if none). DO NOT repeat those past failure modes in your pass/fail classification or any follow-up P5 verification work.\n\n'
   + 'For EACH FR in order, substituting <FR> with the FR id:\n'
-  + '1. `timeout 180 ' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 5 --fr-id <FR> --step GATE1-DELTA --project ' + REPO + ' 2>&1 | tail -5`\n'
+  + '1. GATE1-DELTA is long-running for any FR whose code actually changed (harness runs up to 3 internal CODE-FIX rounds, each up to ~600s — can silently block ~2400s worst case even though this step is a "probe"). Run it BACKGROUNDED for every FR, not just slow ones — unchanged FRs still hit the fast in-CLI short-circuit almost instantly so this costs nothing extra:\n'
+  + '   a. `nohup ' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 5 --fr-id <FR> --step GATE1-DELTA --project ' + REPO + ' > /tmp/gate1delta_<FR>.log 2>&1 & echo $!` — note the PID.\n'
+  + '   b. Poll every 30s: `kill -0 <PID> 2>/dev/null && echo RUNNING || echo DONE`. Cap 40 polls (~20min). Still RUNNING past the cap → classify <FR> as fail_fr_ids (the full loop below will retry it) and move to the next FR — do not kill the PID.\n'
+  + '   c. DONE → proceed to step 2 (the log itself is not needed — the authoritative verdict is the manifest read below).\n'
   + '2. Authoritative verdict (manifest qc AND a phase-5 gate-1 timestamp for <FR>): `' + PY + ' -c "import json; g=(json.load(open(\'' + REPO + '/.methodology/quality_manifest.json\')).get(\'gate_results\',{}) or {}).get(\'gate1\',{}).get(\'<FR>\',{}) or {}; ts=any(e.get(\'phase\')==5 and e.get(\'gate\')==1 and e.get(\'fr_id\')==\'<FR>\' for e in (json.loads(l) for l in open(\'' + REPO + '/.methodology/gate_timestamps.jsonl\') if l.strip())); print(bool(g.get(\'quality_complete\')) and ts)"`\n'
   + '   stdout `True` → pass_fr_ids; anything else (False/None/timeout/error/missing file) → fail_fr_ids.\n\n'
   + 'HARD RULES:\n- DO NOT fix code, edit files, or run TDD steps.\n- DO NOT retry a failing FR — classify it and move on (the full loop handles it).\n- DO NOT run advance-phase / push-milestone / generate BASELINE docs.\n- DO NOT modify harness/.\n\n'
@@ -276,13 +281,16 @@ for (const frId of deltaTodo) {
     'YOU ARE THE VERIFIER for ' + frId + ' (' + (frTitle[frId] || '') + '). Re-evaluate Gate 1 for THIS ONE FR.\n'
     + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
     + 'Steps:\n'
-    + '1. `' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 5 --fr-id ' + frId + ' --step GATE1-DELTA --project ' + REPO + '`\n'
+    + '1. GATE1-DELTA — long-running when code changed (harness runs up to 3 internal CODE-FIX rounds plus, on FAIL, a full TDD-RED→GREEN→IMPROVE→GATE1 chain — can silently block well past 180s). Run it BACKGROUNDED, do NOT invoke it as a plain synchronous command:\n'
+    + '   a. `nohup ' + PY + ' ' + REPO + '/harness_cli.py run-fr-step --phase 5 --fr-id ' + frId + ' --step GATE1-DELTA --project ' + REPO + ' > /tmp/gate1delta_' + frId + '.log 2>&1 & echo $!` — note the PID.\n'
+    + '   b. Poll every 30s: `kill -0 <PID> 2>/dev/null && echo RUNNING || echo DONE`. Cap 60 polls (~30min — this path can chain a full TDD cycle on top of GATE1-DELTA\'s own retries). Still RUNNING past the cap → report "' + frId + ' GATE1: TIMEOUT" (not FAIL) and stop — do not kill the PID.\n'
+    + '   c. DONE → `cat /tmp/gate1delta_' + frId + '.log` for the full output, identical to a synchronous run. Parse PASS/FAIL from it.\n'
     + '   - PASS → done.\n'
     + '   - FAIL → full TDD auto-triggered by crash recovery: run-fr-step --step TDD-RED → TDD-GREEN → TDD-IMPROVE → GATE1 (each for ' + frId + '). Max 3 TDD rounds.\n'
     + '   - Still failing after 3 → report FAIL.\n'
     + '   Note: if ' + frId + '’s code has not changed since its last Gate 1 PASS, GATE1-DELTA passes immediately (advance-phase auto-skip will also honour this).\n\n'
     + 'Report final line: "' + frId + ' GATE1: PASS" or "' + frId + ' GATE1: FAIL — <reason>".\n\n'
-    + 'SCOPE RULES:\n- DO NOT touch any FR OTHER than ' + frId + '.\n- DO NOT run advance-phase / push-milestone / generate BASELINE docs.\n- DO NOT modify harness/.\n- ONLY GATE1-DELTA (+ full TDD if needed) for ' + frId + '.',
+    + 'SCOPE RULES:\n- DO NOT touch any FR OTHER than ' + frId + '.\n- DO NOT run advance-phase / push-milestone / generate BASELINE docs.\n- DO NOT edit .methodology/quality_manifest.json or .sessi-work/gate1_result.json to fake/reset scores — fix the underlying code/tests instead.\n- DO NOT modify harness/.\n- ONLY GATE1-DELTA (+ full TDD if needed) for ' + frId + '.',
     { label: 'delta-' + frId, phase: 'Per-FR Delta', agentType: 'general-purpose' },
   )
   // L1 (ported from phase3): distinguish a session/rate-limit block (null/empty
@@ -335,6 +343,24 @@ const docsReport = await agent(
 if (!(docsReport && docsReport.pass === true)) {
   return { error: 'Phase 5 verification docs did not PASS', reason: docsReport ? String(docsReport.reason ?? '').slice(-500) : 'agent returned null' }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Phase: Artifacts Commit (commit verification artifacts BEFORE p5-baseline push)
+// ════════════════════════════════════════════════════════════════════════
+// Milestone push sweeps the tree via commit_and_push_gate (git add -A), but
+// verify-handoff FAIL exits this workflow early with the verification
+// artifacts still dirty. Commit the already-final deterministic artifacts NOW
+// with an explicit path list (allowlist philosophy, mirrors phase4 d4f4724 —
+// never `git add -A` here, mid-workflow trees can carry unrelated noise).
+phase('Artifacts Commit')
+log('Committing phase-5 artifacts (explicit paths) so a verify-handoff FAIL exit leaves a clean tree')
+await agent(
+  'Run ONE bash command and report its stdout/stderr:\n'
+  + '`git -C ' + REPO + ' add 05-verification .methodology && git -C ' + REPO + ' commit -m "chore(p5): baseline + verification-report artifacts" || true`\n\n'
+  + 'Report: the verbatim stdout/stderr of that command. "nothing to commit" is a valid outcome.\n\n'
+  + 'SCOPE RULES:\n- DO NOT run any code, tests, gates, or phase transitions.\n- DO NOT stage any path other than the two listed above.\n- ONLY the git command above.',
+  { label: 'artifacts-commit', phase: 'Artifacts Commit', agentType: 'general-purpose' },
+)
 
 // ════════════════════════════════════════════════════════════════════════
 // Phase: Milestone (p5-baseline push)
@@ -413,6 +439,24 @@ for (let round = 1; round <= ADVANCE_MAX_ROUNDS; round++) {
 if (!advancePass) {
   return { error: 'Advance did not PASS in ' + ADVANCE_MAX_ROUNDS + ' rounds — check HANDOVER.md + state.json + the last [BLOCKED] message below. If Phase 6 is confirmed, resume workflow to verify.', raw: String(advanceReport ?? '').slice(-600) }
 }
+
+// Bug A fix (2026-07-07): advance-phase intentionally commits the handover
+// locally without pushing (harness/cli/phase_cmds.py: "next milestone push
+// publishes to origin"). This workflow ends right after Advance with no
+// next-phase push queued, so the handover commit was left stranded on
+// local until whatever runs next happened to push it. Publish it now.
+phase('Sync')
+log('git push origin main (publish advance handover commit)')
+const syncReport = await agent(
+  'Run EXACTLY this command via Bash:\n'
+  + 'git -C ' + REPO + ' push origin main\n\n'
+  + 'Report final outcome as plain text: "SYNC: PASS" or "SYNC: FAIL — <one-line reason>".',
+  { label: 'sync', phase: 'Sync', agentType: 'general-purpose' },
+)
+if (!/SYNC:\s*PASS/.test(String(syncReport ?? ''))) {
+  return { error: 'post-advance push did not PASS', raw: String(syncReport ?? '').slice(-500) }
+}
+
 log('Phase 5 workflow complete. Open .methodology/phase6_plan.md to continue.')
 return {
   phase: 5,

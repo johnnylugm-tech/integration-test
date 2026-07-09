@@ -32,7 +32,7 @@ export const meta = {
 // REPO precedence: args.repo override wins, then DEFAULT_REPO canonical
 // path. process.env.HARNESS_REPO cannot be read here — playbook §4 forbids
 // process.* in workflow JS. Caller scripts inject via args.repo.
-const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+const DEFAULT_REPO = '.'
 let REPO = DEFAULT_REPO
 if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
 if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo

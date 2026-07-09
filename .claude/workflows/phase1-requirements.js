@@ -34,13 +34,16 @@ export const meta = {
     { title: 'Sub-Task 4/4 — TEST_INVENTORY.yaml' },
     { title: 'Constitution Check' },
     { title: 'Peer Review' },
+    { title: 'Load Legal Artifacts' },
+    { title: 'Forward Ref Check' },
     { title: 'Push' },
     { title: 'Advance' },
+    { title: 'Sync' },
   ],
 }
 
 // ---- Resolve REPO from args (no process.* / no fs) ----
-const DEFAULT_REPO = '/Users/johnny/projects/integration-test'
+const DEFAULT_REPO = '.'
 let REPO = DEFAULT_REPO
 if (typeof args === 'string') {
   try { args = JSON.parse(args) } catch {}
@@ -510,8 +513,8 @@ async function persistApproval(deliverableId, b2) {
   // LLM agent emits the command verbatim or paraphrases it. Single quotes in
   // the payload are escaped via the close-escape-reopen pattern ('\'').
   const escapedPayload = approvalPayload.replace(/'/g, "'\\''")
-  const cmd = PY + ' ' + cliPath + ' write-approval --fr-id ' +
-    JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
+  const cmd = PY + ' ' + cliPath + ' write-approval --project ' + REPO +
+    ' --fr-id ' + JSON.stringify(deliverableId) + " --json '" + escapedPayload + "'"
 
   let lastErr = null
   for (let attempt = 1; attempt <= MAX_OUTER_ATTEMPTS; attempt++) {
@@ -663,6 +666,7 @@ for (let pfAttempt = 1; pfAttempt <= 3; pfAttempt++) {
     + '   c. ' + REPO + '/.git/hooks/prepare-commit-msg — must exist\n'
     + '   If any missing: ' + PY + ' ' + REPO + '/harness_cli.py init-project --phase 1 --project ' + REPO + ' --overwrite\n'
     + '3. mkdir -p ' + REPO + '/.sessi-work && ' + PY + ' ' + REPO + '/harness_cli.py load-context --phase 1 --project ' + REPO + ' --json > ' + REPO + '/.sessi-work/phase1_ctx.json\n\n'
+    + '4. READ THE LESSONS BLOCK: Bash `cat ' + REPO + '/.sessi-work/phase1_ctx.json` and READ the `lessons` field (compact markdown, "" if none). DO NOT repeat those past failure modes in your preflight or any follow-up P1 work. (Direction C — past lessons injection)\n\n'
     + 'Report final outcome as plain text: "PREFLIGHT: PASS" or "PREFLIGHT: FAIL — <one-line reason>".\n\n'
     + 'ABSOLUTE SCOPE RULES (violations will break the pipeline):\n'
     + '- ONLY run the 3 steps above. Zero other harness commands.\n'
@@ -697,6 +701,30 @@ if (projectBriefContent.startsWith('FILE_MISSING') || projectBriefContent.starts
   }
 }
 log('  PROJECT_BRIEF content loaded: ' + projectBriefContent.length + ' chars | first line: ' + projectBriefContent.split('\n')[0])
+
+// ============================================================================
+// LOAD LEGAL ARTIFACTS (DRY fix: read SSOT from harness instead of hardcoding)
+// ============================================================================
+phase('Load Legal Artifacts')
+log('Load legal-deliverable filenames from harness SSOT (legal_artifacts.py)')
+
+let LEGAL_ARTIFACTS_HINT = ''
+const laRaw = await agent(
+  'Run EXACTLY this command via Bash:\n'
+  + PY + ' ' + REPO + '/harness_cli.py print-legal-artifacts\n\n'
+  + 'Read the JSON output. Then report a SINGLE line starting with "LEGAL_HINT: " followed by:\n'
+  + '**Forward references to downstream phase docs**: any `NN-stage/FILE.md` reference in the deliverable MUST use a legal framework deliverable filename. The harness `check_forward_refs` gate (artifact_consistency.py) blocks any invented filename. Legal per-stage filenames are: <for each stage from JSON, format as: STAGE → {FILE1, FILE2, ...}; next STAGE → {...}; ...>. NEVER invent filenames like `ARCHITECTURE.md` for the P2 architecture deliverable — use `SAD.md`.\n\n'
+  + 'Output ONLY the LEGAL_HINT: line. Nothing else.',
+  { label: 'legal-artifacts', phase: 'Load Legal Artifacts', agentType: 'general-purpose' },
+)
+const laMatch = String(laRaw ?? '').match(/^LEGAL_HINT:\s*(.+)$/m)
+if (laMatch) {
+  LEGAL_ARTIFACTS_HINT = '   ' + laMatch[1].trim()
+  log('  Legal artifacts hint loaded (' + LEGAL_ARTIFACTS_HINT.length + ' chars)')
+} else {
+  LEGAL_ARTIFACTS_HINT = '   **Forward references to downstream phase docs**: any `NN-stage/FILE.md` reference in the deliverable MUST use a legal framework deliverable filename. The harness `check_forward_refs` gate (artifact_consistency.py) blocks any invented filename. See `harness_cli.py print-legal-artifacts` for the authoritative list. NEVER invent filenames like `ARCHITECTURE.md` for the P2 architecture deliverable — use `SAD.md`.'
+  log('  WARNING: failed to parse legal-artifacts hint; using fallback (forward-ref check still enforced by pre-push hook)')
+}
 
 // ============================================================================
 // SUB-TASK 1/4 — SRS.md (plan: A-1 INGESTION MODE; B-1 STATELESS sandbox)
@@ -806,6 +834,7 @@ function specTrackAPrompt(round, prevB2) {
     + '   - If MISSING: Continue to step 2 (first-time authoring).\n'
     + '2. Build spec tracking matrix from SRS.md FRs → assign status/owner per FR → validate completeness.\n'
     + '   **REQUIRED H1 (must include "Specification Tracking Matrix")**: the file MUST start with `# Specification Tracking Matrix — \`<project-name>\`` (or any H1 line containing the phrase "Specification Tracking Matrix"). The orchestrator\'s loader validates this H1 anchor — non-conforming H1 fails the load step.\n'
+    + LEGAL_ARTIFACTS_HINT + '\n'
     + '3. (Re-)read file via Read for final state.\n'
     + '4. If round > 1: review previous B-2 review JSON (DOC below). Apply HIGH-severity gap fixes via Edit (surgical).\n'
     + '5. (Re-)read file for final state.\n'
@@ -861,7 +890,8 @@ function traceAPrompt(round, prevB2) {
     'YOU ARE REQUIREMENTS_ENGINEER (Agent A for Sub-Task 3/4 TRACEABILITY_MATRIX.md). ROUND ' + round + '.\n'
     + 'REPO: ' + REPO + '\n\n'
     + 'Your SINGLE deliverable: ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md\n\n'
-    + '**REQUIRED H1 (must include "Traceability Matrix")**: the file MUST start with `# Traceability Matrix — \`<project-name>\`` (or any H1 line containing the phrase "Traceability Matrix"). The orchestrator\'s loader validates this H1 anchor — non-conforming H1 fails the load step.\n\n'
+    + '**REQUIRED H1 (must include "Traceability Matrix")**: the file MUST start with `# Traceability Matrix — \`<project-name>\`` (or any H1 line containing the phrase "Traceability Matrix"). The orchestrator\'s loader validates this H1 anchor — non-conforming H1 fails the load step.\n'
+    + LEGAL_ARTIFACTS_HINT + '\n'
     + 'Steps:\n'
     + '1. Self-check (Bash): `test -f ' + REPO + '/01-requirements/TRACEABILITY_MATRIX.md && echo EXISTS || echo MISSING`.\n'
     + '   - If EXISTS: Read it. Continue to step 4.\n'
@@ -1038,6 +1068,27 @@ const peerResult = await runPeerReview(peerDocs)
 if (peerResult.error) return peerResult
 
 // ============================================================================
+// FORWARD REF CHECK (pre-PUSH — deterministic forward-reference gate, fail fast)
+// ============================================================================
+phase('Forward Ref Check')
+log('check-artifact-consistency --forward-refs-only (catch invented filenames before 40min push)')
+
+const fwdRefRaw = await agent(
+  'Run EXACTLY this command via Bash:\n'
+  + PY + ' ' + REPO + '/harness_cli.py check-artifact-consistency --forward-refs-only --project ' + REPO + '\n\n'
+  + 'Report final outcome as plain text: "FWDREF: PASS" or "FWDREF: FAIL — <one-line reason>".\n\n'
+  + 'If FAIL, also report which file(s) contain illegal forward references.',
+  { label: 'forward-ref-check', phase: 'Forward Ref Check', agentType: 'general-purpose' },
+)
+if (!/FWDREF:\s*PASS/.test(String(fwdRefRaw ?? ''))) {
+  return {
+    error: 'Forward ref check FAILED — illegal forward reference in P1 artifact (invented filename like ARCHITECTURE.md). Fix the artifact before push.',
+    raw: String(fwdRefRaw ?? '').slice(-500),
+  }
+}
+log('  Forward ref check PASSED')
+
+// ============================================================================
 // PUSH (per phase1_plan.md B-PUSH)
 // ============================================================================
 phase('Push')
@@ -1079,6 +1130,23 @@ const advanceReport = await agent(
 )
 if (!/ADVANCE:\s*PASS/.test(String(advanceReport ?? ''))) {
   return { error: 'advance-phase did not PASS', raw: String(advanceReport ?? '').slice(-800) }
+}
+
+// Bug A fix (2026-07-07): advance-phase intentionally commits the handover
+// locally without pushing (harness/cli/phase_cmds.py: "next milestone push
+// publishes to origin"). This workflow ends right after Advance with no
+// next-phase push queued, so the handover commit was left stranded on
+// local until whatever runs next happened to push it. Publish it now.
+phase('Sync')
+log('git push origin main (publish advance handover commit)')
+const syncReport = await agent(
+  'Run EXACTLY this command via Bash:\n'
+  + 'git -C ' + REPO + ' push origin main\n\n'
+  + 'Report final outcome as plain text: "SYNC: PASS" or "SYNC: FAIL — <one-line reason>".',
+  { label: 'sync', phase: 'Sync', agentType: 'general-purpose' },
+)
+if (!/SYNC:\s*PASS/.test(String(syncReport ?? ''))) {
+  return { error: 'post-advance push did not PASS', raw: String(syncReport ?? '').slice(-500) }
 }
 
 log('Phase 1 workflow complete. Open .methodology/phase2_plan.md to continue.')
