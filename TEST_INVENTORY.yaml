@@ -1,0 +1,408 @@
+# TEST_INVENTORY.yaml — taskq test case inventory (FR/NFR → test function mapping)
+#
+# Derived from SRS.md §3/§4 Acceptance Criteria and
+# TRACEABILITY_MATRIX.md §2/§3 (Test Case ID column). 1:1 mapping:
+# every AC ID in TRACEABILITY_MATRIX.md has exactly one entry here.
+# SRS.md and TRACEABILITY_MATRIX.md are APPROVED and not modified by
+# this document.
+#
+# Source: SRS.md (approved), TRACEABILITY_MATRIX.md (approved).
+# Agent A, Sub-Task 4/4, Round 1.
+
+test_inventory:
+  meta:
+    project: taskq
+    source_srs: 01-requirements/SRS.md
+    source_matrix: 01-requirements/TRACEABILITY_MATRIX.md
+    naming_convention: "it('test_frNN_xxx') / test_nfrNN_xxx (pytest function names)"
+    total_test_cases: 36
+
+  tests:
+    # --- FR-01: Task Submission and Validation (cli.py, store.py) ---
+    - tc_id: TC-FR-01-1
+      name: test_fr01_empty_command_exit2
+      fr_id: FR-01
+      ac_id: AC-FR-01-1
+      layer: unit
+      module: [store.py, cli.py]
+      exit_code: 2
+      data_file: tasks.json
+      description: "Empty/whitespace command → reject, no write"
+
+    - tc_id: TC-FR-01-2
+      name: test_fr01_command_too_long_exit2
+      fr_id: FR-01
+      ac_id: AC-FR-01-2
+      layer: unit
+      module: [store.py, cli.py]
+      exit_code: 2
+      data_file: tasks.json
+      description: "Command > 1000 chars → reject"
+
+    - tc_id: TC-FR-01-3
+      name: test_fr01_injection_char_exit2
+      fr_id: FR-01
+      ac_id: AC-FR-01-3
+      layer: unit
+      module: [store.py, cli.py]
+      exit_code: 2
+      data_file: tasks.json
+      description: "Injection char (; | & $ > < `) → reject"
+
+    - tc_id: TC-FR-01-4
+      name: test_fr01_duplicate_name_exit2
+      fr_id: FR-01
+      ac_id: AC-FR-01-4
+      layer: unit
+      module: [store.py, cli.py]
+      exit_code: 2
+      data_file: tasks.json
+      description: "--name collides with pending/running → reject"
+
+    - tc_id: TC-FR-01-5
+      name: test_fr01_valid_submit_pending
+      fr_id: FR-01
+      ac_id: AC-FR-01-5
+      layer: unit
+      module: [store.py, cli.py]
+      exit_code: 0
+      data_file: tasks.json
+      description: "Valid submit → exit 0, 8-hex id, status pending"
+
+    - tc_id: TC-FR-01-6
+      name: test_fr01_json_output_single_line
+      fr_id: FR-01
+      ac_id: AC-FR-01-6
+      layer: unit
+      module: [cli.py]
+      exit_code: 0
+      data_file: tasks.json
+      description: "--json → single-line JSON"
+
+    # --- FR-02: Task Executor (executor.py, store.py) ---
+    - tc_id: TC-FR-02-1
+      name: test_fr02_no_shell_true
+      fr_id: FR-02
+      ac_id: AC-FR-02-1
+      layer: unit
+      module: [executor.py]
+      exit_code: null
+      data_file: null
+      description: "subprocess.run + shlex.split, never shell=True"
+
+    - tc_id: TC-FR-02-2
+      name: test_fr02_status_transitions
+      fr_id: FR-02
+      ac_id: AC-FR-02-2
+      layer: unit
+      module: [executor.py]
+      exit_code: "0/4"
+      data_file: tasks.json
+      description: "exit0→done, non-0→failed, TimeoutExpired→timeout"
+
+    - tc_id: TC-FR-02-3
+      name: test_fr02_result_fields_present
+      fr_id: FR-02
+      ac_id: AC-FR-02-3
+      layer: unit
+      module: [executor.py]
+      exit_code: 0
+      data_file: tasks.json
+      description: "Result fields: exit_code/stdout_tail/stderr_tail/duration_ms/finished_at"
+
+    - tc_id: TC-FR-02-4
+      name: test_fr02_run_all_concurrent_lock
+      fr_id: FR-02
+      ac_id: AC-FR-02-4
+      layer: integration
+      module: [executor.py, store.py]
+      exit_code: 0
+      data_file: tasks.json
+      cross_ref_nfrs: [NFR-03]
+      description: "run --all concurrent, Lock-protected write (see AC-NFR-03-1)"
+
+    - tc_id: TC-FR-02-5
+      name: test_fr02_single_timeout_exit4
+      fr_id: FR-02
+      ac_id: AC-FR-02-5
+      layer: unit
+      module: [executor.py]
+      exit_code: 4
+      data_file: tasks.json
+      description: "Single-task timeout → exit 4"
+
+    # --- FR-03: Retry and Circuit Breaker (executor.py, breaker.py) ---
+    - tc_id: TC-FR-03-1
+      name: test_fr03_retry_up_to_limit
+      fr_id: FR-03
+      ac_id: AC-FR-03-1
+      layer: unit
+      module: [executor.py, breaker.py]
+      exit_code: null
+      data_file: null
+      description: "Auto-retry failed/timeout up to TASKQ_RETRY_LIMIT, injectable backoff"
+
+    - tc_id: TC-FR-03-2
+      name: test_fr03_breaker_opens_at_threshold
+      fr_id: FR-03
+      ac_id: AC-FR-03-2
+      layer: unit
+      module: [breaker.py]
+      exit_code: null
+      data_file: breaker.json
+      description: "Consecutive final failures ≥ TASKQ_BREAKER_THRESHOLD → OPEN"
+
+    - tc_id: TC-FR-03-3
+      name: test_fr03_open_rejects_exit3
+      fr_id: FR-03
+      ac_id: AC-FR-03-3
+      layer: unit
+      module: [breaker.py, executor.py]
+      exit_code: 3
+      data_file: breaker.json
+      description: "OPEN → run exit 3, stderr 'breaker open', no subprocess"
+
+    - tc_id: TC-FR-03-4
+      name: test_fr03_half_open_recovery
+      fr_id: FR-03
+      ac_id: AC-FR-03-4
+      layer: integration
+      module: [breaker.py]
+      exit_code: null
+      data_file: breaker.json
+      description: "Cooldown → HALF_OPEN; success→CLOSED, failure→OPEN"
+
+    - tc_id: TC-FR-03-5
+      name: test_fr03_breaker_atomic_write
+      fr_id: FR-03
+      ac_id: AC-FR-03-5
+      layer: unit
+      module: [breaker.py]
+      exit_code: null
+      data_file: breaker.json
+      description: "Breaker state atomic write"
+
+    # --- FR-04: Result TTL Cache (cache.py) ---
+    - tc_id: TC-FR-04-1
+      name: test_fr04_cache_signature_sha256
+      fr_id: FR-04
+      ac_id: AC-FR-04-1
+      layer: unit
+      module: [cache.py]
+      exit_code: null
+      data_file: cache.json
+      description: "Cache signature = sha256(command)"
+
+    - tc_id: TC-FR-04-2
+      name: test_fr04_cache_replay_no_subprocess
+      fr_id: FR-04
+      ac_id: AC-FR-04-2
+      layer: unit
+      module: [cache.py, executor.py]
+      exit_code: 0
+      data_file: cache.json
+      description: "TTL-valid done replay, no subprocess, cached: true"
+
+    - tc_id: TC-FR-04-3
+      name: test_fr04_cache_miss_writes_on_success
+      fr_id: FR-04
+      ac_id: AC-FR-04-3
+      layer: unit
+      module: [cache.py]
+      exit_code: 0
+      data_file: cache.json
+      description: "Expired/absent cache → normal execution, write on success"
+
+    - tc_id: TC-FR-04-4
+      name: test_fr04_cache_atomic_thread_safe
+      fr_id: FR-04
+      ac_id: AC-FR-04-4
+      layer: integration
+      module: [cache.py]
+      exit_code: null
+      data_file: cache.json
+      description: "cache.json atomic + thread-safe"
+
+    # --- FR-05: CLI Integration (cli.py) ---
+    - tc_id: TC-FR-05-1
+      name: test_fr05_subcommands_registered
+      fr_id: FR-05
+      ac_id: AC-FR-05-1
+      layer: integration
+      module: [cli.py]
+      exit_code: null
+      data_file: null
+      description: "submit/run/status/list/clear as argparse subcommands"
+
+    - tc_id: TC-FR-05-2
+      name: test_fr05_status_all_fields
+      fr_id: FR-05
+      ac_id: AC-FR-05-2
+      layer: integration
+      module: [cli.py]
+      exit_code: 0
+      data_file: tasks.json
+      description: "status <id> outputs all fields"
+
+    - tc_id: TC-FR-05-3
+      name: test_fr05_list_filter_by_status
+      fr_id: FR-05
+      ac_id: AC-FR-05-3
+      layer: integration
+      module: [cli.py]
+      exit_code: 0
+      data_file: tasks.json
+      description: "list [--status S] filters"
+
+    - tc_id: TC-FR-05-4
+      name: test_fr05_clear_all_data_files
+      fr_id: FR-05
+      ac_id: AC-FR-05-4
+      layer: integration
+      module: [cli.py]
+      exit_code: 0
+      data_file: "tasks.json, breaker.json, cache.json"
+      description: "clear empties all data files"
+
+    - tc_id: TC-FR-05-5
+      name: test_fr05_global_json_flag
+      fr_id: FR-05
+      ac_id: AC-FR-05-5
+      layer: integration
+      module: [cli.py]
+      exit_code: 0
+      data_file: null
+      description: "--json → single-line JSON (global flag)"
+
+    - tc_id: TC-FR-05-6
+      name: test_fr05_exit_code_matrix
+      fr_id: FR-05
+      ac_id: AC-FR-05-6
+      layer: integration
+      module: [cli.py]
+      exit_code: "0,1,2,3,4"
+      data_file: null
+      description: "Exit codes 0/2/3/4/1 map precisely"
+
+    - tc_id: TC-FR-05-7
+      name: test_fr05_unknown_id_exit2
+      fr_id: FR-05
+      ac_id: AC-FR-05-7
+      layer: integration
+      module: [cli.py]
+      exit_code: 2
+      data_file: tasks.json
+      description: "Unknown task id → exit 2"
+
+    # --- NFR-01: Performance ---
+    - tc_id: TC-NFR-01-1
+      name: test_nfr01_submit_status_p95_latency
+      nfr_id: NFR-01
+      ac_id: AC-NFR-01-1
+      layer: performance
+      module: [store.py, cli.py]
+      measurement: pytest-benchmark
+      description: "submit+status p95 < 50ms / 100 iter"
+
+    # --- NFR-02: Security — no shell=True, injection blacklist ---
+    - tc_id: TC-NFR-02-1
+      name: test_nfr02_no_shell_true_grep
+      nfr_id: NFR-02
+      ac_id: AC-NFR-02-1
+      layer: static
+      module: [executor.py]
+      measurement: "CI gate / grep"
+      description: "shell=True usage = 0 (whole codebase)"
+
+    - tc_id: TC-NFR-02-2
+      name: test_nfr02_injection_blacklist_covered
+      nfr_id: NFR-02
+      ac_id: AC-NFR-02-2
+      layer: unit
+      module: [executor.py]
+      cross_ref_frs: [FR-01]
+      measurement: "unit test"
+      description: "Injection blacklist test coverage"
+
+    # --- NFR-03: Reliability — atomic writes, breaker recovery time ---
+    - tc_id: TC-NFR-03-1
+      name: test_nfr03_atomic_write_fault_injection
+      nfr_id: NFR-03
+      ac_id: AC-NFR-03-1
+      layer: integration
+      module: [store.py, breaker.py, cache.py]
+      cross_ref_frs: [FR-02]
+      measurement: "fault-injection + json.load"
+      description: "Atomic write; valid JSON post-crash"
+
+    - tc_id: TC-NFR-03-2
+      name: test_nfr03_breaker_recovery_time
+      nfr_id: NFR-03
+      ac_id: AC-NFR-03-2
+      layer: integration
+      module: [breaker.py]
+      measurement: "integration test"
+      description: "Breaker recovery time ≤ cooldown + 1s"
+
+    # --- NFR-04: Security — Secret Redaction ---
+    - tc_id: TC-NFR-04-1
+      name: test_nfr04_secret_redaction_hit_rate
+      nfr_id: NFR-04
+      ac_id: AC-NFR-04-1
+      layer: unit
+      module: [executor.py]
+      measurement: "unit test on stdout_tail"
+      description: "Secret redaction 100% hit rate"
+
+    # --- NFR-05: Maintainability — docstring [FR-XX] coverage ---
+    - tc_id: TC-NFR-05-1
+      name: test_nfr05_docstring_fr_ref_coverage
+      nfr_id: NFR-05
+      ac_id: AC-NFR-05-1
+      layer: static
+      module: "all src/taskq/*"
+      measurement: "Gate 1 inspect"
+      description: "Docstring [FR-XX] coverage 100% (public)"
+
+    # --- NFR-06: Deployability — env var completeness ---
+    - tc_id: TC-NFR-06-1
+      name: test_nfr06_env_vars_have_defaults
+      nfr_id: NFR-06
+      ac_id: AC-NFR-06-1
+      layer: unit
+      module: [config.py]
+      measurement: "unit test"
+      description: "8 TASKQ_* vars read from env, with defaults"
+
+    - tc_id: TC-NFR-06-2
+      name: test_nfr06_env_example_completeness
+      nfr_id: NFR-06
+      ac_id: AC-NFR-06-2
+      layer: static
+      module: [config.py]
+      measurement: "file inspection"
+      description: ".env.example declares all 8, with comments"
+
+  coverage_summary:
+    by_fr:
+      FR-01: { tc_count: 6 }
+      FR-02: { tc_count: 5 }
+      FR-03: { tc_count: 5 }
+      FR-04: { tc_count: 4 }
+      FR-05: { tc_count: 7 }
+      NFR-01: { tc_count: 1 }
+      NFR-02: { tc_count: 2 }
+      NFR-03: { tc_count: 2 }
+      NFR-04: { tc_count: 1 }
+      NFR-05: { tc_count: 1 }
+      NFR-06: { tc_count: 2 }
+      by_fr_total: 36
+
+    by_layer:
+      unit: { count: 20 }
+      integration: { count: 12 }
+      performance: { count: 1 }
+      static: { count: 3 }
+      by_layer_total: 36
+
+    total_test_cases: 36
