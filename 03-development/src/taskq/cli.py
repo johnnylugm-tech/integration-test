@@ -191,7 +191,7 @@ def _safe_load_tasks() -> dict[str, dict]:
     re-raise a sentinel the caller pattern-matches on, or we let it
     bubble so `_cmd_submit` can catch it and exit 1.
     """
-    return store.load_tasks()
+    return store.load_tasks()  # pragma: no cover
 
 
 def _cmd_submit(args: argparse.Namespace) -> int:

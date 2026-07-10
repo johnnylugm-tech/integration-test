@@ -158,6 +158,22 @@ def test_fr04_cache_signature_sha256() -> None:
     )
 
 
+def test_fr04_cache_ttl_non_integer_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """[FR-04] Non-integer TASKQ_CACHE_TTL → falls back to default TTL (line 72).
+
+    Covers the `except ValueError: return _DEFAULT_TTL_SECONDS` branch
+    that the parametrized happy/expiry tests don't exercise (they always
+    set TASKQ_CACHE_TTL to a parseable int).
+    """
+    monkeypatch.setenv("TASKQ_CACHE_TTL", "not-a-number")
+    assert cache.ttl() == cache._DEFAULT_TTL_SECONDS, (
+        f"non-integer TASKQ_CACHE_TTL must fall back to default "
+        f"({cache._DEFAULT_TTL_SECONDS}s); got {cache.ttl()}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Case 2 — happy_path: TTL-fresh done cache → replay, no subprocess, cached:true (Q1)
 # ---------------------------------------------------------------------------

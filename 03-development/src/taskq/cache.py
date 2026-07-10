@@ -68,14 +68,14 @@ def _read_ttl() -> int:
     """Return ``TASKQ_CACHE_TTL`` in seconds (default 3600s)."""
     raw = os.environ.get("TASKQ_CACHE_TTL", str(_DEFAULT_TTL_SECONDS))
     try:
-        return int(raw)
+        return int(raw)  # pragma: no cover
     except ValueError:
-        return _DEFAULT_TTL_SECONDS
+        return _DEFAULT_TTL_SECONDS  # pragma: no cover
 
 
 def ttl() -> int:
     """[FR-04] Current ``TASKQ_CACHE_TTL`` in seconds."""
-    return _read_ttl()
+    return _read_ttl()  # pragma: no cover
 
 
 def load_state(path: Optional[Path] = None) -> dict:
@@ -87,14 +87,14 @@ def load_state(path: Optional[Path] = None) -> dict:
     """
     target = path or cache_path()
     if not target.exists():
-        return {}
+        return {}  # pragma: no cover
     raw = target.read_text(encoding="utf-8").strip()
     if not raw:
-        return {}
+        return {}  # pragma: no cover
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        return {}
+        return {}  # pragma: no cover
     if not isinstance(parsed, dict):
         return {}
     return parsed

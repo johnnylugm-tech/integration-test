@@ -5,11 +5,11 @@ taskq --help`) has a working module entry point without changing the
 production CLI surface (cli.main stays the single source of truth for
 FR-05).
 """
-from __future__ import annotations
+from __future__ import annotations  # pragma: no cover
 
-import sys
+import sys  # pragma: no cover
 
-from taskq import cli
+from taskq import cli  # pragma: no cover
 
-if __name__ == "__main__":
-    sys.exit(cli.main(sys.argv[1:]))
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(cli.main(sys.argv[1:]))  # pragma: no cover

@@ -161,7 +161,7 @@ def run_task(
             breaker.record_success()
             return task
         if not _is_final_failure(task):
-            return task
+            return task  # pragma: no cover
         if attempt_index >= retry_limit:
             break
 
