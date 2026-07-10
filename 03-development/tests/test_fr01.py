@@ -285,27 +285,27 @@ def test_unit_validate_name_unique_accepted() -> None:
 
 
 def test_unit_validate_name_conflicts_with_pending() -> None:
-    tasks = {"12345678": {"name": "dup", "status": "pending"}}
+    tasks: dict[str, dict[str, object]] = {"12345678": {"name": "dup", "status": "pending"}}
     assert cli._validate_name("dup", tasks) is not None
 
 
 def test_unit_validate_name_conflicts_with_running() -> None:
-    tasks = {"12345678": {"name": "dup", "status": "running"}}
+    tasks: dict[str, dict[str, object]] = {"12345678": {"name": "dup", "status": "running"}}
     assert cli._validate_name("dup", tasks) is not None
 
 
 def test_unit_validate_name_does_not_conflict_with_done() -> None:
-    tasks = {"12345678": {"name": "dup", "status": "done"}}
+    tasks: dict[str, dict[str, object]] = {"12345678": {"name": "dup", "status": "done"}}
     assert cli._validate_name("dup", tasks) is None
 
 
 def test_unit_validate_name_does_not_conflict_with_failed() -> None:
-    tasks = {"12345678": {"name": "dup", "status": "failed"}}
+    tasks: dict[str, dict[str, object]] = {"12345678": {"name": "dup", "status": "failed"}}
     assert cli._validate_name("dup", tasks) is None
 
 
 def test_unit_validate_name_does_not_conflict_with_timeout() -> None:
-    tasks = {"12345678": {"name": "dup", "status": "timeout"}}
+    tasks: dict[str, dict[str, object]] = {"12345678": {"name": "dup", "status": "timeout"}}
     assert cli._validate_name("dup", tasks) is None
 
 

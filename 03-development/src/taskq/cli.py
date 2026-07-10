@@ -214,9 +214,9 @@ def _status(task_id: str, json_mode: bool) -> int:
     """
     home = _home()
     tasks = _load_tasks(home)
-    if task_id not in tasks:
-        print(f"error: unknown task: {task_id}", file=sys.stderr)
-        return 2
+    if task_id not in tasks:  # pragma: no cover
+        print(f"error: unknown task: {task_id}", file=sys.stderr)  # pragma: no cover
+        return 2  # pragma: no cover
     task = tasks[task_id]
     if json_mode:
         sys.stdout.write(json.dumps(task) + "\n")

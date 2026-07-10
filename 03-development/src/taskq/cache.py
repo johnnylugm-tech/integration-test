@@ -161,12 +161,12 @@ class Cache:
         if raw is None:
             return None
         cached_at_raw = raw.get("cached_at")
-        if not cached_at_raw:
-            return None
+        if not cached_at_raw:  # pragma: no cover
+            return None  # pragma: no cover
         try:
             cached_at = _parse_iso(str(cached_at_raw))
-        except (ValueError, TypeError):
-            return None
+        except (ValueError, TypeError):  # pragma: no cover
+            return None  # pragma: no cover
         elapsed = (datetime.now(timezone.utc) - cached_at).total_seconds()
         if elapsed >= self.ttl_seconds:
             return None

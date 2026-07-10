@@ -17,7 +17,6 @@ Coverage:
 from __future__ import annotations
 
 import ast
-import inspect
 import json
 import os
 import re
@@ -127,7 +126,8 @@ def test_nfr03_breaker_recovery_time(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     # Force breaker to OPEN by recording threshold failures
     b1 = breaker.Breaker()
-    b1.record_failure(); b1.record_failure()
+    b1.record_failure()
+    b1.record_failure()
     assert b1.state == breaker.STATE_OPEN
 
     # Save and reload → after cooldown it should transition to HALF_OPEN
