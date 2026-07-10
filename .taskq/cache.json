@@ -1,0 +1,11 @@
+{
+  "7d10fced96b38c84f90db07708f266e83da48ca763189eaed7fe1a00348385eb": {
+    "command": "echo ok",
+    "exit_code": 0,
+    "stdout_tail": "ok\n",
+    "stderr_tail": "",
+    "duration_ms": 2,
+    "finished_at": "2026-07-10T05:50:56Z",
+    "stored_at": 1783662656.5554292
+  }
+}
