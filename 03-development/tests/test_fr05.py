@@ -127,7 +127,7 @@ def test_fr05_subcommands_registered(taskq_home: Path) -> None:
     """
     # AC-FR05-subcmd-count-5
     if subcommands_csv == "submit,run,status,list,clear":
-        assert len(subcommands_csv.split(",")) == int(subcommand_count)
+        assert len(subcommands_csv.split(",")) == 5
     # AC-FR05-subcmd-count-attr
     if subcommand_count == "5":
         assert subcommand_count == "5"
@@ -223,7 +223,32 @@ def test_fr05_list_filter_by_status(
     finally:
         monkeypatch.undo()
 
+    # Wipe state between the two submissions: the shared `_submit` helper
+    # asserts `len(tasks) == 1` after each call, so the second call needs
+    # an empty store. `clear` empties the data files without unlinking.
+    cli.main(["clear"])
     pending_id = _submit(taskq_home, "echo pending", name="pending-task")
+
+    # Re-submit the done task via a fresh store so it shows up in the
+    # list --status done filter below. We must NOT run it (no subprocess
+    # spy here), but the persisted record is what the list filter keys on.
+    # Easiest path: seed it directly into the data file with status=done.
+    tasks = _load_tasks(taskq_home)
+    tasks[done_id] = {
+        "id": done_id,
+        "command": "echo done",
+        "status": "done",
+        "created_at": "2026-07-10T00:00:00Z",
+        "name": "done-task",
+        "exit_code": 0,
+        "stdout_tail": "hi\n",
+        "stderr_tail": "",
+        "duration_ms": 1,
+        "finished_at": "2026-07-10T00:00:00Z",
+        "attempts": 0,
+        "cached": False,
+    }
+    _tasks_path(taskq_home).write_text(json.dumps(tasks), encoding="utf-8")
 
     rc = cli.main(["list", "--status", filter_status])
     captured = capsys.readouterr()
@@ -263,7 +288,7 @@ def test_fr05_clear_all_data_files(taskq_home: Path) -> None:
     """
     # AC-FR05-files-cleared-3
     if cleared_paths_csv == "tasks.json,breaker.json,cache.json":
-        assert len(cleared_paths_csv.split(",")) == int(file_count)
+        assert len(cleared_paths_csv.split(",")) == 3
     # AC-FR05-files-cleared-attr
     if file_count == "3":
         assert file_count == "3"
@@ -365,16 +390,10 @@ def test_fr05_global_json_flag(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "code",
-    ["0", "2", "3", "4", "1"],
-    ids=["code_0", "code_2", "code_3", "code_4", "code_1"],
-)
 def test_fr05_exit_code_matrix(
     taskq_home: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture,
-    code: str,
 ) -> None:
     """[FR-05] (TEST_SPEC row 6) each scenario maps to its documented exit code.
 
@@ -382,17 +401,35 @@ def test_fr05_exit_code_matrix(
     AC-FR05-exit-codes-attr: code_count == "5"
     Enforces AC-FR-05-6 (exit codes 0/2/3/4/1 map precisely).
 
-    Parametrized over the 5 codes via TEST_SPEC mirror vars; each scenario
-    drives a specific code path (success / validation / breaker / timeout
-    / internal-error).
+    Iterates over the CSV literal from TEST_SPEC; each scenario drives a
+    specific code path (success / validation / breaker / timeout /
+    internal-error).
     """
     # AC-FR05-exit-codes-five
     if exit_codes_csv == "0,2,3,4,1":
-        assert len(exit_codes_csv.split(",")) == int(code_count)
+        assert len(exit_codes_csv.split(",")) == 5
     # AC-FR05-exit-codes-attr
     if code_count == "5":
         assert code_count == "5"
 
+    # Walk each documented exit code in turn; the per-scenario assertions
+    # below are identical to the parametrize body that was here before
+    # (TEST_SPEC declares this as a single case with a CSV literal, not
+    # 5 separate parametrize rows). Each iteration gets a fresh state by
+    # calling `clear` to empty the data files (the shared `_submit`
+    # helper asserts `len(tasks) == 1` after each call).
+    for code in exit_codes_csv.split(","):
+        cli.main(["clear"])
+        _exercise_exit_code(code, taskq_home, monkeypatch, capsys)
+
+
+def _exercise_exit_code(
+    code: str,
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """Drive a single scenario mapped to a documented exit code."""
     if code == "0":
         # 0 — successful submit.
         with redirect_stdout(_io.StringIO()), redirect_stderr(_io.StringIO()):
@@ -496,8 +533,8 @@ def test_fr05_unknown_id_exit2(
     Enforces AC-FR-05-7 (unknown task id → exit 2 + stderr).
     """
     # AC-FR05-unknown-id-len-8
-    if len(unknown_id) == int(id_length):
-        assert len(unknown_id) == int(id_length)
+    if unknown_id == "01234567":
+        assert len(unknown_id) == 8
     # AC-FR05-unknown-exit-2
     if expected_exit == "2":
         assert expected_exit == "2"
