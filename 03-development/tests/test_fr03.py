@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from taskq import executor, store  # `breaker` intentionally not imported yet
+from taskq import breaker  # in-process unit tests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = PROJECT_ROOT / "03-development" / "src"
@@ -404,3 +405,109 @@ def test_unit_execute_task_retries_until_done(tmp_path, monkeypatch):
     status = executor.execute_task("rt1", "echo hi", 5.0)
     assert status == "done"
     assert calls["n"] == 3
+
+
+# ── executor.run_all breaker integration (in-process coverage) ──────────
+
+
+def test_unit_run_all_records_breaker_success(tmp_path, monkeypatch):
+    """When a task succeeds under breaker supervision, run_all records
+    the success and the breaker returns to CLOSED with failure_count == 0.
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    store._HOME = None
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "3")
+    monkeypatch.setattr(executor.time, "sleep", lambda _s: None)
+
+    home = tmp_path
+    (home / "tasks.json").write_text(json.dumps({
+        "p0": {
+            "id": "p0",
+            "command": "echo ok",
+            "name": None,
+            "status": "pending",
+            "created_at": "2026-07-10T00:00:00Z",
+        },
+    }))
+    results = executor.run_all(timeout=5.0, max_workers=1)
+    assert results == {"p0": "done"}
+
+    bp = breaker.load(home / "breaker.json")
+    assert bp.state == "CLOSED"
+    assert bp.failure_count == 0
+
+
+def test_unit_run_all_records_breaker_failure(tmp_path, monkeypatch):
+    """When a task fails under breaker supervision, run_all records the
+    failure on the breaker (failure_count increments).
+    """
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    store._HOME = None
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "5")
+    monkeypatch.setattr(executor.time, "sleep", lambda _s: None)
+
+    home = tmp_path
+    fail_cmd = _python_command("import sys; sys.exit(1)")
+    (home / "tasks.json").write_text(json.dumps({
+        "f0": {
+            "id": "f0",
+            "command": fail_cmd,
+            "name": None,
+            "status": "pending",
+            "created_at": "2026-07-10T00:00:00Z",
+        },
+    }))
+    results = executor.run_all(timeout=5.0, max_workers=1)
+    assert results == {"f0": "failed"}
+
+    bp = breaker.load(home / "breaker.json")
+    assert bp.failure_count >= 1
+
+
+def test_unit_run_all_skips_when_breaker_open(tmp_path, monkeypatch):
+    """When the breaker is OPEN and cooldown has not elapsed, run_all
+    skips pending tasks (returns without attempting them).
+    """
+    from datetime import datetime, timezone
+
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    store._HOME = None
+    monkeypatch.setattr(executor.time, "sleep", lambda _s: None)
+
+    home = tmp_path
+    opened_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    (home / "breaker.json").write_text(json.dumps({
+        "state": "OPEN",
+        "opened_at": opened_at,
+        "failure_count": 5,
+        "threshold": 3,
+        "cooldown": 60.0,
+    }))
+    (home / "tasks.json").write_text(json.dumps({
+        "s0": {
+            "id": "s0",
+            "command": "echo ok",
+            "name": None,
+            "status": "pending",
+            "created_at": "2026-07-10T00:00:00Z",
+        },
+    }))
+    results = executor.run_all(timeout=5.0, max_workers=1)
+    # Breaker is OPEN and cooldown not elapsed → task skipped, not in results.
+    assert results == {}
+
+
+# ── executor._run_subprocess timeout branch (coverage) ──────────────────
+
+
+def test_unit_run_subprocess_timeout_branch(monkeypatch):
+    """Cover the TimeoutExpired exception path in _run_subprocess."""
+    monkeypatch.setattr(executor.time, "sleep", lambda _s: None)
+    cmd = _python_command("import time; time.sleep(5)")
+    exit_code, stdout_tail, stderr_tail, duration_ms, status = executor._run_subprocess(
+        cmd, 0.5
+    )
+    assert status == "timeout"
+    assert exit_code is None
+    assert duration_ms >= 0
