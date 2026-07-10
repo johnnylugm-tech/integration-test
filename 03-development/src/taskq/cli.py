@@ -100,7 +100,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="filter listed tasks by status (e.g. done / pending / failed)",
     )
 
-    clear_p = sub.add_parser("clear", parents=[_json_parent()])
+    sub.add_parser("clear", parents=[_json_parent()])
 
     return p
 

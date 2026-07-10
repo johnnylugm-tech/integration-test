@@ -617,3 +617,736 @@ def _inject_fr05_mirror_vars(request: pytest.FixtureRequest):
         for var_name, value in _FR05_MIRROR[key].items():
             setattr(request.module, var_name, value)
     yield
+
+
+# ---------------------------------------------------------------------------
+# Coverage-bridging tests — additional unit tests targeting source lines the
+# TEST_SPEC FR-05 cases do not exercise. These do NOT duplicate any existing
+# test name; they are additive coverage probes the meta-loop relies on.
+# ---------------------------------------------------------------------------
+
+
+def test_coverage_main_no_argv(taskq_home: Path) -> None:
+    """Cover cli.main() with argv=None branch (cli.py:425-426)."""
+    import io as _i
+    with redirect_stdout(_i.StringIO()), redirect_stderr(_i.StringIO()):
+        rc = cli.main(argv=None)
+    assert rc == 2  # no subcommand → exit 2 + help on stderr
+
+
+def test_coverage_run_all_pending(taskq_home: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover cli._cmd_run --all branch (cli.py:249-266) including json output."""
+    from taskq import models as _models
+    monkeypatch.setenv("TASKQ_MAX_WORKERS", "2")
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    # Seed two pending tasks directly into the store.
+    tasks_path = taskq_home / "tasks.json"
+    seed = {
+        "a1b2c3d1": {"id": "a1b2c3d1", "command": "echo a", "status": "pending", "created_at": "2026-01-01T00:00:00Z", "name": None, "attempts": 0, "cached": False},
+        "a1b2c3d2": {"id": "a1b2c3d2", "command": "echo b", "status": "pending", "created_at": "2026-01-01T00:00:00Z", "name": None, "attempts": 0, "cached": False},
+    }
+    tasks_path.write_text(json.dumps(seed), encoding="utf-8")
+
+    # Force breaker CLOSED explicitly.
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+
+    def _fake_run_ok(*_a, **_k):
+        return subprocess.CompletedProcess(args=(), returncode=0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(executor.subprocess, "run", _fake_run_ok)
+    rc = cli.main(["--json", "run", "--all"])
+    captured = capsys.readouterr()
+    assert rc == 0
+    payload = json.loads(captured.out.strip())
+    assert payload["ran"] == 2
+
+
+def test_coverage_run_cached_hit(taskq_home: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover cli._cmd_run --cached HIT path (cli.py:281-296)."""
+    from taskq import cache as _cache
+    task_id = _submit(taskq_home, "echo cached-hit", name="cached-task")
+
+    # Pre-populate cache with a fresh done entry.
+    _cache.put("echo cached-hit", {
+        "command": "echo cached-hit",
+        "exit_code": 0,
+        "stdout_tail": "cached-out\n",
+        "stderr_tail": "",
+        "duration_ms": 5,
+        "finished_at": "2026-01-01T00:00:00Z",
+    })
+
+    calls: list = []
+    def _spy_run(*_a, **_k):
+        calls.append(1)
+        return subprocess.CompletedProcess(args=(), returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(executor.subprocess, "run", _spy_run)
+    rc = cli.main(["--json", "run", task_id, "--cached"])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert calls == [], "cache HIT must NOT call subprocess"
+    payload = json.loads(captured.out.strip())
+    assert payload["id"] == task_id
+    assert payload["cached"] is True
+    assert payload["status"] == "done"
+
+
+def test_coverage_run_cached_miss(taskq_home: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover cli._cmd_run --cached MISS path (cli.py:297-316)."""
+    task_id = _submit(taskq_home, "echo miss-then-run", name="miss-task")
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+
+    def _fake_run_ok(*_a, **_k):
+        return subprocess.CompletedProcess(args=(), returncode=0, stdout="live\n", stderr="")
+
+    monkeypatch.setattr(executor.subprocess, "run", _fake_run_ok)
+    rc = cli.main(["run", task_id, "--cached"])
+    assert rc == 0
+
+
+def test_coverage_status_non_json(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """Cover cli._cmd_status non-json output (cli.py:351-353)."""
+    task_id = _submit(taskq_home, "echo s", name="s-task")
+    rc = cli.main(["status", task_id])
+    captured = capsys.readouterr()
+    assert rc == 0
+    out = captured.out
+    for field in ("id", "command", "status", "exit_code", "stdout_tail",
+                  "stderr_tail", "duration_ms", "finished_at", "cached"):
+        assert field in out, f"status non-json must include {field!r}"
+
+
+def test_coverage_list_non_json(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """Cover cli._cmd_list non-json output (cli.py:376-378)."""
+    _submit(taskq_home, "echo l", name="l-task")
+    rc = cli.main(["list"])
+    captured = capsys.readouterr()
+    assert rc == 0
+    out_lines = [ln for ln in captured.out.splitlines() if ln.strip()]
+    assert len(out_lines) == 1  # the one task id
+
+
+def test_coverage_executor_retry_then_success(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover executor.run_task retry path with backoff (executor.py:132-167)."""
+    from taskq import models as _models
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "2")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0.0")
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+
+    task = _models.Task.new_pending(command="echo retry-then-ok", name=None)
+    task_id = task.id
+    store.add_task(task)
+
+    # First call fails, second succeeds.
+    call_count = {"n": 0}
+    def _flaky_run(*_a, **_k):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return subprocess.CompletedProcess(args=(), returncode=1, stdout="", stderr="oops")
+        return subprocess.CompletedProcess(args=(), returncode=0, stdout="ok\n", stderr="")
+
+    sleeps: list = []
+    def _spy_sleep(s: float) -> None:
+        sleeps.append(s)
+
+    monkeypatch.setattr(executor.subprocess, "run", _flaky_run)
+    out = executor.run_task(task, sleep=_spy_sleep)
+    assert out.status == "done"
+    assert call_count["n"] == 2
+    assert sleeps == [0.0]  # backoff base 0 * 2**1 = 0
+
+
+def test_coverage_executor_final_failure_records_breaker(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover executor.run_task final-failure path (executor.py:168-169) and breaker.record_failure."""
+    from taskq import models as _models
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "1")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0.0")
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+
+    task = _models.Task.new_pending(command="echo always-fail", name=None)
+    store.add_task(task)
+
+    def _always_fail(*_a, **_k):
+        return subprocess.CompletedProcess(args=(), returncode=1, stdout="", stderr="err")
+
+    monkeypatch.setattr(executor.subprocess, "run", _always_fail)
+    out = executor.run_task(task, sleep=lambda _s: None)
+    assert out.status == "failed"
+    # Breaker counter incremented.
+    data = json.loads((taskq_home / "breaker.json").read_text(encoding="utf-8"))
+    assert data["consecutive_failures"] >= 1
+
+
+def test_coverage_breaker_threshold_opens(taskq_home: Path) -> None:
+    """Cover breaker.record_failure opening at threshold (breaker.py:218-222)."""
+    from taskq import breaker as _br
+    # Pre-seed counter at threshold-1 so one more call hits threshold.
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+    monkeypatch_environ = pytest.MonkeyPatch()
+    try:
+        monkeypatch_environ.setenv("TASKQ_BREAKER_THRESHOLD", "2")
+        _br.reload_config()
+        # First failure: counter=1, not yet at threshold.
+        result1 = _br.record_failure()
+        assert result1 == "CLOSED"
+        # Second failure: counter=2 == threshold → OPEN.
+        result2 = _br.record_failure()
+        assert result2 == "OPEN"
+    finally:
+        monkeypatch_environ.undo()
+        _br.reload_config()
+
+
+def test_coverage_breaker_half_open_failure_reopens(taskq_home: Path) -> None:
+    """Cover breaker.record_failure in HALF_OPEN re-opening (breaker.py:212-217)."""
+    from taskq import breaker as _br
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "HALF_OPEN", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+    result = _br.record_failure()
+    assert result == "OPEN"
+
+
+def test_coverage_breaker_half_open_success_closes(taskq_home: Path) -> None:
+    """Cover breaker.record_success closing from HALF_OPEN (breaker.py:228-239)."""
+    from taskq import breaker as _br
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "HALF_OPEN", "consecutive_failures": 1, "opened_at": 1.0}),
+        encoding="utf-8",
+    )
+    result = _br.record_success()
+    assert result == "CLOSED"
+    data = json.loads((taskq_home / "breaker.json").read_text(encoding="utf-8"))
+    assert data["consecutive_failures"] == 0
+    assert data["opened_at"] is None
+
+
+def test_coverage_breaker_state_function(taskq_home: Path) -> None:
+    """Cover breaker.state() reading raw_state != 'OPEN' (breaker.py:119-130)."""
+    from taskq import breaker as _br
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+    assert _br.state() == "CLOSED"
+
+
+def test_coverage_breaker_state_open_with_cooldown_elapsed(taskq_home: Path) -> None:
+    """Cover breaker.state() cooldown-elapsed → HALF_OPEN (breaker.py:131-136)."""
+    from taskq import breaker as _br
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "OPEN", "consecutive_failures": 3, "opened_at": 1.0}),  # 1.0 epoch = 1970
+        encoding="utf-8",
+    )
+    assert _br.state() == "HALF_OPEN"
+
+
+def test_coverage_breaker_state_open_cooldown_not_elapsed(taskq_home: Path) -> None:
+    """Cover breaker.state() cooldown-not-elapsed → OPEN (breaker.py:131-136)."""
+    from taskq import breaker as _br
+    import time
+    # Use a far-future opened_at so cooldown cannot have elapsed.
+    future = time.time() + 10000
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "OPEN", "consecutive_failures": 3, "opened_at": future}),
+        encoding="utf-8",
+    )
+    assert _br.state() == "OPEN"
+
+
+def test_coverage_breaker_check_and_admit_allow(taskq_home: Path) -> None:
+    """Cover breaker.check_and_admit() ALLOW branch (breaker.py:191-194)."""
+    from taskq import breaker as _br
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+    assert _br.check_and_admit() == _br.ALLOW
+
+
+def test_coverage_breaker_check_and_admit_reject(taskq_home: Path) -> None:
+    """Cover breaker.check_and_admit() REJECT branch (breaker.py:201)."""
+    from taskq import breaker as _br
+    import time
+    future = time.time() + 10000
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "OPEN", "consecutive_failures": 3, "opened_at": future}),
+        encoding="utf-8",
+    )
+    assert _br.check_and_admit() == _br.REJECT
+
+
+def test_coverage_cache_get_expired(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover cache.get TTL-expired branch (cache.py:136)."""
+    from taskq import cache as _cache
+    monkeypatch.setenv("TASKQ_CACHE_TTL", "1")
+    _cache.put("echo expired", {
+        "command": "echo expired",
+        "exit_code": 0,
+        "stdout_tail": "x",
+        "stderr_tail": "",
+        "duration_ms": 1,
+        "finished_at": "2026-01-01T00:00:00Z",
+        "stored_at": 1.0,  # epoch 1970 — definitely expired
+    })
+    assert _cache.get("echo expired") is None
+
+
+def test_coverage_cache_get_nonzero_exit(taskq_home: Path) -> None:
+    """Cover cache.get non-success exit_code branch (cache.py:131-132)."""
+    from taskq import cache as _cache
+    import time
+    _cache.put("echo nonzero", {
+        "command": "echo nonzero",
+        "exit_code": 1,  # non-zero → never replayable
+        "stdout_tail": "",
+        "stderr_tail": "fail",
+        "duration_ms": 1,
+        "finished_at": "2026-01-01T00:00:00Z",
+        "stored_at": time.time(),
+    })
+    assert _cache.get("echo nonzero") is None
+
+
+def test_coverage_cache_get_invalid_stored_at(taskq_home: Path) -> None:
+    """Cover cache.get invalid stored_at type branch (cache.py:134-135)."""
+    from taskq import cache as _cache
+    key = _cache.signature("echo bad-stored")
+    # Manually write cache.json with a string stored_at (invalid).
+    cache_path = taskq_home / "cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps({
+        key: {
+            "command": "echo bad-stored",
+            "exit_code": 0,
+            "stdout_tail": "x",
+            "stderr_tail": "",
+            "duration_ms": 1,
+            "finished_at": "2026-01-01T00:00:00Z",
+            "stored_at": "not-a-number",
+        }
+    }), encoding="utf-8")
+    assert _cache.get("echo bad-stored") is None
+
+
+def test_coverage_cache_get_entry_not_dict(taskq_home: Path) -> None:
+    """Cover cache.get entry not a dict branch (cache.py:129-130)."""
+    from taskq import cache as _cache
+    key = _cache.signature("echo string-entry")
+    cache_path = taskq_home / "cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps({key: "not-a-dict"}), encoding="utf-8")
+    assert _cache.get("echo string-entry") is None
+
+
+def test_coverage_cache_put_default_stored_at(taskq_home: Path) -> None:
+    """Cover cache.put default stored_at (cache.py:150)."""
+    from taskq import cache as _cache
+    state = _cache.put("echo default-stored", {
+        "command": "echo default-stored",
+        "exit_code": 0,
+        "stdout_tail": "y",
+        "stderr_tail": "",
+        "duration_ms": 1,
+        "finished_at": "2026-01-01T00:00:00Z",
+        # stored_at intentionally omitted → setdefault fills it
+    })
+    key = _cache.signature("echo default-stored")
+    assert "stored_at" in state[key]
+    assert isinstance(state[key]["stored_at"], (int, float))
+
+
+def test_coverage_cache_load_corrupt_returns_empty(taskq_home: Path) -> None:
+    """Cover cache.load_state corrupt-JSON branch (cache.py:96-98)."""
+    from taskq import cache as _cache
+    cache_path = taskq_home / "cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text("not valid json", encoding="utf-8")
+    assert _cache.load_state() == {}
+
+
+def test_coverage_cache_load_non_dict_returns_empty(taskq_home: Path) -> None:
+    """Cover cache.load_state non-dict root branch (cache.py:98-99)."""
+    from taskq import cache as _cache
+    cache_path = taskq_home / "cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text("[1, 2, 3]", encoding="utf-8")
+    assert _cache.load_state() == {}
+
+
+def test_coverage_store_load_corrupt_raises(taskq_home: Path) -> None:
+    """Cover store.load_tasks JSONDecodeError branch (store.py:55-57)."""
+    from taskq import store as _store
+    tasks_path = taskq_home / "tasks.json"
+    tasks_path.parent.mkdir(parents=True, exist_ok=True)
+    tasks_path.write_text("not valid json", encoding="utf-8")
+    with pytest.raises(_store.StoreCorruptedError):
+        _store.load_tasks()
+
+
+def test_coverage_store_load_non_dict_raises(taskq_home: Path) -> None:
+    """Cover store.load_tasks non-dict root branch (store.py:58-62)."""
+    from taskq import store as _store
+    tasks_path = taskq_home / "tasks.json"
+    tasks_path.parent.mkdir(parents=True, exist_ok=True)
+    tasks_path.write_text("[1, 2, 3]", encoding="utf-8")
+    with pytest.raises(_store.StoreCorruptedError):
+        _store.load_tasks()
+
+
+def test_coverage_store_find_active_by_name_running(taskq_home: Path) -> None:
+    """Cover store.find_active_by_name matching 'running' status (store.py:125-127)."""
+    from taskq import store as _store
+    from taskq import models as _models
+    task = _models.Task.new_pending(command="echo r", name="running-named")
+    task.status = "running"
+    _store.add_task(task)
+    found = _store.find_active_by_name("running-named")
+    assert found is not None
+    assert found["id"] == task.id
+
+
+def test_coverage_store_get_task_empty_id(taskq_home: Path) -> None:
+    """Cover store.get_task empty-id branch (store.py:101-102)."""
+    from taskq import store as _store
+    assert _store.get_task("") is None
+    assert _store.get_task(None) is None  # type: ignore[arg-type]
+
+
+def test_coverage_executor_timeout_branch(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover executor.run_task TimeoutExpired branch (executor.py:151-156)."""
+    from taskq import models as _models
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "1")
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+    task = _models.Task.new_pending(command="sleep 5", name=None)
+    store.add_task(task)
+
+    def _raise_timeout(*_a, **_k):
+        raise subprocess.TimeoutExpired(cmd="sleep 5", timeout=1.0)
+
+    monkeypatch.setattr(executor.subprocess, "run", _raise_timeout)
+    out = executor.run_task(task, sleep=lambda _s: None)
+    assert out.status == "timeout"
+    assert out.exit_code is None
+
+
+def test_coverage_executor_done_returns_early(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover executor.run_task done-on-first-attempt early return (executor.py:160-162)."""
+    from taskq import models as _models
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "5")  # would retry, but done on first try
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+    task = _models.Task.new_pending(command="echo ok", name=None)
+    store.add_task(task)
+
+    def _ok(*_a, **_k):
+        return subprocess.CompletedProcess(args=(), returncode=0, stdout="y\n", stderr="")
+
+    monkeypatch.setattr(executor.subprocess, "run", _ok)
+    out = executor.run_task(task, sleep=lambda _s: None)
+    assert out.status == "done"
+    assert out.exit_code == 0
+
+
+def test_coverage_executor_reject_branch(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover executor.run_task breaker REJECT early-return (executor.py:122-129)."""
+    from taskq import models as _models
+    import time
+    future = time.time() + 10000
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "OPEN", "consecutive_failures": 3, "opened_at": future}),
+        encoding="utf-8",
+    )
+    task = _models.Task.new_pending(command="echo rejected", name=None)
+    calls = []
+    def _spy(*_a, **_k):
+        calls.append(1)
+        return subprocess.CompletedProcess(args=(), returncode=0, stdout="", stderr="")
+    monkeypatch.setattr(executor.subprocess, "run", _spy)
+    out = executor.run_task(task, sleep=lambda _s: None)
+    assert out.status == "failed"
+    assert "breaker open" in out.stderr_tail
+    assert calls == []
+
+
+def test_coverage_models_from_dict_filters_unknown_keys() -> None:
+    """Cover models.Task.from_dict filtering unknown keys (models.py:72)."""
+    from taskq import models as _models
+    record = {
+        "id": "12345678",
+        "command": "echo x",
+        "status": "done",
+        "created_at": "2026-01-01T00:00:00Z",
+        "name": None,
+        "unknown_field": "should be filtered",
+    }
+    task = _models.Task.from_dict(record)
+    assert task.id == "12345678"
+    assert task.status == "done"
+
+
+def test_coverage_cli_run_requires_id(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """Cover cli._cmd_run validation branch (cli.py:269-271)."""
+    rc = cli.main(["run"])
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "task id" in captured.err or "all" in captured.err
+
+
+def test_coverage_cli_submit_json_with_name(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """Cover cli._cmd_submit --json with explicit --name (cli.py:221-226)."""
+    rc = cli.main(["--json", "submit", "echo named", "--name", "named-task"])
+    captured = capsys.readouterr()
+    assert rc == 0
+    payload = json.loads(captured.out.strip())
+    assert payload["status"] == "pending"
+    assert "id" in payload
+
+
+def test_coverage_cli_submit_name_collision(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """Cover cli._cmd_submit --name collision (cli.py:206-213)."""
+    cli.main(["submit", "echo first", "--name", "dup-name"])
+    rc = cli.main(["submit", "echo second", "--name", "dup-name"])
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "dup-name" in captured.err or "collides" in captured.err
+
+
+def test_coverage_cli_submit_command_too_long(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """Cover cli._cmd_submit length>1000 branch (cli.py:120-121)."""
+    rc = cli.main(["submit", "x" * 1001])
+    captured = capsys.readouterr()
+    assert rc == 2
+
+
+def test_coverage_cli_submit_injection_char(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """Cover cli._cmd_submit injection-char branch (cli.py:122-124)."""
+    rc = cli.main(["submit", "echo hi; rm x"])
+    captured = capsys.readouterr()
+    assert rc == 2
+
+
+def test_coverage_cli_submit_whitespace_only(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """Cover cli._validate whitespace-only branch (cli.py:118-119)."""
+    rc = cli.main(["submit", "   \t  "])
+    captured = capsys.readouterr()
+    assert rc == 2
+
+
+def test_coverage_cli_clear_idempotent(taskq_home: Path) -> None:
+    """Cover cli._cmd_clear p.exists() == False branch (cli.py:400-405)."""
+    # Don't pre-create the files — they should not exist yet.
+    rc = cli.main(["clear"])
+    assert rc == 0
+
+
+def test_coverage_executor_zero_retry_done(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover executor.run_task with retry_limit=0 + done path (executor.py:165)."""
+    from taskq import models as _models
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+    task = _models.Task.new_pending(command="echo zero-retry", name=None)
+    monkeypatch.setattr(executor.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(args=(), returncode=0, stdout="ok", stderr=""))
+    out = executor.run_task(task, sleep=lambda _s: None)
+    assert out.status == "done"
+    assert out.attempts == 1
+
+
+def test_coverage_breaker_to_epoch_string_iso(taskq_home: Path) -> None:
+    """Cover breaker._to_epoch ISO-8601 string branch (breaker.py:166-171)."""
+    from taskq import breaker as _br
+    epoch = _br._to_epoch("2020-01-01T00:00:00Z")
+    assert isinstance(epoch, float)
+    assert epoch > 0
+
+
+def test_coverage_breaker_to_epoch_string_garbage() -> None:
+    """Cover breaker._to_epoch garbage string returns None (breaker.py:172-173)."""
+    from taskq import breaker as _br
+    assert _br._to_epoch("not a date") is None
+    assert _br._to_epoch(None) is None  # type: ignore[arg-type]
+    assert _br._to_epoch([]) is None  # type: ignore[arg-type]
+
+
+def test_coverage_breaker_to_epoch_numeric_string() -> None:
+    """Cover breaker._to_epoch numeric string branch (breaker.py:162-165)."""
+    from taskq import breaker as _br
+    assert _br._to_epoch("12345.678") == 12345.678
+
+
+def test_coverage_breaker_load_corrupt_returns_empty(taskq_home: Path) -> None:
+    """Cover breaker.load_state corrupt-JSON branch (breaker.py:96-98)."""
+    from taskq import breaker as _br
+    bp = taskq_home / "breaker.json"
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text("not valid json", encoding="utf-8")
+    assert _br.load_state() == {}
+
+
+def test_coverage_breaker_load_non_dict_returns_empty(taskq_home: Path) -> None:
+    """Cover breaker.load_state non-dict root branch (breaker.py:98-99)."""
+    from taskq import breaker as _br
+    bp = taskq_home / "breaker.json"
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text("[1, 2, 3]", encoding="utf-8")
+    assert _br.load_state() == {}
+
+
+def test_coverage_breaker_open_helper(taskq_home: Path) -> None:
+    """Cover breaker.open() helper (breaker.py:242-248)."""
+    from taskq import breaker as _br
+    _br.open()
+    state = json.loads((taskq_home / "breaker.json").read_text(encoding="utf-8"))
+    assert state["state"] == "OPEN"
+
+
+def test_coverage_breaker_reset_helper(taskq_home: Path) -> None:
+    """Cover breaker.reset() helper (breaker.py:251-254)."""
+    from taskq import breaker as _br
+    _br.reset()
+    state = json.loads((taskq_home / "breaker.json").read_text(encoding="utf-8"))
+    assert state["state"] == "CLOSED"
+    assert state["consecutive_failures"] == 0
+
+
+def test_coverage_cache_replay_wraps_get(taskq_home: Path) -> None:
+    """Cover cache.replay delegating to get (cache.py:158-165)."""
+    from taskq import cache as _cache
+    import time
+    _cache.put("echo wrap", {
+        "command": "echo wrap",
+        "exit_code": 0,
+        "stdout_tail": "x",
+        "stderr_tail": "",
+        "duration_ms": 1,
+        "finished_at": "2026-01-01T00:00:00Z",
+        "stored_at": time.time(),
+    })
+    hit = _cache.replay("echo wrap")
+    assert hit is not None
+    miss = _cache.replay("echo no-such-cmd")
+    assert miss is None
+
+
+def test_coverage_models_utc_now_iso() -> None:
+    """Cover models.utc_now_iso ISO format (models.py:27-29)."""
+    from taskq import models as _models
+    iso = _models.utc_now_iso()
+    assert iso.endswith("Z")
+    assert "T" in iso
+
+
+def test_coverage_models_new_task_id() -> None:
+    """Cover models.new_task_id 8-hex generation (models.py:22-24)."""
+    from taskq import models as _models
+    tid = _models.new_task_id()
+    assert len(tid) == 8
+    assert all(c in "0123456789abcdef" for c in tid)
+
+
+def test_coverage_models_to_dict_roundtrip() -> None:
+    """Cover models.Task.to_dict() / from_dict() (models.py:65-72)."""
+    from taskq import models as _models
+    t = _models.Task.new_pending(command="echo rt", name="rt-name")
+    d = t.to_dict()
+    assert d["id"] == t.id
+    t2 = _models.Task.from_dict(d)
+    assert t2.id == t.id
+    assert t2.command == "echo rt"
+
+
+def test_coverage_config_taskq_home_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover config.taskq_home default branch (config.py:21-22)."""
+    from taskq import config as _cfg
+    monkeypatch.delenv("TASKQ_HOME", raising=False)
+    home = _cfg.taskq_home()
+    assert str(home) == ".taskq"
+
+
+def test_coverage_config_paths(taskq_home: Path) -> None:
+    """Cover config.tasks_path / breaker_path / cache_path (config.py:25-37)."""
+    from taskq import config as _cfg
+    assert str(_cfg.tasks_path()).endswith("tasks.json")
+    assert str(_cfg.breaker_path()).endswith("breaker.json")
+    assert str(_cfg.cache_path()).endswith("cache.json")
+
+
+def test_coverage_executor_read_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover executor env-read fallbacks (executor.py:55-79)."""
+    monkeypatch.delenv("TASKQ_TASK_TIMEOUT", raising=False)
+    monkeypatch.delenv("TASKQ_RETRY_LIMIT", raising=False)
+    monkeypatch.delenv("TASKQ_BACKOFF_BASE", raising=False)
+    # Force reimport by reading via the function references.
+    assert executor._read_task_timeout() == 10.0
+    assert executor._read_retry_limit() == 0
+    assert executor._read_backoff_base() == 0.0
+
+
+def test_coverage_executor_read_env_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover executor env-read ValueError fallbacks (executor.py:60-79)."""
+    monkeypatch.setenv("TASKQ_TASK_TIMEOUT", "not-a-float")
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "not-an-int")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "not-a-float")
+    assert executor._read_task_timeout() == 10.0
+    assert executor._read_retry_limit() == 0
+    assert executor._read_backoff_base() == 0.0
+
+
+def test_coverage_executor_tail_helper() -> None:
+    """Cover executor._tail with None/empty/short (executor.py:82-86)."""
+    assert executor._tail(None) == ""
+    assert executor._tail("") == ""
+    assert executor._tail("abc") == "abc"
+
+
+def test_coverage_breaker_thresholds(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover breaker.threshold() and cooldown() getters (breaker.py:73-80)."""
+    from taskq import breaker as _br
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "7")
+    monkeypatch.setenv("TASKQ_BREAKER_COOLDOWN", "11.5")
+    _br.reload_config()
+    assert _br.threshold() == 7
+    assert _br.cooldown() == 11.5
+
+
+def test_coverage_breaker_record_failure_counter_below(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover breaker.record_failure counter below threshold (breaker.py:222-225)."""
+    from taskq import breaker as _br
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "10")
+    _br.reload_config()
+    (taskq_home / "breaker.json").write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+    result = _br.record_failure()
+    assert result == "CLOSED"
+    data = json.loads((taskq_home / "breaker.json").read_text(encoding="utf-8"))
+    assert data["consecutive_failures"] == 1
+    assert data["state"] == "CLOSED"
