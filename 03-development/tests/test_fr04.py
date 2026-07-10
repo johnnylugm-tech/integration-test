@@ -126,7 +126,7 @@ def _read_tasks(home: Path) -> list[dict]:
 
 _FR04_PARAMETRIZE = [
     # signature,                                                                                                                                                                                                            signature_len, cache_present, ttl_fresh, cached_outcome, ttl_expired, ttl_seconds, concurrent_writers, writers_completed, data_file_valid
-    ("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",                                                                                       "64",         "yes",         "yes",      "true",         None,        None,        None,              None,              None),           # 1 sha256_signature
+    ("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",                                                                                       "64",         None,          None,       None,           None,        None,        None,              None,              None),           # 1 sha256_signature
     (None,                                                                                                                                                                                                                  None,         "yes",         "yes",      "true",         None,        None,        None,              None,              None),           # 2 cache_replay_hit
     (None,                                                                                                                                                                                                                  None,         "yes",         None,      "false",        "yes",       None,        None,              None,              None),           # 3 cache_miss_expired
     (None,                                                                                                                                                                                                                  None,         "no",          None,      "false",        None,        "3600",      None,              None,              None),           # 4 cache_miss_absent
@@ -196,7 +196,7 @@ def test_fr04(
         # AC-FR04-cache-present-no : cache_present == "no" (case 4)
         assert cache_present == "no"
 
-    if writers_completed == concurrent_writers and concurrent_writers is not None:
+    if concurrent_writers == "4":
         # AC-FR04-concurrent-writers-match : writers_completed == concurrent_writers (case 5)
         assert writers_completed == concurrent_writers
 
