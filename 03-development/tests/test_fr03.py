@@ -23,8 +23,6 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
-
 from taskq import executor, store  # `breaker` intentionally not imported yet
 from taskq import breaker  # in-process unit tests
 
@@ -212,7 +210,6 @@ def test_fr03_open_rejects_exit3(tmp_path):
 def test_fr03_half_open_recovery(tmp_path):
     cooldown_elapsed = "yes"
     state = "HALF_OPEN"
-    probe_result = "success"
     next_state = "CLOSED"
     home = tmp_path / "taskq-home"
     task_id = "recover001"

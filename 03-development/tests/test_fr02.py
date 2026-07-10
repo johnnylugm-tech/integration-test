@@ -85,7 +85,7 @@ def test_fr02_status_transitions(tmp_path):
     }
     _write_tasks(home, tasks)
 
-    done_run = _run_taskq(home, "run", done_id, env_extra={"TASKQ_TASK_TIMEOUT": "1"})
+    _run_taskq(home, "run", done_id, env_extra={"TASKQ_TASK_TIMEOUT": "1"})  # noqa: F841  side-effecting: transitions task to done
     done_task = _load_tasks(home)[done_id]
     exit_code_str = "0"
     status = "done"
@@ -98,7 +98,7 @@ def test_fr02_status_transitions(tmp_path):
         assert finished_at_set == "yes"
         assert done_task["finished_at"]
 
-    fail_run = _run_taskq(home, "run", fail_id, env_extra={"TASKQ_TASK_TIMEOUT": "1"})
+    _run_taskq(home, "run", fail_id, env_extra={"TASKQ_TASK_TIMEOUT": "1"})  # noqa: F841  side-effecting: transitions task to failed
     fail_task = _load_tasks(home)[fail_id]
     exit_code_str = "1"
     status = "failed"
@@ -111,7 +111,7 @@ def test_fr02_status_transitions(tmp_path):
         assert finished_at_set == "yes"
         assert fail_task["finished_at"]
 
-    time_run = _run_taskq(home, "run", time_id, env_extra={"TASKQ_TASK_TIMEOUT": "1"})
+    _run_taskq(home, "run", time_id, env_extra={"TASKQ_TASK_TIMEOUT": "1"})  # noqa: F841  side-effecting: transitions task to timeout
     time_task = _load_tasks(home)[time_id]
     exit_code_str = "timeout"
     status = "timeout"

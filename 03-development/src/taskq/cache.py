@@ -14,7 +14,6 @@ import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import cast
 
 # Process-wide lock guarding the atomic tmp + os.replace sequence for
 # cache.json. FR-04 requires thread-safe writes concurrent with FR-02

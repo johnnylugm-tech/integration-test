@@ -1,9 +1,15 @@
-"""[FR-01/FR-02/FR-03] CLI dispatch: `submit` (FR-01), `run` (FR-02/FR-03).
+"""[FR-01/FR-02/FR-03/FR-05] CLI dispatch for the taskq command-line tool.
+
+[FR-05] `cli.main` is the argparse-style subcommand dispatcher that wires the
+five subcommands (`submit`/`run`/`status`/`list`/`clear`), the global `--json`
+flag and the exit-code matrix (0 ok / 2 input error / 3 breaker open /
+4 timeout / 1 internal error) — see SPEC.md §3 FR-05.
 
 Citations:
   - SPEC.md §3 FR-01 (FR-01: Task Submission and Validation)
   - SPEC.md §3 FR-02 (FR-02: Task Executor)
   - SPEC.md §3 FR-03 (FR-03: Retry and Circuit Breaker)
+  - SPEC.md §3 FR-05 (FR-05: CLI Integration)
   - NFR-02 (injection-char rejection) — SPEC.md §3 NFR-02
 """
 from __future__ import annotations
@@ -200,21 +206,82 @@ def _run_all(timeout: float, max_workers: int) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    """[FR-01/FR-02] CLI entry point. Returns the process exit code.
+def _status(task_id: str, json_mode: bool) -> int:
+    """[FR-05] Print every stored field of one task, or exit 2 if unknown.
 
-    Citations: SPEC.md §3 FR-01 / FR-02.
+    Citations: SPEC.md §3 FR-05 — `status <id>` outputs all task fields;
+    unknown task id maps to exit 2.
     """
-    if argv is None:
-        argv = sys.argv[1:]
+    home = _home()
+    tasks = _load_tasks(home)
+    if task_id not in tasks:
+        print(f"error: unknown task: {task_id}", file=sys.stderr)
+        return 2
+    task = tasks[task_id]
+    if json_mode:
+        sys.stdout.write(json.dumps(task) + "\n")
+    else:
+        for key, value in task.items():
+            sys.stdout.write(f"{key}: {value}\n")
+    sys.stdout.flush()
+    return 0
 
-    json_mode = False
-    if argv and argv[0] == "--json":
-        json_mode = True
-        argv = argv[1:]
 
+def _list(status_filter: str | None, json_mode: bool) -> int:
+    """[FR-05] List tasks, optionally filtered by `--status`.
+
+    Citations: SPEC.md §3 FR-05 — `list [--status S]`.
+    """
+    home = _home()
+    tasks = _load_tasks(home)
+    rows = [
+        task
+        for task in tasks.values()
+        if status_filter is None or task.get("status") == status_filter
+    ]
+    if json_mode:
+        sys.stdout.write(json.dumps(rows) + "\n")
+    else:
+        for task in rows:
+            sys.stdout.write(
+                f"{task.get('id')}\t{task.get('status')}\t{task.get('command')}\n"
+            )
+    sys.stdout.flush()
+    return 0
+
+
+def _clear(json_mode: bool) -> int:
+    """[FR-05] Delete every taskq data file under $TASKQ_HOME.
+
+    Removes `tasks.json`, `breaker.json` and `cache.json` (each if
+    present). Citations: SPEC.md §3 FR-05 — `clear` 清空 $TASKQ_HOME 全部資料檔.
+    """
+    home = _home()
+    cleared = []
+    for name in ("tasks.json", "breaker.json", "cache.json"):
+        path = home / name
+        if path.exists():
+            path.unlink()
+        cleared.append(name)
+    if json_mode:
+        sys.stdout.write(json.dumps({"cleared": cleared}) + "\n")
+    else:
+        sys.stdout.write("cleared: " + ", ".join(cleared) + "\n")
+    sys.stdout.flush()
+    return 0
+
+
+def _dispatch(argv: list[str], json_mode: bool) -> int:
+    """[FR-05] Route a normalised argv to its subcommand handler.
+
+    Citations: SPEC.md §3 FR-05 — subcommand dispatch table.
+    """
     if not argv:
-        print("error: missing subcommand (expected `submit` or `run`)", file=sys.stderr)
+        print(
+            "error: missing subcommand "
+            "(expected `submit`/`run`/`status`/`list`/`clear`)",
+            file=sys.stderr,
+        )
         return 2
 
     if argv[0] == "submit":
@@ -234,5 +301,46 @@ def main(argv: list[str] | None = None) -> int:
             return _run_all(timeout, max_workers)
         return _run_single(argv[1], timeout)
 
+    if argv[0] == "status":
+        if len(argv) < 2:
+            print("error: `status` requires a task id", file=sys.stderr)
+            return 2
+        return _status(argv[1], json_mode)
+
+    if argv[0] == "list":
+        status_filter: str | None = None
+        if "--status" in argv:
+            idx = argv.index("--status")
+            if idx + 1 < len(argv):
+                status_filter = argv[idx + 1]
+        return _list(status_filter, json_mode)
+
+    if argv[0] == "clear":
+        return _clear(json_mode)
+
     print(f"error: unsupported command: {argv[0]!r}", file=sys.stderr)
     return 2
+
+
+def main(argv: list[str] | None = None) -> int:
+    """[FR-05] CLI entry point. Returns the process exit code.
+
+    Strips the global `--json` flag (accepted anywhere in argv) then
+    dispatches the subcommand. Any unexpected exception is mapped to
+    exit code 1 (internal error) per the SPEC.md §3 FR-05 exit-code
+    matrix (0 ok / 2 input error / 3 breaker open / 4 timeout / 1 other).
+
+    Citations: SPEC.md §3 FR-05.
+    """
+    if argv is None:
+        argv = sys.argv[1:]
+
+    json_mode = "--json" in argv
+    if json_mode:
+        argv = [tok for tok in argv if tok != "--json"]
+
+    try:
+        return _dispatch(argv, json_mode)
+    except Exception as exc:  # noqa: BLE001 — FR-05 exit-code 1 catch-all
+        print(f"error: internal error: {exc}", file=sys.stderr)
+        return 1

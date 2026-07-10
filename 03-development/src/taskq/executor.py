@@ -1,5 +1,8 @@
 """[FR-02/FR-03] Task executor — subprocess runner + retries + breaker-aware fan-out.
 
+[NFR-04] ``_redact`` masks any ``sk-...`` / ``token=...`` substrings in captured
+stdout/stderr before they reach the cache layer so secrets never persist on disk.
+
 Citations:
   - SPEC.md §3 FR-02 (line 74-83) — task executor
   - SPEC.md §3 FR-03 (line 84-100) — retry + circuit breaker
@@ -7,6 +10,7 @@ Citations:
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 import threading
@@ -24,6 +28,19 @@ _TAIL_LEN = 2000
 def _now_iso() -> str:
     """[FR-02] UTC ISO-8601 timestamp string for finished_at."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+_REDACT_PATTERNS = (
+    re.compile(r"sk-[A-Za-z0-9_-]{8,}"),
+    re.compile(r"token=\S+"),
+)
+
+
+def _redact(text: str) -> str:
+    """[NFR-04] Replace secret-like substrings with ``[REDACTED]``."""
+    for pat in _REDACT_PATTERNS:
+        text = pat.sub("[REDACTED]", text)
+    return text
 
 
 def _run_subprocess(
@@ -59,11 +76,11 @@ def _run_subprocess(
             if isinstance(stderr_raw, bytes)
             else (stderr_raw or "")
         )[-_TAIL_LEN:]
-        return None, stdout_tail, stderr_tail, duration_ms, "timeout"
+        return None, _redact(stdout_tail), _redact(stderr_tail), duration_ms, "timeout"
 
     duration_ms = (time.perf_counter() - started) * 1000
-    stdout_tail = (proc.stdout or "")[-_TAIL_LEN:]
-    stderr_tail = (proc.stderr or "")[-_TAIL_LEN:]
+    stdout_tail = _redact((proc.stdout or "")[-_TAIL_LEN:])
+    stderr_tail = _redact((proc.stderr or "")[-_TAIL_LEN:])
     status = "done" if proc.returncode == 0 else "failed"
     return proc.returncode, stdout_tail, stderr_tail, duration_ms, status
 

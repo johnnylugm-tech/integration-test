@@ -47,7 +47,7 @@ def _parse_iso(s: str) -> datetime:
 
 
 class Breaker:
-    """Circuit breaker state holder.
+    """[FR-03] Circuit breaker state holder.
 
     Attributes:
         state: one of ``CLOSED``, ``OPEN``, ``HALF_OPEN``.
@@ -80,7 +80,7 @@ class Breaker:
         self.cooldown: float = cooldown
 
     def record_failure(self) -> None:
-        """Record one final failure. Opens the breaker at threshold or
+        """[FR-03] Record one final failure. Opens the breaker at threshold or
         after a ``HALF_OPEN`` probe failure.
         """
         self.failure_count += 1
@@ -94,7 +94,7 @@ class Breaker:
             self.opened_at = _now_iso()
 
     def record_success(self) -> None:
-        """Record a successful run. Closes the breaker and resets the
+        """[FR-03] Record a successful run. Closes the breaker and resets the
         consecutive-failure counter.
         """
         self.state = STATE_CLOSED
@@ -102,7 +102,7 @@ class Breaker:
         self.opened_at = None
 
     def try_acquire(self) -> bool:
-        """Ask permission to run. Returns ``True`` to admit, ``False``
+        """[FR-03] Ask permission to run. Returns ``True`` to admit, ``False``
         to reject.
 
         Transitions performed in place:

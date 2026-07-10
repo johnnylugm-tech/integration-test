@@ -20,7 +20,7 @@ _HOME: Path | None = None
 
 
 def home() -> Path:
-    """Return TASKQ_HOME, memoised for the life of the process."""
+    """[FR-01] Return TASKQ_HOME, memoised for the life of the process."""
     global _HOME
     if _HOME is None:
         _HOME = Path(os.environ["TASKQ_HOME"])

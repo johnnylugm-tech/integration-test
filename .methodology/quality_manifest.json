@@ -42,14 +42,32 @@
         "score": 86.0
       },
       "FR-04": {
-        "score": 97.08,
+        "open_critical": 0,
+        "open_high": 0,
         "quality_complete": true,
         "rounds_used": 2,
+        "score": 97.08
+      },
+      "FR-05": {
+        "coverage_fallback": "inline-fallback@8abe4f9",
         "open_critical": 0,
-        "open_high": 0
+        "open_high": 0,
+        "quality_complete": true,
+        "rounds_used": 1,
+        "score": 80.0
       }
     },
-    "gate2": null,
+    "gate2": {
+      "score": 95.5,
+      "quality_complete": true,
+      "rounds_used": 2,
+      "open_critical": 0,
+      "open_high": 0,
+      "phase": 3,
+      "gate": 2,
+      "fr_scope": "all",
+      "overall_score": 95.5
+    },
     "gate3": null,
     "gate4": null
   },

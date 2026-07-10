@@ -3,7 +3,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -168,7 +168,6 @@ def test_fr01_duplicate_name_running_exit2(tmp_path: Path) -> None:
     """Extra coverage: --name collision with an existing RUNNING task is also rejected."""
     home = tmp_path / "taskq-home"
     command = "echo hi"
-    existing_name = "dup"
     new_name = "dup"
 
     _seed_task(home, task_id="87654321", name="dup", status="running")

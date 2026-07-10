@@ -1,6 +1,5 @@
 """Run FR-03 coverage via subprocess, output to file."""
 import subprocess
-import sys
 
 result = subprocess.run(
     [".venv/bin/pytest", "03-development/tests/test_fr03.py",

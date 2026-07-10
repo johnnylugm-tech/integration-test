@@ -27,8 +27,6 @@ import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
-
 # `taskq.cache` does not exist yet → this import will raise
 # ModuleNotFoundError at collection time. That is the desired RED signal.
 from taskq import cache, executor, store
