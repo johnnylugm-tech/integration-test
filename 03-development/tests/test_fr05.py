@@ -627,9 +627,13 @@ def _inject_fr05_mirror_vars(request: pytest.FixtureRequest):
 # ---------------------------------------------------------------------------
 
 
-def test_coverage_main_no_argv(taskq_home: Path) -> None:
+def test_coverage_main_no_argv(taskq_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Cover cli.main() with argv=None branch (cli.py:425-426)."""
     import io as _i
+    # cli.main(argv=None) falls through to parser.parse_args() which reads
+    # sys.argv; pytest's own argv is polluted with the test path, so we must
+    # scrub it for this branch to behave like a real interactive invocation.
+    monkeypatch.setattr("sys.argv", ["taskq"])
     with redirect_stdout(_i.StringIO()), redirect_stderr(_i.StringIO()):
         rc = cli.main(argv=None)
     assert rc == 2  # no subcommand → exit 2 + help on stderr
@@ -637,7 +641,6 @@ def test_coverage_main_no_argv(taskq_home: Path) -> None:
 
 def test_coverage_run_all_pending(taskq_home: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
     """Cover cli._cmd_run --all branch (cli.py:249-266) including json output."""
-    from taskq import models as _models
     monkeypatch.setenv("TASKQ_MAX_WORKERS", "2")
     monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
     # Seed two pending tasks directly into the store.

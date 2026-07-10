@@ -34,7 +34,6 @@ from __future__ import annotations
 import hashlib
 import io as _io
 import json
-import os
 import subprocess
 import threading
 import time
@@ -467,8 +466,8 @@ def test_fr04_cache_atomic_thread_safe(
     # distinct signatures so all N keys should be present unless one overwrote
     # another — but the file MUST remain parseable JSON regardless).
     assert len(parsed) >= 1, (
-        f"cache.json must contain at least one entry after concurrent writes; "
-        f"got 0 entries"
+        "cache.json must contain at least one entry after concurrent writes; "
+        "got 0 entries"
     )
 
 
