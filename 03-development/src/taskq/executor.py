@@ -1,16 +1,20 @@
-"""[FR-02] Task executor — subprocess runner + concurrent fan-out.
+"""[FR-02/FR-03] Task executor — subprocess runner + retries + breaker-aware fan-out.
 
-Citations: SPEC.md §3 FR-02 (line 74-83).
+Citations:
+  - SPEC.md §3 FR-02 (line 74-83) — task executor
+  - SPEC.md §3 FR-03 (line 84-100) — retry + circuit breaker
 """
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from taskq import store
+from taskq import breaker, store
 
 # SPEC.md §3 FR-02 — stdout/stderr 末 2000 字元.
 _TAIL_LEN = 2000
@@ -52,15 +56,44 @@ def _run_subprocess(
 
 
 def execute_task(task_id: str, command: str, timeout: float) -> str:
-    """[FR-02] Run one task to completion and persist the result.
+    """[FR-02/FR-03] Run one task to completion with retry.
 
-    The task transitions pending → running → done|failed|timeout.
+    Transitions pending → running → done|failed|timeout. On
+    ``failed``/``timeout`` the task is retried up to
+    ``TASKQ_RETRY_LIMIT`` times with exponential backoff
+    ``TASKQ_BACKOFF_BASE * 2**n`` between attempts (``n`` is the
+    zero-based retry index). The sleeper is injectable via
+    ``executor.time.sleep`` so tests do not actually wait.
+
+    Citations:
+      - SPEC.md §3 FR-02 — pending → running → done|failed|timeout
+      - SPEC.md §3 FR-03 — retry with exponential backoff
+
     Returns the final status string.
     """
     store.update_task(task_id, status="running")
-    exit_code, stdout_tail, stderr_tail, duration_ms, status = _run_subprocess(
-        command, timeout
-    )
+
+    limit = int(os.environ.get("TASKQ_RETRY_LIMIT", "0"))
+    base = float(os.environ.get("TASKQ_BACKOFF_BASE", "1.0"))
+
+    exit_code: int | None = None
+    stdout_tail = ""
+    stderr_tail = ""
+    duration_ms = 0.0
+    status = "failed"
+
+    retries = 0
+    while True:
+        exit_code, stdout_tail, stderr_tail, duration_ms, status = _run_subprocess(
+            command, timeout
+        )
+        if status == "done":
+            break
+        if retries >= limit:
+            break
+        time.sleep(base * (2 ** retries))
+        retries += 1
+
     store.update_task(
         task_id,
         status=status,
@@ -74,11 +107,25 @@ def execute_task(task_id: str, command: str, timeout: float) -> str:
 
 
 def run_all(timeout: float, max_workers: int) -> dict[str, str]:
-    """[FR-02] Concurrently execute every pending task.
+    """[FR-02/FR-03] Concurrently execute every pending task under breaker supervision.
 
-    Uses ThreadPoolExecutor(max_workers=max_workers) as required by
-    AC-FR-02-4. Returns {task_id: final_status} for everything attempted.
+    Uses ``ThreadPoolExecutor(max_workers=max_workers)`` so concurrent
+    workers do not serialise wall-clock time (AC-FR-02-4). The breaker
+    state is shared across worker threads via a single ``Breaker``
+    instance and a ``bp_lock``; mutations and atomic file saves are
+    serialised by that lock. Workers whose ``try_acquire`` returns
+    ``False`` (breaker open) are skipped.
+
+    Returns ``{task_id: final_status}`` for tasks that were actually
+    attempted; tasks skipped by an open breaker are omitted.
+
+    Citations:
+      - SPEC.md §3 FR-02 — concurrent fan-out
+      - SPEC.md §3 FR-03 — circuit breaker supervision
     """
+    home = store.home()
+    breaker_path = home / "breaker.json"
+
     tasks = store.load_tasks()
     pending = [
         (tid, t["command"])
@@ -88,10 +135,30 @@ def run_all(timeout: float, max_workers: int) -> dict[str, str]:
     results: dict[str, str] = {}
     if not pending:
         return results
+
+    bp = breaker.load(breaker_path)
+    bp_lock = threading.Lock()
+
+    def _run_one(tid: str, cmd: str) -> str | None:
+        with bp_lock:
+            if not bp.try_acquire():
+                return None  # breaker open → skip this task
+            breaker.save(breaker_path, bp)
+        status = execute_task(tid, cmd, timeout)
+        with bp_lock:
+            if status == "done":
+                bp.record_success()
+            else:
+                bp.record_failure()
+            breaker.save(breaker_path, bp)
+        return status
+
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
-            tid: pool.submit(execute_task, tid, cmd, timeout) for tid, cmd in pending
+            tid: pool.submit(_run_one, tid, cmd) for tid, cmd in pending
         }
         for tid, fut in futures.items():
-            results[tid] = fut.result()
+            r = fut.result()
+            if r is not None:
+                results[tid] = r
     return results

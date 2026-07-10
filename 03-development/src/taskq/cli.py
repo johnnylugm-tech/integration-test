@@ -1,8 +1,9 @@
-"""[FR-01/FR-02] CLI dispatch: `submit` (FR-01) and `run` (FR-02).
+"""[FR-01/FR-02/FR-03] CLI dispatch: `submit` (FR-01), `run` (FR-02/FR-03).
 
 Citations:
   - SPEC.md §3 FR-01 (FR-01: Task Submission and Validation)
   - SPEC.md §3 FR-02 (FR-02: Task Executor)
+  - SPEC.md §3 FR-03 (FR-03: Retry and Circuit Breaker)
   - NFR-02 (injection-char rejection) — SPEC.md §3 NFR-02
 """
 from __future__ import annotations
@@ -143,23 +144,55 @@ def _parse_submit_args(submit_args: list[str]) -> tuple[str, str | None] | int:
 
 
 def _run_single(task_id: str, timeout: float) -> int:
-    """[FR-02] Dispatch a single-task `run <id>` invocation.
+    """[FR-02/FR-03] Dispatch a single-task `run <id>` invocation under breaker.
 
-    Returns the process exit code (timeout → 4, else 0).
+    Consults the breaker first: an ``OPEN`` breaker with cooldown not
+    yet elapsed rejects with exit ``3`` and a ``breaker open`` stderr
+    line, leaving the task in ``pending`` (no subprocess is run). When
+    the cooldown has elapsed the breaker transitions to ``HALF_OPEN``
+    and the task is admitted as a probe; the outcome is then recorded
+    back to the breaker (``record_success`` → ``CLOSED``,
+    ``record_failure`` → stays or becomes ``OPEN``).
+
+    Returns the process exit code (breaker open → 3, timeout → 4,
+    missing task → 2, else 0).
     """
-    from taskq import store
+    from taskq import breaker, store
     from taskq.executor import execute_task
+
+    home = store.home()
+    breaker_path = home / "breaker.json"
+    bp = breaker.load(breaker_path)
+
+    if not bp.try_acquire():
+        print("breaker open", file=sys.stderr)
+        return 3
+    # Persist any state transition (e.g. OPEN → HALF_OPEN) before the run.
+    breaker.save(breaker_path, bp)
 
     tasks = store.load_tasks()
     if task_id not in tasks:
         print(f"error: unknown task: {task_id}", file=sys.stderr)
         return 2
+
     status = execute_task(task_id, tasks[task_id]["command"], timeout)
+
+    if status == "done":
+        bp.record_success()
+    else:
+        bp.record_failure()
+    breaker.save(breaker_path, bp)
+
     return 4 if status == "timeout" else 0
 
 
 def _run_all(timeout: float, max_workers: int) -> int:
-    """[FR-02] Dispatch a `run --all` invocation."""
+    """[FR-02/FR-03] Dispatch a `run --all` invocation.
+
+    Breaker supervision happens inside ``executor.run_all`` (one
+    shared ``Breaker`` + ``bp_lock`` across worker threads). This
+    wrapper just delegates and returns 0.
+    """
     from taskq.executor import run_all
 
     run_all(timeout=timeout, max_workers=max_workers)
