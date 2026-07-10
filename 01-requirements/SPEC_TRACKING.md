@@ -37,11 +37,11 @@ All rows below are `BASELINED` as of this tracking round — Phase 2
 
 | FR ID | Title | Owning Module(s) | AC Count | Status | SRS Section |
 |---|---|---|---|---|---|
-| FR-01 | Task Submission and Validation | `store.py`, `cli.py` | 6 | BASELINED | SRS.md §3 FR-01 |
-| FR-02 | Task Executor | `executor.py` (high-risk), `store.py` (high-risk) | 5 | BASELINED | SRS.md §3 FR-02 |
-| FR-03 | Retry and Circuit Breaker | `breaker.py`, `executor.py` (high-risk) | 5 | BASELINED | SRS.md §3 FR-03 |
-| FR-04 | Result TTL Cache | `cache.py` | 4 | BASELINED | SRS.md §3 FR-04 |
-| FR-05 | CLI Integration | `cli.py` | 7 | BASELINED | SRS.md §3 FR-05 |
+| FR-01 | Task Submission and Validation | `store.py`, `cli.py` | 6 | ✅ Done | SRS.md §3 FR-01 |
+| FR-02 | Task Executor | `executor.py` (high-risk), `store.py` (high-risk) | 5 | ✅ Done | SRS.md §3 FR-02 |
+| FR-03 | Retry and Circuit Breaker | `breaker.py`, `executor.py` (high-risk) | 5 | ✅ Done | SRS.md §3 FR-03 |
+| FR-04 | Result TTL Cache | `cache.py` | 4 | ✅ Done | SRS.md §3 FR-04 |
+| FR-05 | CLI Integration | `cli.py` | 7 | ✅ Done | SRS.md §3 FR-05 |
 
 ---
 
@@ -49,12 +49,12 @@ All rows below are `BASELINED` as of this tracking round — Phase 2
 
 | NFR ID | Title | Owning Module(s) | AC Count | Status | SRS Section |
 |---|---|---|---|---|---|
-| NFR-01 | Performance (submit+status p95 < 50ms) | `store.py`, `cli.py` | 1 | BASELINED | SRS.md §4 NFR-01 |
-| NFR-02 | Security — no `shell=True`, injection blacklist | `executor.py` | 2 | BASELINED | SRS.md §4 NFR-02 |
-| NFR-03 | Reliability — atomic writes, breaker recovery time | `store.py`, `breaker.py`, `cache.py` | 2 | BASELINED | SRS.md §4 NFR-03 |
-| NFR-04 | Security — secret redaction | `executor.py` | 1 | BASELINED | SRS.md §4 NFR-04 |
-| NFR-05 | Maintainability — docstring `[FR-XX]` coverage | all `src/taskq/*` | 1 | BASELINED | SRS.md §4 NFR-05 |
-| NFR-06 | Deployability — env var completeness | `config.py` | 2 | BASELINED | SRS.md §4 NFR-06 |
+| NFR-01 | Performance (submit+status p95 < 50ms) | `store.py`, `cli.py` | 1 | ✅ Done | SRS.md §4 NFR-01 |
+| NFR-02 | Security — no `shell=True`, injection blacklist | `executor.py` | 2 | ✅ Done | SRS.md §4 NFR-02 |
+| NFR-03 | Reliability — atomic writes, breaker recovery time | `store.py`, `breaker.py`, `cache.py` | 2 | ✅ Done | SRS.md §4 NFR-03 |
+| NFR-04 | Security — secret redaction | `executor.py` | 1 | ✅ Done | SRS.md §4 NFR-04 |
+| NFR-05 | Maintainability — docstring `[FR-XX]` coverage | all `src/taskq/*` | 1 | ✅ Done | SRS.md §4 NFR-05 |
+| NFR-06 | Deployability — env var completeness | `config.py` | 2 | ✅ Done | SRS.md §4 NFR-06 |
 
 ---
 
