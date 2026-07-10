@@ -340,6 +340,7 @@ for (const frId of frIds) {
     gate1Pass.push(frId)
   } else {
         log('  === ' + frId + ' (' + (frTitle[frId] || '') + ') — TDD chain ===')
+    const frNum = frId.match(/\d+/)[0].padStart(2, '0')
     const frReport = await agent(
       'YOU ARE THE IMPLEMENTER for ' + frId + ' (' + (frTitle[frId] || '') + '). Run the full TDD chain for THIS ONE FR.\n'
       + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
@@ -364,7 +365,7 @@ for (const frId of frIds) {
       + '6. ORCH-POST (after GATE1 PASS, per phase3_plan.md [ORCH-POST]):\n'
       + '   a. `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 40.0 --fr-id ' + frId + '` (per-FR D4 ≥40%). FAIL → add the missing test implementations for ' + frId + ', re-run.\n'
       + '   b. `' + PY + ' ' + REPO + '/harness/scripts/generate_sab.py --project ' + REPO + ' --overwrite` (regenerate SAB.json).\n\n'
-      + 'Implement the module per SPEC.md (read ' + REPO + '/SPEC.md for ' + frId + ') + SAD.md module mapping. Write source under the project\'s `src/` tree as specified in SAD §2 (do not assume a fixed project layout — read SAD §2 for the module path; e.g. for the canonical `03-development/src/<module>/` layout, use that; otherwise follow whatever SAD §2 specifies). Tests under `tests/` per project layout. Docstrings must include [' + frId + '] reference (NFR-05).\n\n'
+      + 'Implement the module per SPEC.md (read ' + REPO + '/SPEC.md for ' + frId + ') + SAD.md module mapping. Write source under the project\'s `src/` tree as specified in SAD §2 (do not assume a fixed project layout — read SAD §2 for the module path; e.g. for the canonical `03-development/src/<module>/` layout, use that; otherwise follow whatever SAD §2 specifies). Tests under `tests/` per project layout. All tests for ' + frId + ' MUST live in the single canonical file `tests/test_fr' + frNum + '.py` — this is the only filename the harness coverage/RED-check/GATE1-DELTA diff tooling recognizes. Do not create satellite files like `test_fr' + frNum + '_unit.py`; add more test functions to the one file instead. Docstrings must include [' + frId + '] reference (NFR-05).\n\n'
       + 'Report final line: "' + frId + ' GATE1: PASS" or "' + frId + ' GATE1: FAIL — <reason>".\n\n'
       + 'SCOPE RULES:\n- DO NOT implement any FR OTHER than ' + frId + '.\n- DO NOT run run-gate (Gate 2), advance-phase, or push-milestone.\n- DO NOT edit .methodology/quality_manifest.json or .sessi-work/gate1_result.json to fake/reset scores — fix the underlying code/tests instead.\n- DO NOT modify harness/ (HR-17).\n- ONLY the 6 steps above for ' + frId + ' (spec-coverage-check + generate_sab.py in step 6 are allowed).',
       { label: 'tdd-' + frId, phase: 'Per-FR TDD', agentType: 'general-purpose' },
