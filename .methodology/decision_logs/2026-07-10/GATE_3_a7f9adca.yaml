@@ -1,0 +1,11 @@
+ctx:
+  agent_id: GATE
+  phase: 3
+  fr_id: FR-01
+  trace_id: ebe3515c
+  timestamp: '2026-07-10T10:05:47.765249+00:00'
+decision: GATE_BLOCK
+reasoning: 'Gate 1: score=66.0, critical=0, high=0'
+scores:
+  gate_score: 66.0
+metadata: {}
