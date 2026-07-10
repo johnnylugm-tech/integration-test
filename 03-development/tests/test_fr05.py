@@ -559,6 +559,210 @@ def test_fr05(
 
 
 # ===========================================================================
+# FR-05 canonical test functions (TEST_SPEC.md §FR-05 Test Functions).
+# ===========================================================================
+# spec-coverage-check matches these exact names against TEST_SPEC rows. The
+# canonical names also help downstream ID-tagging in P4 and beyond.
+
+
+def test_fr05_subcommands_registered() -> None:
+    """build_parser registers 5 subcommands (submit/run/status/list/clear)."""
+    parser = cli.build_parser()  # type: ignore[attr-defined]
+    names = sorted(parser.subparsers.choices.keys())  # type: ignore[attr-defined]
+    assert names == ["clear", "list", "run", "status", "submit"]
+    assert len(names) == 5
+
+
+def test_fr05_status_all_fields(tmp_path, monkeypatch, capsys) -> None:
+    """status <id> emits the canonical 9-field projection."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    task_id = "abcdef01"
+    (tmp_path / "tasks.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": task_id,
+                    "name": None,
+                    "command": "echo fields",
+                    "status": "done",
+                    "created_at": "2026-07-11T00:00:00Z",
+                    "exit_code": 0,
+                    "stdout_tail": "fields",
+                    "stderr_tail": "",
+                    "duration_ms": 11,
+                    "finished_at": "2026-07-11T00:00:01Z",
+                    "cached": False,
+                }
+            ]
+        )
+    )
+    rc = cli.status_cmd(task_id, json_mode=True)  # type: ignore[attr-defined]
+    out = capsys.readouterr().out.strip()
+    assert rc == 0
+    payload = json.loads(out)
+    assert set(payload.keys()) == {
+        "id",
+        "command",
+        "status",
+        "exit_code",
+        "stdout_tail",
+        "stderr_tail",
+        "duration_ms",
+        "finished_at",
+        "cached",
+    }
+
+
+def test_fr05_list_filter_by_status(tmp_path, monkeypatch, capsys) -> None:
+    """list --status done filters persisted tasks."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    (tmp_path / "tasks.json").write_text(
+        json.dumps(
+            [
+                {"id": "1", "status": "done", "command": "x"},
+                {"id": "2", "status": "pending", "command": "y"},
+            ]
+        )
+    )
+    rc = cli.list_cmd(filter_status="done", json_mode=True)  # type: ignore[attr-defined]
+    out = capsys.readouterr().out.strip()
+    assert rc == 0
+    payload = json.loads(out)
+    assert len(payload) == 1 and payload[0]["status"] == "done"
+
+
+def test_fr05_clear_all_data_files(tmp_path, monkeypatch, capsys) -> None:
+    """clear deletes tasks.json + breaker.json + cache.json atomically."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    (tmp_path / "tasks.json").write_text(json.dumps([{"id": "x"}]))
+    (tmp_path / "breaker.json").write_text(json.dumps({"state": "CLOSED"}))
+    (tmp_path / "cache.json").write_text(json.dumps([]))
+    rc = cli.clear_cmd(json_mode=True)  # type: ignore[attr-defined]
+    out = capsys.readouterr().out.strip()
+    assert rc == 0
+    payload = json.loads(out)
+    assert set(payload.get("cleared", [])) == {
+        "tasks.json",
+        "breaker.json",
+        "cache.json",
+    }
+
+
+def test_fr05_global_json_flag(tmp_path, monkeypatch, capsys) -> None:
+    """--json emits a single-line JSON document for submit."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    rc = cli.submit_cmd("echo json", None, json_mode=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    non_empty = [ln for ln in out.splitlines() if ln.strip()]
+    assert len(non_empty) == 1
+    payload = json.loads(non_empty[0])
+    assert payload.get("status") == "pending"
+    assert "id" in payload
+
+
+def test_fr05_exit_code_matrix(tmp_path, monkeypatch, capsys) -> None:
+    """Exit codes 0/2/3/4/1 map precisely (success/unknown/breaker/timeout/internal)."""
+    from taskq import executor as exec_mod
+
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+
+    # 0 — success
+    rc = cli.submit_cmd("echo matrix", None, json_mode=False)
+    assert rc == 0, f"success must exit 0, got {rc}"
+
+    # 2 — unknown task id (run + status)
+    rc = cli.run_cmd(
+        task_id="ffffffff", all_mode=False, cached=False, json_mode=False
+    )
+    assert rc == 2, f"unknown id must exit 2, got {rc}"
+    rc = cli.status_cmd("ffffffff", json_mode=False)
+    assert rc == 2, f"status unknown must exit 2, got {rc}"
+
+    # 3 — breaker OPEN
+    (tmp_path / "breaker.json").write_text(
+        json.dumps(
+            {
+                "state": "OPEN",
+                "consecutive_failures": 9,
+                "opened_at": "2026-07-11T00:00:00Z",
+            }
+        )
+    )
+    (tmp_path / "tasks.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "7fffffff",
+                    "status": "pending",
+                    "command": "echo x",
+                    "created_at": "2026-07-11T00:00:00Z",
+                }
+            ]
+        )
+    )
+    rc = cli.run_cmd(
+        task_id="7fffffff", all_mode=False, cached=False, json_mode=False
+    )
+    assert rc == 3, f"breaker-open must exit 3, got {rc}"
+    assert "breaker open" in capsys.readouterr().err
+
+    # 4 — single task timeout
+    (tmp_path / "tasks.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "deadbeef",
+                    "status": "pending",
+                    "command": "echo x",
+                    "created_at": "2026-07-11T00:00:00Z",
+                }
+            ]
+        )
+    )
+
+    def _fake_timeout(_task):
+        return {
+            "status": "timeout",
+            "exit_code": None,
+            "stdout_tail": "",
+            "stderr_tail": "",
+            "duration_ms": 10000,
+            "finished_at": "2026-07-11T00:00:10Z",
+            "cached": False,
+        }
+
+    monkeypatch.setattr(exec_mod, "run_task", _fake_timeout)
+    rc = cli.run_cmd(
+        task_id="deadbeef", all_mode=False, cached=False, json_mode=False
+    )
+    assert rc == 4, f"single-task timeout must exit 4, got {rc}"
+
+    # 1 — internal error funnel
+    def _explode(*_a, **_kw):
+        raise RuntimeError("forced")
+
+    monkeypatch.setattr(cli, "list_cmd", _explode)
+    rc = cli.run_cli(["taskq", "list"])
+    assert rc == 1, f"internal error must exit 1, got {rc}"
+
+
+def test_fr05_unknown_id_exit2(tmp_path, monkeypatch, capsys) -> None:
+    """unknown task id ⇒ exit 2 + stderr echoes the id (run + status)."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    rc = cli.run_cmd(
+        task_id="01234567", all_mode=False, cached=False, json_mode=False
+    )
+    out_err = capsys.readouterr()
+    assert rc == 2
+    assert "01234567" in out_err.err
+    rc2 = cli.status_cmd("01234567", json_mode=False)
+    out_err2 = capsys.readouterr()
+    assert rc2 == 2
+    assert "01234567" in out_err2.err
+
+
+# ===========================================================================
 # FR-05 coverage-fix additions.
 # ===========================================================================
 # The canonical parametrized test above exercises the 7 TEST_SPEC cases

@@ -36,8 +36,8 @@ from .store import TaskStore
 # Maximum allowed command length per SPEC Sec.3 FR-01 (length rule).
 MAX_COMMAND_LEN = 1000
 
-# Shell-injection characters rejected per NFR-02.
-_INJECTION_CHARS = set(";|$>\`<")
+# Shell-injection characters rejected per NFR-02 (SPEC §3 FR-01 注入字元表).
+_INJECTION_CHARS = set(";|&$><`")
 
 # Statuses whose "name" collides with new submissions per SPEC Sec.3 FR-01
 # (name uniqueness rule).
@@ -443,8 +443,10 @@ def run_cli(argv: list[str]) -> int:
         if sub == "clear":
             return clear_cmd(json_mode)
     except Exception as exc:  # pragma: no cover -- defensive funnel
-        # FR-05: any unexpected error path surfaces exit 1.
-        print(f"internal error: {exc}", file=sys.stderr)
+        # FR-05: any unexpected error path surfaces exit 1; emit the
+        # exception class name (not just the message) so callers can
+        # distinguish it from a validation-rule stderr line.
+        print(f"internal error: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
     # No subcommand provided.
