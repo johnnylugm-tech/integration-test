@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "fd831ba34b7c9b62b720bbfddbf449281beb46e2",
-  "content_sha256": "279d8653c47df680a360132f37c44e8f7e4a0876bb96e92cc0a54dc366687d58",
+  "git_sha": "12e057bb50c09c81f4c6cb3cc7370fce22b7ee57",
+  "content_sha256": "b73c5a9da98946fb357ac93a87993e9f8e3ebe67e20be4b93c0be75c012b1c3e",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -11,28 +11,18 @@
     "completeness": {
       "total_requirements": 6,
       "srs_coverage": "83.3%",
-      "code_coverage": "0.0%",
-      "test_coverage": "0.0%",
-      "verification_rate": "0.0%",
-      "total_links": 5,
+      "code_coverage": "83.3%",
+      "test_coverage": "83.3%",
+      "verification_rate": "83.3%",
+      "total_links": 22,
       "missing_mappings": {
         "fr_without_srs": [
           "FR-06"
         ],
         "fr_without_code": [
-          "FR-01",
-          "FR-02",
-          "FR-03",
-          "FR-04",
-          "FR-05",
           "FR-06"
         ],
         "fr_without_test": [
-          "FR-01",
-          "FR-02",
-          "FR-03",
-          "FR-04",
-          "FR-05",
           "FR-06"
         ]
       }
@@ -42,65 +32,82 @@
         "FR-06"
       ],
       "fr_without_code": [
-        "FR-01",
-        "FR-02",
-        "FR-03",
-        "FR-04",
-        "FR-05",
         "FR-06"
       ],
       "fr_without_test": [
-        "FR-01",
-        "FR-02",
-        "FR-03",
-        "FR-04",
-        "FR-05",
         "FR-06"
       ]
     },
     "requirements": {
       "FR-01": {
         "fr_id": "FR-01",
-        "status": "pending",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
-        "test_files": [],
+        "code_files": [
+          "03-development/src/taskq/__init__.py",
+          "03-development/src/taskq/__main__.py",
+          "03-development/src/taskq/cli.py",
+          "03-development/src/taskq/store.py"
+        ],
+        "test_files": [
+          "tests/test_fr01.py"
+        ],
         "sad_module": "—",
         "priority": "HIGH"
       },
       "FR-02": {
         "fr_id": "FR-02",
-        "status": "pending",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
-        "test_files": [],
+        "code_files": [
+          "03-development/src/taskq/executor.py",
+          "03-development/src/taskq/store.py"
+        ],
+        "test_files": [
+          "tests/test_fr02.py"
+        ],
         "sad_module": "—",
         "priority": "HIGH"
       },
       "FR-03": {
         "fr_id": "FR-03",
-        "status": "in_progress",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
-        "test_files": [],
+        "code_files": [
+          "03-development/src/taskq/breaker.py",
+          "03-development/tests/test_fr03.py"
+        ],
+        "test_files": [
+          "tests/test_fr03.py"
+        ],
         "sad_module": "store.py",
         "priority": "HIGH"
       },
       "FR-04": {
         "fr_id": "FR-04",
-        "status": "pending",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
-        "test_files": [],
+        "code_files": [
+          "03-development/src/taskq/cache.py",
+          "03-development/tests/test_fr04.py"
+        ],
+        "test_files": [
+          "tests/test_fr04.py"
+        ],
         "sad_module": "—",
         "priority": "HIGH"
       },
       "FR-05": {
         "fr_id": "FR-05",
-        "status": "in_progress",
+        "status": "verified",
         "srs_section": "SAD.md",
-        "code_files": [],
-        "test_files": [],
+        "code_files": [
+          "03-development/src/taskq/cli.py",
+          "03-development/tests/test_fr05.py"
+        ],
+        "test_files": [
+          "tests/test_fr05.py"
+        ],
         "sad_module": "src/taskq/*.py",
         "priority": "HIGH"
       },
