@@ -50,7 +50,13 @@
         "score": 95.0
       }
     },
-    "gate2": null,
+    "gate2": {
+      "score": 98.7,
+      "quality_complete": false,
+      "rounds_used": 1,
+      "open_critical": 0,
+      "open_high": 0
+    },
     "gate3": null,
     "gate4": null
   },
@@ -87,7 +93,7 @@
     },
     "NFR-03": {
       "module": "taskq.store",
-      "target": "100% atomic write recovery; breaker OPEN\u2192CLOSED \u2264 cooldown+1s",
+      "target": "100% atomic write recovery; breaker OPEN→CLOSED ≤ cooldown+1s",
       "type": "reliability"
     },
     "NFR-04": {

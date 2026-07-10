@@ -14,6 +14,7 @@ by ``test_fr02_no_shell_true``).
 from __future__ import annotations
 
 import os
+import re as _re
 import shlex
 import subprocess
 import time
@@ -25,6 +26,28 @@ _DEFAULT_TIMEOUT = "10.0"
 
 # tail length for stdout/stderr capture (SPEC §3 FR-02 result fields).
 _TAIL_LEN = 2000
+
+# NFR-04: secret-line redaction pattern. Matches whole lines containing
+# a `sk-...` key (≥ 8 chars after the prefix) or a `token=...` assignment.
+_SECRET_PATTERN = _re.compile(r"(sk-[A-Za-z0-9_-]{8,}|token=\S+)")
+
+
+def _redact(text: str) -> str:
+    """Replace any line containing a secret pattern with ``[REDACTED]``.
+
+    Per SPEC §4 NFR-04: stdout_tail / stderr_tail must redact
+    ``(sk-[A-Za-z0-9_-]{8,}|token=\\S+)`` hits at 100% hit rate.
+    """
+    if not text:
+        return text
+    out_lines = []
+    for line in text.splitlines(keepends=True):
+        if _SECRET_PATTERN.search(line):
+            nl = "\n" if line.endswith("\n") else ""
+            out_lines.append(f"[REDACTED]{nl}")
+        else:
+            out_lines.append(line)
+    return "".join(out_lines)
 
 # Default for TASKQ_RETRY_LIMIT (SPEC §3 FR-03).
 _DEFAULT_RETRY_LIMIT = "0"
@@ -82,8 +105,8 @@ def _run_once(args: list[str], timeout: float) -> dict[str, Any]:
     return {
         "status": "done" if completed.returncode == 0 else "failed",
         "exit_code": completed.returncode,
-        "stdout_tail": stdout[-_TAIL_LEN:],
-        "stderr_tail": stderr[-_TAIL_LEN:],
+        "stdout_tail": _redact(stdout[-_TAIL_LEN:]),
+        "stderr_tail": _redact(stderr[-_TAIL_LEN:]),
         "duration_ms": duration_ms,
         "finished_at": finished_at,
     }
