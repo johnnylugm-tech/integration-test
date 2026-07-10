@@ -3,6 +3,8 @@
 [FR-01] Citations: SPEC.md §3 FR-01 (Task Submission and Validation).
 [FR-02] Citations: SPEC.md §3 FR-02 (run single task by id; run --all
 with ThreadPoolExecutor; single-task timeout → exit 4).
+[FR-03] Citations: SPEC.md §3 FR-03 (circuit breaker consult before
+each run; ``OPEN`` → exit 3 + stderr ``breaker open``, no subprocess).
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .breaker import Breaker
 from .executor import run_task
 from .store import TaskStore
 
@@ -147,15 +150,25 @@ def run_cmd(
     [FR-02] Citations: SPEC.md §3 FR-02 (run single: exit 4 on timeout;
     run --all: ThreadPoolExecutor(max_workers=TASKQ_MAX_WORKERS),
     thread-safe writes); NFR-03 (Lock-protected store updates).
+    [FR-03] Citations: SPEC.md §3 FR-03 (breaker consulted before each
+    run; ``OPEN`` → exit 3, stderr ``breaker open``, no subprocess).
 
     Returns the process exit code per SPEC §3 FR-05:
 
     * ``0`` success (single task done/failed, or --all completed).
     * ``2`` unknown task id (single mode).
+    * ``3`` breaker OPEN (SPEC §3 FR-03).
     * ``4`` single task finished in ``timeout``.
     * ``1`` other internal error.
     """
     del cached, json_mode  # FR-04 cache flag deferred to FR-04 implementation.
+
+    # FR-03: consult the global breaker before doing any work. OPEN
+    # state rejects the run immediately, without invoking subprocess.
+    breaker = Breaker()
+    if not breaker.try_acquire():
+        print("breaker open", file=sys.stderr)
+        return 3
 
     store = TaskStore()
 
