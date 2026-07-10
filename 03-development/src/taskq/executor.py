@@ -14,7 +14,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from taskq import breaker, store
+from taskq import breaker, cache, store
 
 # SPEC.md §3 FR-02 — stdout/stderr 末 2000 字元.
 _TAIL_LEN = 2000
@@ -56,7 +56,7 @@ def _run_subprocess(
 
 
 def execute_task(task_id: str, command: str, timeout: float) -> str:
-    """[FR-02/FR-03] Run one task to completion with retry.
+    """[FR-02/FR-03/FR-04] Run one task to completion with retry + cache.
 
     Transitions pending → running → done|failed|timeout. On
     ``failed``/``timeout`` the task is retried up to
@@ -65,12 +65,40 @@ def execute_task(task_id: str, command: str, timeout: float) -> str:
     zero-based retry index). The sleeper is injectable via
     ``executor.time.sleep`` so tests do not actually wait.
 
+    FR-04 cache: before invoking the subprocess, consult
+    ``taskq.cache.Cache.get(sig)``. A TTL-fresh hit short-circuits
+    the run — no subprocess is invoked, the task is marked
+    ``done`` with ``cached: true`` and the cached stdout_tail /
+    stderr_tail / exit_code are replayed. After a fresh ``done``
+    run, the result is written to ``cache.json``.
+
     Citations:
       - SPEC.md §3 FR-02 — pending → running → done|failed|timeout
       - SPEC.md §3 FR-03 — retry with exponential backoff
+      - SPEC.md §3 FR-04 — sha256(command) + TTL replay + cache.json
 
     Returns the final status string.
     """
+    # FR-04: cache short-circuit. A TTL-fresh entry replays the prior
+    # done result without invoking subprocess.run. Mark the task done
+    # with `cached: true` so subsequent status reads can distinguish
+    # a replay from a fresh execution.
+    sig = cache.signature(command)
+    cache_obj = cache.Cache()
+    cached = cache_obj.get(sig)
+    if cached is not None:
+        store.update_task(
+            task_id,
+            status="done",
+            exit_code=cached.exit_code,
+            stdout_tail=cached.stdout_tail,
+            stderr_tail=cached.stderr_tail,
+            duration_ms=0.0,
+            finished_at=_now_iso(),
+            cached=True,
+        )
+        return "done"
+
     store.update_task(task_id, status="running")
 
     limit = int(os.environ.get("TASKQ_RETRY_LIMIT", "0"))
@@ -94,6 +122,18 @@ def execute_task(task_id: str, command: str, timeout: float) -> str:
         time.sleep(base * (2 ** retries))
         retries += 1
 
+    # FR-04: cache the fresh done result so future replay short-circuits.
+    if status == "done" and exit_code is not None:
+        cache_obj.put(
+            sig,
+            cache.CacheEntry(
+                signature=sig,
+                exit_code=exit_code,
+                stdout_tail=stdout_tail,
+                stderr_tail=stderr_tail,
+            ),
+        )
+
     store.update_task(
         task_id,
         status=status,
@@ -102,6 +142,7 @@ def execute_task(task_id: str, command: str, timeout: float) -> str:
         stderr_tail=stderr_tail,
         duration_ms=duration_ms,
         finished_at=_now_iso(),
+        cached=False,
     )
     return status
 
