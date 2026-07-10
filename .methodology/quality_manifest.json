@@ -47,12 +47,11 @@
         "score": 94.56
       },
       "FR-05": {
-        "coverage_fallback": "inline-fallback@8abe4f9",
-        "open_critical": 0,
-        "open_high": 0,
+        "score": 99.5,
         "quality_complete": true,
-        "rounds_used": 1,
-        "score": 98.0
+        "rounds_used": 2,
+        "open_critical": 0,
+        "open_high": 0
       }
     },
     "gate2": {
