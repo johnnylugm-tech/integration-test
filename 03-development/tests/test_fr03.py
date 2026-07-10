@@ -70,11 +70,18 @@ def _load_breaker(taskq_home: Path) -> dict:
 
 
 def _submit(taskq_home: Path, command: str, name: str | None = None) -> str:
-    """Submit a task via cli.main; return the 8-hex task id."""
+    """Submit a task via cli.main; return the 8-hex task id.
+
+    stdout/stderr are suppressed so the helper does not leak the submit
+    id into `capsys.readouterr()` results of the calling test.
+    """
+    import io as _io
+    from contextlib import redirect_stdout, redirect_stderr
     argv = ["submit", command]
     if name is not None:
         argv += ["--name", name]
-    rc = cli.main(argv)
+    with redirect_stdout(_io.StringIO()), redirect_stderr(_io.StringIO()):
+        rc = cli.main(argv)
     assert rc == 0, f"submit must succeed so a pending task exists; got rc={rc}"
     tasks = store.load_tasks(path=taskq_home / "tasks.json")
     # Return the most recently created task — older tasks from previous
@@ -505,6 +512,630 @@ def test_fr03_breaker_atomic_write(
 
     # Restore os.replace so pytest teardown / other tests are unaffected.
     monkeypatch.setattr("os.replace", real_replace)
+
+
+# ---------------------------------------------------------------------------
+# Coverage-extension tests for FR-03 scope + adjacent modules touched
+# during retry / breaker execution. These tests are not in TEST_SPEC.md
+# FR-03 (cases 1-5); they exist solely to bring coverage of the FR-03
+# source files (breaker.py, executor.py, cli.py, store.py, models.py,
+# config.py) above the 80% Gate 1 threshold.
+# ---------------------------------------------------------------------------
+
+
+def test_fr03_timeout_expired_status(
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-02/FR-03] TimeoutExpired → retry to TASKQ_RETRY_LIMIT → status='timeout', exit 4.
+
+    Covers executor.run_task TimeoutExpired branch (executor.py:151-155)
+    and cli._cmd_run timeout → exit 4 (cli.py:157-158).
+    """
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "2")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "0")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "999")
+
+    call_count = {"n": 0}
+
+    def _timeout_run(*args, **kwargs):
+        call_count["n"] += 1
+        raise subprocess.TimeoutExpired(cmd=args[0] if args else "x", timeout=1)
+
+    monkeypatch.setattr(executor.subprocess, "run", _timeout_run)
+
+    task_id = _submit(taskq_home, "sleep 10", name="timeout-target")
+    rc = cli.main(["run", task_id])
+    captured = capsys.readouterr()
+
+    assert call_count["n"] == 3, (
+        f"1 initial + 2 retries = 3 subprocess calls; got {call_count['n']}"
+    )
+
+    tasks = _load_tasks(taskq_home)
+    record = tasks[task_id]
+    assert record["status"] == "timeout", (
+        f"after exhausting retries on TimeoutExpired, status must be 'timeout'; "
+        f"got {record['status']!r}"
+    )
+    assert rc == 4, f"cli.run must exit 4 on timeout; got {rc}"
+    # on timeout + non-json, cli writes nothing to stdout for the task payload
+    assert captured.out == ""
+
+
+def test_fr03_executor_reject_branch_direct(
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """[FR-03] executor.run_task with OPEN breaker → REJECT branch (defensive in-executor check).
+
+    Covers executor.run_task REJECT branch (executor.py:122-129). The CLI path
+    short-circuits REJECT before invoking run_task, so the executor's own
+    defensive pre-check is otherwise dead code; this test exercises it via
+    a direct call.
+    """
+    monkeypatch.setenv("TASKQ_BREAKER_COOLDOWN", "3600")
+
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text(
+        json.dumps(
+            {
+                "state": "OPEN",
+                "consecutive_failures": 5,
+                "opened_at": "2099-01-01T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess_calls: list[tuple] = []
+
+    def _spy_run(*args, **kwargs):
+        subprocess_calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(executor.subprocess, "run", _spy_run)
+
+    task = models.Task(
+        id="deadbeef",
+        command="echo hi",
+        status="pending",
+        created_at="2026-01-01T00:00:00Z",
+    )
+
+    result = executor.run_task(task)
+
+    assert result.status == "failed"
+    assert result.exit_code is None
+    assert result.stdout_tail == ""
+    assert result.stderr_tail == "breaker open"
+    assert result.duration_ms == 0
+    assert result.finished_at is not None
+    assert subprocess_calls == [], (
+        f"REJECT branch must NOT invoke subprocess; got {len(subprocess_calls)} call(s)"
+    )
+
+
+def test_fr03_no_retry_single_attempt_no_backoff(
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """[FR-03] retry_limit=0 → exactly one attempt and zero backoff sleeps.
+
+    Covers the executor.run_task retry loop edge case where the loop runs
+    exactly once (range(0 + 1) = [0]); also exercises the loop's `break`
+    via `attempt_index >= retry_limit`.
+    """
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    monkeypatch.setenv("TASKQ_BACKOFF_BASE", "5")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "999")
+
+    sleep_calls: list[float] = []
+
+    def _injected_sleep(s: float) -> None:
+        sleep_calls.append(s)
+
+    monkeypatch.setattr(executor, "_sleep", _injected_sleep)
+
+    def _fail_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args="x", returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(executor.subprocess, "run", _fail_run)
+
+    task_id = _submit(taskq_home, "false", name="no-retry")
+    cli.main(["run", task_id])
+
+    assert sleep_calls == [], (
+        f"retry_limit=0 means no retries → no backoff sleep; got {sleep_calls!r}"
+    )
+
+    tasks = _load_tasks(taskq_home)
+    record = tasks[task_id]
+    assert record["status"] == "failed"
+    assert record["exit_code"] == 1
+
+
+def test_fr03_breaker_open_helper(
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """[FR-03] breaker.open() forces OPEN with consecutive_failures=threshold (recovery helper)."""
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "5")
+    breaker.reload_config()
+
+    breaker.open()
+
+    data = _load_breaker(taskq_home)
+    assert data["state"] == "OPEN"
+    assert data["consecutive_failures"] == 5
+    assert data["opened_at"] is not None
+
+
+def test_fr03_breaker_reset_helper(taskq_home: Path) -> None:
+    """[FR-03] breaker.reset() forces CLOSED + counter 0 + opened_at None (recovery helper)."""
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text(
+        json.dumps(
+            {
+                "state": "OPEN",
+                "consecutive_failures": 99,
+                "opened_at": "2026-01-01T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    breaker.reset()
+
+    data = _load_breaker(taskq_home)
+    assert data["state"] == "CLOSED"
+    assert data["consecutive_failures"] == 0
+    assert data["opened_at"] is None
+
+
+def test_fr03_breaker_threshold_cooldown_getters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """[FR-03] threshold() / cooldown() getters expose the current config values."""
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "7")
+    monkeypatch.setenv("TASKQ_BREAKER_COOLDOWN", "12.5")
+    breaker.reload_config()
+
+    assert breaker.threshold() == 7
+    assert breaker.cooldown() == 12.5
+
+
+def test_fr03_load_state_corrupt_json_returns_empty(taskq_home: Path) -> None:
+    """[FR-03] breaker.load_state on invalid JSON → returns {} (NFR-03 corruption recovery)."""
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text("not-valid-json {{{", encoding="utf-8")
+
+    assert breaker.load_state() == {}
+
+
+def test_fr03_load_state_non_dict_returns_empty(taskq_home: Path) -> None:
+    """[FR-03] breaker.load_state on non-object JSON (e.g. list) → returns {}."""
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+
+    assert breaker.load_state() == {}
+
+
+def test_fr03_load_state_empty_file_returns_empty(taskq_home: Path) -> None:
+    """[FR-03] breaker.load_state on empty file → returns {}."""
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text("", encoding="utf-8")
+
+    assert breaker.load_state() == {}
+
+
+def test_fr03_state_default_closed_when_state_field_missing(
+    taskq_home: Path,
+) -> None:
+    """[FR-03] breaker.state() defaults to 'CLOSED' when `state` field is absent."""
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text(json.dumps({"consecutive_failures": 0}), encoding="utf-8")
+
+    assert breaker.state() == "CLOSED"
+
+
+def test_fr03_to_epoch_numeric(taskq_home: Path) -> None:
+    """[FR-03] breaker._to_epoch handles numeric (int / float) values directly."""
+    assert breaker._to_epoch(1700000000) == 1700000000.0
+    assert breaker._to_epoch(1700000000.5) == 1700000000.5
+
+
+def test_fr03_to_epoch_numeric_string(taskq_home: Path) -> None:
+    """[FR-03] breaker._to_epoch accepts numeric strings (epoch form)."""
+    assert breaker._to_epoch("1700000000") == 1700000000.0
+
+
+def test_fr03_check_and_admit_allow_path(taskq_home: Path) -> None:
+    """[FR-03] check_and_admit on CLOSED state returns ALLOW."""
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text(
+        json.dumps({"state": "CLOSED", "consecutive_failures": 0, "opened_at": None}),
+        encoding="utf-8",
+    )
+
+    assert breaker.check_and_admit() == breaker.ALLOW
+
+
+def test_fr03_check_and_admit_reject_path(taskq_home: Path) -> None:
+    """[FR-03] check_and_admit on OPEN + cooldown-not-elapsed returns REJECT."""
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text(
+        json.dumps(
+            {
+                "state": "OPEN",
+                "consecutive_failures": 5,
+                "opened_at": "2099-01-01T00:00:00Z",  # far future
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert breaker.check_and_admit() == breaker.REJECT
+
+
+def test_fr03_record_failure_below_threshold_stays_closed(
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """[FR-03] record_failure below threshold → state stays CLOSED, counter incremented."""
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "10")
+    breaker.reload_config()
+
+    result = breaker.record_failure()
+
+    assert result == "CLOSED"
+    data = _load_breaker(taskq_home)
+    assert data["consecutive_failures"] == 1
+    assert data["state"] == "CLOSED"
+
+
+def test_fr03_record_success_closes_breaker(taskq_home: Path) -> None:
+    """[FR-03] record_success resets counter + clears opened_at + sets CLOSED."""
+    bp = _breaker_path(taskq_home)
+    bp.parent.mkdir(parents=True, exist_ok=True)
+    bp.write_text(
+        json.dumps(
+            {
+                "state": "HALF_OPEN",
+                "consecutive_failures": 3,
+                "opened_at": "2026-01-01T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = breaker.record_success()
+
+    assert result == "CLOSED"
+    data = _load_breaker(taskq_home)
+    assert data["state"] == "CLOSED"
+    assert data["consecutive_failures"] == 0
+    assert data["opened_at"] is None
+
+
+def test_fr03_submit_name_collision_exit2(
+    taskq_home: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-01/FR-03] submit with duplicate --name → exit 2 + stderr collision msg.
+
+    Covers cli._cmd_submit name-collision branch (cli.py:85-92) and
+    store.find_active_by_name (store.py:115-127).
+    """
+    rc1 = cli.main(["submit", "echo hi", "--name", "dup-name"])
+    assert rc1 == 0, f"first submit must succeed; got rc={rc1}"
+
+    rc2 = cli.main(["submit", "echo there", "--name", "dup-name"])
+    captured = capsys.readouterr()
+
+    assert rc2 == 2, f"duplicate --name must exit 2; got rc={rc2}"
+    assert "dup-name" in captured.err, (
+        f"collision error must print task name; got: {captured.err!r}"
+    )
+
+
+def test_fr03_submit_json_mode(taskq_home: Path, capsys: pytest.CaptureFixture) -> None:
+    """[FR-01/FR-03] submit --json produces single-line JSON on stdout (NP-04).
+
+    Covers cli._cmd_submit json_mode branch (cli.py:97-100).
+    """
+    rc = cli.main(["submit", "echo hi", "--json"])
+    captured = capsys.readouterr()
+
+    assert rc == 0, f"submit --json must exit 0; got {rc}"
+
+    lines = [line for line in captured.out.splitlines() if line.strip()]
+    assert len(lines) == 1, (
+        f"--json must emit exactly one line; got {len(lines)}: {lines!r}"
+    )
+
+    parsed = json.loads(lines[0])
+    assert parsed["status"] == "pending"
+    assert len(parsed["id"]) == 8
+
+
+def test_fr03_submit_empty_command_exit2(
+    taskq_home: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-01/FR-03] submit empty/whitespace → exit 2 + stderr validation msg.
+
+    Covers cli._validate empty check (cli.py:69-71) and cli._cmd_submit
+    error branch (cli.py:79-83).
+    """
+    rc = cli.main(["submit", ""])
+    captured = capsys.readouterr()
+
+    assert rc == 2, f"empty command must exit 2; got {rc}"
+    assert "empty" in captured.err.lower(), (
+        f"validation error must mention 'empty'; got: {captured.err!r}"
+    )
+
+
+def test_fr03_submit_injection_char_exit2(
+    taskq_home: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-01/FR-03] submit with `;` → exit 2 + stderr injection msg (NFR-02)."""
+    rc = cli.main(["submit", "echo hi; rm x"])
+    captured = capsys.readouterr()
+
+    assert rc == 2, f"injection char must exit 2; got {rc}"
+    assert "forbidden" in captured.err.lower(), (
+        f"validation error must mention 'forbidden'; got: {captured.err!r}"
+    )
+
+
+def test_fr03_submit_command_too_long_exit2(
+    taskq_home: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-01/FR-03] submit command > 1000 chars → exit 2 + stderr length msg."""
+    rc = cli.main(["submit", "x" * 1001])
+    captured = capsys.readouterr()
+
+    assert rc == 2, f"too-long command must exit 2; got {rc}"
+    assert "1000" in captured.err, (
+        f"length validation must mention the cap; got: {captured.err!r}"
+    )
+
+
+def test_fr03_run_all_concurrent(
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """[FR-02/FR-03] run --all processes pending tasks concurrently via ThreadPoolExecutor.
+
+    Covers cli._cmd_run --all branch (cli.py:117-132) and store.list_pending
+    (store.py:108-112).
+    """
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "999")
+    monkeypatch.setenv("TASKQ_MAX_WORKERS", "2")
+
+    def _success_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(executor.subprocess, "run", _success_run)
+
+    for i in range(3):
+        _submit(taskq_home, f"echo task-{i}", name=f"task-{i}")
+
+    rc = cli.main(["run", "--all"])
+    assert rc == 0, f"run --all must exit 0; got {rc}"
+
+    tasks = _load_tasks(taskq_home)
+    statuses = [r["status"] for r in tasks.values()]
+    assert statuses.count("done") == 3, f"all 3 tasks must be done; got {statuses!r}"
+
+
+def test_fr03_run_unknown_id_exit2(
+    taskq_home: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-02/FR-03] run with unknown id → exit 2 + stderr 'unknown task id'.
+
+    Covers cli._cmd_run unknown-task branch (cli.py:139-142) and store.get_task
+    (store.py:99-105).
+    """
+    rc = cli.main(["run", "ffffffff"])
+    captured = capsys.readouterr()
+
+    assert rc == 2, f"unknown id must exit 2; got {rc}"
+    assert "unknown" in captured.err.lower(), (
+        f"error must mention 'unknown'; got: {captured.err!r}"
+    )
+
+
+def test_fr03_run_no_id_no_all_exit2(
+    taskq_home: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-02/FR-03] run with no id and no --all → exit 2 + stderr usage.
+
+    Covers cli._cmd_run no-task-id branch (cli.py:135-137).
+    """
+    rc = cli.main(["run"])
+    captured = capsys.readouterr()
+
+    assert rc == 2, f"run with no id and no --all must exit 2; got {rc}"
+
+
+def test_fr03_run_json_mode(
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-02/FR-03] run --json emits single-line JSON of final task state.
+
+    Covers cli._cmd_run json_mode branch (cli.py:153-155).
+    """
+    monkeypatch.setenv("TASKQ_RETRY_LIMIT", "0")
+    monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "999")
+
+    def _success_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(executor.subprocess, "run", _success_run)
+
+    task_id = _submit(taskq_home, "echo hi", name="json-mode")
+    rc = cli.main(["run", task_id, "--json"])
+    captured = capsys.readouterr()
+
+    assert rc == 0, f"run --json must exit 0; got {rc}"
+
+    lines = [line for line in captured.out.splitlines() if line.strip()]
+    assert len(lines) == 1, f"--json must emit exactly one line; got {len(lines)}"
+
+    parsed = json.loads(lines[0])
+    assert parsed["id"] == task_id
+    assert parsed["status"] == "done"
+
+
+def test_fr03_main_no_subcommand(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """[FR-05/FR-03] main with no subcommand → prints help to stderr + exit 2.
+
+    Covers cli.main no-subcommand branch (cli.py:171-172).
+    """
+    rc = cli.main([])
+    captured = capsys.readouterr()
+
+    assert rc == 2, f"main with no subcommand must exit 2; got {rc}"
+
+
+def test_fr03_store_corrupt_json_raises(taskq_home: Path) -> None:
+    """[FR-01/FR-03] store.load_tasks on corrupt JSON → raises StoreCorruptedError.
+
+    Covers store.load_tasks invalid JSON branch (store.py:56-62) and the
+    StoreCorruptedError class declaration (store.py:31-33).
+    """
+    tp = taskq_home / "tasks.json"
+    tp.parent.mkdir(parents=True, exist_ok=True)
+    tp.write_text("not-valid-json {{{", encoding="utf-8")
+
+    with pytest.raises(store.StoreCorruptedError):
+        store.load_tasks()
+
+
+def test_fr03_store_non_dict_tasks_raises(taskq_home: Path) -> None:
+    """[FR-01/FR-03] store.load_tasks on non-object JSON (e.g. list) → raises StoreCorruptedError."""
+    tp = taskq_home / "tasks.json"
+    tp.parent.mkdir(parents=True, exist_ok=True)
+    tp.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+
+    with pytest.raises(store.StoreCorruptedError):
+        store.load_tasks()
+
+
+def test_fr03_store_get_task_present_and_absent(taskq_home: Path) -> None:
+    """[FR-02/FR-03] store.get_task returns the record when present, None otherwise.
+
+    Covers store.get_task (store.py:99-105) including the empty-id short-circuit.
+    """
+    task_id = _submit(taskq_home, "echo hi", name="getter-target")
+
+    rec = store.get_task(task_id)
+    assert rec is not None
+    assert rec["id"] == task_id
+
+    assert store.get_task("ffffffff") is None
+    assert store.get_task("") is None
+
+
+def test_fr03_store_find_active_by_name(taskq_home: Path) -> None:
+    """[FR-01/FR-03] store.find_active_by_name matches pending, misses on empty / unknown.
+
+    Covers store.find_active_by_name (store.py:115-127).
+    """
+    _submit(taskq_home, "echo hi", name="findme")
+
+    found = store.find_active_by_name("findme")
+    assert found is not None
+    assert found["name"] == "findme"
+
+    assert store.find_active_by_name("missing") is None
+    assert store.find_active_by_name("") is None
+
+
+def test_fr03_store_list_pending(taskq_home: Path) -> None:
+    """[FR-02/FR-03] store.list_pending returns all records with status='pending'.
+
+    Covers store.list_pending (store.py:108-112).
+    """
+    _submit(taskq_home, "echo hi", name="a")
+    _submit(taskq_home, "echo there", name="b")
+
+    pending = store.list_pending()
+    names = sorted(r["name"] for r in pending)
+    assert names == ["a", "b"]
+
+
+def test_fr03_models_from_dict(taskq_home: Path) -> None:
+    """[FR-02/FR-03] Task.from_dict re-hydrates a persisted JSON record.
+
+    Covers models.Task.from_dict (models.py:65-70) including the
+    filter-by-dataclass-fields branch.
+    """
+    record = {
+        "id": "01234567",
+        "command": "echo hi",
+        "status": "done",
+        "created_at": "2026-01-01T00:00:00Z",
+        "name": "rehydrated",
+        "exit_code": 0,
+        "stdout_tail": "hi\n",
+        "stderr_tail": "",
+        "duration_ms": 42,
+        "finished_at": "2026-01-01T00:00:01Z",
+        "last_error": None,
+        "attempts": 1,
+    }
+    task = models.Task.from_dict(record)
+    assert task.id == "01234567"
+    assert task.command == "echo hi"
+    assert task.status == "done"
+    assert task.exit_code == 0
+    assert task.stdout_tail == "hi\n"
+    assert task.duration_ms == 42
+    assert task.attempts == 1
+
+
+def test_fr03_config_all_paths(
+    taskq_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """[FR-04/FR-03] config resolves $TASKQ_HOME + tasks/breaker/cache paths.
+
+    Covers config.taskq_home (config.py:19-22) and config.cache_path
+    (config.py:35-37). tasks/breaker paths are exercised transitively
+    by the submit / run tests above.
+    """
+    # Exercise the default branch when TASKQ_HOME is unset.
+    monkeypatch.delenv("TASKQ_HOME", raising=False)
+    assert config.taskq_home() == config.DEFAULT_HOME
+
+    # Exercise the env-var branch with TASKQ_HOME set to our tmp dir.
+    monkeypatch.setenv("TASKQ_HOME", str(taskq_home))
+    assert config.taskq_home() == taskq_home
+    assert config.tasks_path() == taskq_home / "tasks.json"
+    assert config.breaker_path() == taskq_home / "breaker.json"
+    assert config.cache_path() == taskq_home / "cache.json"
 
 
 # ---------------------------------------------------------------------------
