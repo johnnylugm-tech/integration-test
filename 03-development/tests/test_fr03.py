@@ -113,20 +113,20 @@ def _no_sleep(_seconds: float) -> None:
 # Column order (13 vars) = every key any TEST_SPEC FR-03 Inputs row references:
 #   retry_within_limit, final_outcome, threshold_reached, state, expected_exit,
 #   stderr_msg, cooldown_elapsed, probe_result, next_state, mid_write_crash,
-#   data_file_valid, write_path, failure_count
+#   data_file_valid, write_path
 # Projection values that TEST_SPEC omits for a case become Python ``None``
 # here (canonicalising ``'None'`` on both sides).
 # ---------------------------------------------------------------------------
 
 _FR03_PARAMETRIZE = [
     # retry_within_limit, final_outcome, threshold_reached, state,  expected_exit, stderr_msg,         cooldown_elapsed, probe_result, next_state, mid_write_crash, data_file_valid, write_path,     failure_count
-    ("yes",               "failed",        None,             None,   None,          None,               None,             None,         None,       None,            None,            None,            None),         # 1 retry_within_limit
-    (None,                None,            "yes",            "OPEN", None,          None,               None,             None,         None,       None,            None,            None,            "2"),          # 2 breaker_threshold_reached
-    (None,                None,            None,             "OPEN", "3",           "breaker open",     None,             None,         None,       None,            None,            None,            None),         # 3 open_state_rejects
-    (None,                None,            None,             "HALF_OPEN", None,     None,               "yes",             None,         None,       None,            None,            None,            None),         # 4 half_open_after_cooldown
-    (None,                None,            None,             "HALF_OPEN", None,     None,               None,             "success",    "CLOSED",   None,            None,            None,            None),         # 5 half_open_success_closes
-    (None,                None,            None,             "HALF_OPEN", None,     None,               None,             "failure",    "OPEN",     None,            None,            None,            None),         # 6 half_open_failure_reopens
-    (None,                None,            None,             None,   None,          None,               None,             None,         None,       "yes",           "yes",           "breaker.json",  None),         # 7 breaker_atomic_write
+    ("yes",               "failed",        None,             None,   None,          None,               None,             None,         None,       None,            None,            None),         # 1 retry_within_limit
+    (None,                None,            "yes",            "OPEN", None,          None,               None,             None,         None,       None,            None,            None),         # 2 breaker_threshold_reached
+    (None,                None,            None,             "OPEN", "3",           "breaker open",     None,             None,         None,       None,            None,            None),         # 3 open_state_rejects
+    (None,                None,            None,             "HALF_OPEN", None,     None,               "yes",             None,         None,       None,            None,            None),         # 4 half_open_after_cooldown
+    (None,                None,            None,             "HALF_OPEN", None,     None,               None,             "success",    "CLOSED",   None,            None,            None),         # 5 half_open_success_closes
+    (None,                None,            None,             "HALF_OPEN", None,     None,               None,             "failure",    "OPEN",     None,            None,            None),         # 6 half_open_failure_reopens
+    (None,                None,            None,             None,   None,          None,               None,             None,         None,       "yes",           "yes",           "breaker.json"),         # 7 breaker_atomic_write
 ]
 
 
@@ -134,7 +134,7 @@ _FR03_PARAMETRIZE = [
     "retry_within_limit, final_outcome, "
     "threshold_reached, state, expected_exit, stderr_msg, "
     "cooldown_elapsed, probe_result, next_state, "
-    "mid_write_crash, data_file_valid, write_path, failure_count",
+    "mid_write_crash, data_file_valid, write_path",
     _FR03_PARAMETRIZE,
 )
 def test_fr03(
@@ -153,7 +153,6 @@ def test_fr03(
     mid_write_crash,
     data_file_valid,
     write_path,
-    failure_count,
 ):
     # Re-isolate TASKQ_HOME inside the parametrize body for clarity.
     monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
@@ -251,7 +250,7 @@ def test_fr03(
         # ===== case 2: breaker_threshold_reached ==========================
         # After TASKQ_BREAKER_THRESHOLD consecutive final failures the
         # breaker must transition to OPEN.
-        monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", failure_count or "3")
+        monkeypatch.setenv("TASKQ_BREAKER_THRESHOLD", "3")
         breaker = Breaker()
         threshold = int(os.environ["TASKQ_BREAKER_THRESHOLD"])
         for _ in range(threshold):
