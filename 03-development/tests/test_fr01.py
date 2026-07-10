@@ -228,3 +228,107 @@ def test_fr01(
         f"parametrize row {command!r}/{length_exceeds_1000!r}/{new_name!r}/"
         f"{existing_name!r}/{json_mode!r} did not match any TEST_SPEC §FR-01 case"
     )
+
+
+# ---------------------------------------------------------------------------
+# TEST_SPEC-named test functions.
+#
+# Per TEST_SPEC.md §FR-01 (rows 83-88) the spec requires six discrete test
+# function names. The parametrized mirror-test above preserves the sub-assertion
+# mirror contract for D4 spec-coverage; the six functions below satisfy the
+# D4 function-name inventory AND raise line coverage by exercising every
+# branch of submit_cmd / _validate_command / _name_conflicts / _atomic_write /
+# _load_tasks with intent-named targets.
+#
+# Each function is independent (no parametrize sharing) so a coverage tool that
+# attributes lines to the test name that executed them can map every line to a
+# spec-named function.
+# ---------------------------------------------------------------------------
+
+
+def test_fr01_empty_command_exit2(tmp_path, monkeypatch, capsys):
+    """[FR-01] case 1: empty command → exit 2 + stderr."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    exit_code = cli.submit_cmd(cmd="", name=None, json_mode=False)
+    assert exit_code == 2
+    assert _read_tasks(tmp_path) == []
+    err = capsys.readouterr().err
+    assert err.strip() != "", "stderr must carry an error message"
+
+
+def test_fr01_command_too_long_exit2(tmp_path, monkeypatch, capsys):
+    """[FR-01] case 2: command length > 1000 → exit 2 + stderr."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    exit_code = cli.submit_cmd(cmd="a" * 1001, name=None, json_mode=False)
+    assert exit_code == 2
+    assert _read_tasks(tmp_path) == []
+    err = capsys.readouterr().err
+    assert err.strip() != "", "stderr must carry an error message"
+
+
+def test_fr01_injection_char_exit2(tmp_path, monkeypatch, capsys):
+    """[FR-01] case 3: command with injection char ';' → exit 2 (NFR-02)."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    exit_code = cli.submit_cmd(cmd="echo hi; rm x", name=None, json_mode=False)
+    assert exit_code == 2
+    assert _read_tasks(tmp_path) == []
+    err = capsys.readouterr().err
+    assert err.strip() != "", "stderr must carry an error message"
+
+
+def test_fr01_duplicate_name_exit2(tmp_path, monkeypatch, capsys):
+    """[FR-01] case 4: --name collides with a pending task → exit 2."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    # Seed the store with a colliding pending task so we exercise the
+    # name-uniqueness validator independent of the GREEN implementation.
+    seed = [
+        {
+            "id": "deadbeef",
+            "status": "pending",
+            "name": "dup",
+            "command": "echo seed",
+            "created_at": "2026-07-11T00:00:00Z",
+        }
+    ]
+    (tmp_path / "tasks.json").write_text(json.dumps(seed), encoding="utf-8")
+    exit_code = cli.submit_cmd(cmd="echo other", name="dup", json_mode=False)
+    assert exit_code == 2
+    tasks = _read_tasks(tmp_path)
+    assert len(tasks) == 1
+    assert tasks[0].get("name") == "dup"
+    assert tasks[0].get("command") == "echo seed"
+    err = capsys.readouterr().err
+    assert err.strip() != "", "stderr must carry an error message"
+
+
+def test_fr01_valid_submit_pending(tmp_path, monkeypatch, capsys):
+    """[FR-01] case 5: valid submit → exit 0 + pending task + id on stdout."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    exit_code = cli.submit_cmd(cmd="echo hi", name="alpha", json_mode=False)
+    assert exit_code == 0
+    tasks = _read_tasks(tmp_path)
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert _HEX8.match(task["id"]), f"id must be 8 hex chars, got {task['id']!r}"
+    assert task["status"] == "pending"
+    assert task["command"] == "echo hi"
+    assert task["name"] == "alpha"
+    assert "created_at" in task
+    out = capsys.readouterr().out
+    assert task["id"] in out, "stdout must contain the newly assigned task id"
+
+
+def test_fr01_json_output_single_line(tmp_path, monkeypatch, capsys):
+    """[FR-01] case 6: --json mode → single-line JSON with id+status."""
+    monkeypatch.setenv("TASKQ_HOME", str(tmp_path))
+    exit_code = cli.submit_cmd(cmd="echo hi", name=None, json_mode=True)
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "\n" not in out.rstrip("\n"), f"json output must be single-line, got {out!r}"
+    payload = json.loads(out)
+    assert set(payload.keys()) >= {"id", "status"}
+    assert payload["status"] == "pending"
+    assert _HEX8.match(payload["id"]), f"id must be 8 hex chars, got {payload['id']!r}"
+    tasks = _read_tasks(tmp_path)
+    assert len(tasks) == 1
+    assert tasks[0]["id"] == payload["id"]
