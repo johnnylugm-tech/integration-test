@@ -1,3 +1,5 @@
+
+
 <!-- AUTO-GEN:START -->
 # Traceability Matrix
 
@@ -9,25 +11,37 @@
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Total Requirements | 0 | — |
-| SRS Coverage | 0% | 100% |
-| Code Coverage | 0% | 100% |
-| Test Coverage | 0% | 100% |
-| Verification Rate | 0% | 100% |
-| Total Links | 0 | — |
+| Total Requirements | 6 | — |
+| SRS Coverage | 83.3% | 100% |
+| Code Coverage | 83.3% | 100% |
+| Test Coverage | 83.3% | 100% |
+| Verification Rate | 83.3% | 100% |
+| Total Links | 22 | — |
 
 ### ASPICE SWE.3 Compliance
 
 | Practice | Status | Coverage |
 |----------|--------|----------|
-| SWE.3 BP1: FR→SRS | FAIL | 0/1 |
-| SWE.3 BP2: SRS→Code | FAIL | 0/1 |
-| SWE.3 BP3: Code→Test | FAIL | 0/1 |
+| SWE.3 BP1: FR→SRS | FAIL | 5/6 |
+| SWE.3 BP2: SRS→Code | FAIL | 5/6 |
+| SWE.3 BP3: Code→Test | FAIL | 5/6 |
 
 ## Detailed Traceability Matrix
 
 | Requirement | Status | Code Files | Test Files | SAD Module |
 |-------------|--------|------------|------------|------------|
+| FR-01 | verified | 03-development/src/taskq/__init__.py, 03-development/src/taskq/__main__.py, 03-development/src/taskq/cli.py (+1) | tests/test_fr01.py | — |
+| FR-02 | verified | 03-development/src/taskq/executor.py, 03-development/src/taskq/store.py | tests/test_fr02.py | — |
+| FR-03 | verified | 03-development/src/taskq/breaker.py, 03-development/tests/test_fr03.py | tests/test_fr03.py | store.py |
+| FR-04 | verified | 03-development/src/taskq/cache.py, 03-development/tests/test_fr04.py | tests/test_fr04.py | — |
+| FR-05 | verified | 03-development/src/taskq/cli.py, 03-development/tests/test_fr05.py | tests/test_fr05.py | src/taskq/*.py |
+| FR-06 | in_progress | — | — | config.py |
+
+## Gaps
+
+- **FR without SRS mapping**: FR-06
+- **FR without Code**: FR-06
+- **FR without Test**: FR-06
 <!-- AUTO-GEN:END -->
 
 

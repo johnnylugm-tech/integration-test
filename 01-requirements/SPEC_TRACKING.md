@@ -37,11 +37,12 @@ All rows below are `BASELINED` as of this tracking round — Phase 2
 
 | FR ID | Title | Owning Module(s) | AC Count | Status | SRS Section |
 |---|---|---|---|---|---|
-| FR-01 | Task Submission and Validation | `store.py`, `cli.py` | 6 | BASELINED | SRS.md §3 FR-01 |
-| FR-02 | Task Executor | `executor.py` (high-risk), `store.py` (high-risk) | 5 | BASELINED | SRS.md §3 FR-02 |
-| FR-03 | Retry and Circuit Breaker | `breaker.py`, `executor.py` (high-risk) | 5 | BASELINED | SRS.md §3 FR-03 |
-| FR-04 | Result TTL Cache | `cache.py` | 4 | BASELINED | SRS.md §3 FR-04 |
-| FR-05 | CLI Integration | `cli.py` | 7 | BASELINED | SRS.md §3 FR-05 |
+| FR-01 | Task Submission and Validation | `store.py`, `cli.py` | 6 | VERIFIED | SRS.md §3 FR-01 |
+| FR-02 | Task Executor | `executor.py` (high-risk), `store.py` (high-risk) | 5 | VERIFIED | SRS.md §3 FR-02 |
+| FR-03 | Retry and Circuit Breaker | `breaker.py`, `executor.py` (high-risk) | 5 | VERIFIED | SRS.md §3 FR-03 |
+| FR-04 | Result TTL Cache | `cache.py` | 4 | VERIFIED | SRS.md §3 FR-04 |
+| FR-05 | CLI Integration | `cli.py` | 7 | VERIFIED | SRS.md §3 FR-05 |
+| FR-06 | — | — | — | IN_PROGRESS | — |
 
 ---
 

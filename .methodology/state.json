@@ -1,9 +1,9 @@
 {
   "state": "RUNNING",
-  "current_phase": 3,
+  "current_phase": 4,
   "last_gate": 2,
-  "last_fr": null,
-  "last_update": "2026-07-10T13:40:28.291128+00:00",
+  "last_fr": "FR-05",
+  "last_update": "2026-07-10T13:49:32.148812+00:00",
   "last_push_checkpoint": "2026-07-09T18:18:49.029678+00:00",
   "last_push_checkpoint_phase": 2,
   "phase_completed": {
@@ -18,6 +18,6 @@
   },
   "test_inventory_checksum": "928f712463eb57e004a22c905afd51fd97c00be6096f25ffbaaaf4733105d847",
   "phase_truth_passed": true,
-  "last_milestone_command": "push-milestone --type p3-post-gate2",
+  "last_milestone_command": "advance-phase --completed-phase 3",
   "last_milestone_at": "2026-07-10T13:42:05.451735+00:00"
 }
