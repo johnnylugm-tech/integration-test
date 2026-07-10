@@ -19,7 +19,7 @@ import json
 import os
 import threading
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
 from taskq import config
 from taskq.models import Task
@@ -81,6 +81,35 @@ def add_task(task: Task) -> dict[str, dict]:
         tasks[task.id] = task.to_dict()
         save_tasks(tasks)
         return tasks
+
+
+def update_task(task: Task) -> dict[str, dict]:
+    """Replace `task` (same id) under `_LOCK` (FR-02 status transitions).
+
+    Read-modify-write atomic: concurrent writers from `run --all` cannot
+    stomp on each other's updates (NP-13, NFR-03).
+    """
+    with _LOCK:
+        tasks = load_tasks()
+        tasks[task.id] = task.to_dict()
+        save_tasks(tasks)
+        return tasks
+
+
+def get_task(task_id: str) -> Optional[dict]:
+    """Return the record for `task_id`, or None if absent (FR-02 lookup)."""
+    if not task_id:
+        return None
+    with _LOCK:
+        tasks = load_tasks()
+    return tasks.get(task_id)
+
+
+def list_pending() -> list[dict]:
+    """Return all records with `status == "pending"` (FR-02 `run --all`)."""
+    with _LOCK:
+        tasks = load_tasks()
+    return [record for record in tasks.values() if record.get("status") == "pending"]
 
 
 def find_active_by_name(name: str) -> Optional[dict]:

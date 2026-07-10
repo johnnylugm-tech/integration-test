@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from typing import Sequence
 
-from taskq import store
+from taskq import executor, store
 from taskq.models import Task
 
 # FR-01 rule 3 (NFR-02) — injection blacklist (SPEC §3 line 65).
@@ -33,6 +35,10 @@ _MAX_COMMAND_LEN = 1000
 # FR-01 / SPEC §6 line 183 — validation rejection exit code.
 _EXIT_VALIDATION = 2
 
+# FR-05 / SPEC §3 FR-05 line 115 — exit codes table.
+_EXIT_BREAKER = 3
+_EXIT_TIMEOUT = 4
+
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="taskq")
@@ -41,6 +47,12 @@ def _build_parser() -> argparse.ArgumentParser:
     submit.add_argument("task_command", help="shell-style command string to validate + persist")
     submit.add_argument("--name", default=None, help="optional human-friendly task name")
     submit.add_argument("--json", action="store_true", dest="json_mode", help="emit single-line JSON")
+
+    run = sub.add_parser("run")
+    run.add_argument("task_id", nargs="?", default=None, help="task id (omit when using --all)")
+    run.add_argument("--all", action="store_true", help="run every pending task concurrently")
+    run.add_argument("--cached", action="store_true", help="use FR-04 cache when available")
+    run.add_argument("--json", action="store_true", dest="json_mode", help="emit single-line JSON")
     return p
 
 
@@ -91,12 +103,62 @@ def _cmd_submit(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_run(args: argparse.Namespace) -> int:
+    """[FR-02] Execute a single pending task, or every pending task via `--all`.
+
+    Single-task mode: exit 0 on done/failed, exit 4 on timeout.
+    `--all` mode: ThreadPoolExecutor with `TASKQ_MAX_WORKERS` workers; each
+    worker re-reads + re-writes `tasks.json` under the shared store lock,
+    so concurrent writers never corrupt the file (NFR-03 + NP-13).
+    """
+    if args.all:
+        pending = store.list_pending()
+        max_workers = int(os.environ.get("TASKQ_MAX_WORKERS", "4"))
+
+        def _run_one(record: dict) -> None:
+            task = Task(**record)
+            executor.run_task(task)
+            store.update_task(task)
+
+        with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
+            list(pool.map(_run_one, pending))
+
+        if args.json_mode:
+            sys.stdout.write(json.dumps({"ran": len(pending)}) + "\n")
+            sys.stdout.flush()
+        return 0
+
+    # Single-task mode.
+    if not args.task_id:
+        print("error: run requires a task id or --all", file=sys.stderr)
+        return _EXIT_VALIDATION
+
+    record = store.get_task(args.task_id)
+    if record is None:
+        print(f"error: unknown task id '{args.task_id}'", file=sys.stderr)
+        return _EXIT_VALIDATION
+
+    task = Task(**record)
+    executor.run_task(task)
+    store.update_task(task)
+
+    if args.json_mode:
+        sys.stdout.write(json.dumps(task.to_dict()) + "\n")
+        sys.stdout.flush()
+
+    if task.status == "timeout":
+        return _EXIT_TIMEOUT
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point. Returns the process exit code (0 / 2 / ...)."""
     parser = _build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.command == "submit":
         return _cmd_submit(args)
+    if args.command == "run":
+        return _cmd_run(args)
     # No subcommand provided — keep behaviour minimal for FR-01 scope.
     parser.print_help(sys.stderr)
     return 2

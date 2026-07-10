@@ -61,3 +61,10 @@ class Task:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, record: dict) -> "Task":
+        """Re-hydrate a `Task` from a persisted JSON record (FR-02 lookup)."""
+        # `attempts` is internal — pre-GREEN records may not carry it; default 0.
+        kwargs = {k: v for k, v in record.items() if k in cls.__dataclass_fields__}
+        return cls(**kwargs)
