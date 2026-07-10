@@ -5,6 +5,9 @@
 with ThreadPoolExecutor; single-task timeout → exit 4).
 [FR-03] Citations: SPEC.md §3 FR-03 (circuit breaker consult before
 each run; ``OPEN`` → exit 3 + stderr ``breaker open``, no subprocess).
+[FR-04] Citations: SPEC.md §3 FR-04 (--cached consults the TTL cache;
+TTL-fresh done entry replays without subprocess; miss/expired run
+normally and refresh the cache on ``done`` only).
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .breaker import Breaker
+from .cache import Cache, compute_signature
 from .executor import run_task
 from .store import TaskStore
 
@@ -127,15 +131,54 @@ def submit_cmd(cmd: str, name: str | None, json_mode: bool) -> int:
 _DEFAULT_MAX_WORKERS = 4
 
 
-def _run_for_store(task: dict) -> None:
+def _replay_from_cache(entry: dict[str, Any]) -> dict[str, Any]:
+    """Build a result dict that mirrors a cached ``done`` entry.
+
+    [FR-04] Citations: SPEC.md §3 FR-04 (replay applies the cached
+    exit_code / stdout_tail / stderr_tail / duration_ms / finished_at
+    without invoking subprocess; the task record must be tagged
+    ``cached: True``).
+    """
+    return {
+        "status": entry.get("status"),
+        "exit_code": entry.get("exit_code"),
+        "stdout_tail": entry.get("stdout_tail"),
+        "stderr_tail": entry.get("stderr_tail"),
+        "duration_ms": entry.get("duration_ms"),
+        "finished_at": entry.get("finished_at"),
+        "cached": True,
+    }
+
+
+def _run_for_store(task: dict, cached: bool) -> None:
     """Execute ``task`` (dict form, from store) and persist the result.
 
-    Worker-pool callback. Errors are propagated to the caller of
-    ``Future.result()`` so the pool surfaces failures instead of silently
-    swallowing them. Concurrent writers serialise on
-    ``TaskStore._lock`` (NFR-03).
+    [FR-02] Citations: SPEC.md §3 FR-02 (worker-pool callback; errors
+    propagated via ``Future.result()``; concurrent writes serialise on
+    ``TaskStore._lock``).
+    [FR-04] Citations: SPEC.md §3 FR-04 (--cached consults the TTL
+    cache; TTL-fresh done entry replays without subprocess; miss/expired
+    runs normally and refreshes the cache on ``done`` only; writes are
+    thread-safe via ``Cache._lock``).
     """
+    cmd_str = task["command"]
+    cache = Cache()
+
+    if cached:
+        signature = compute_signature(cmd_str)
+        hit = cache.get(signature)
+        if hit is not None:
+            TaskStore().update_task(task["id"], **_replay_from_cache(hit))
+            return
+
     result = run_task(task)
+    if cached and result.get("status") == "done":
+        cache.put(
+            signature if cached else compute_signature(cmd_str),
+            cmd_str,
+            result,
+            task["id"],
+        )
     TaskStore().update_task(task["id"], **result)
 
 
@@ -161,7 +204,7 @@ def run_cmd(
     * ``4`` single task finished in ``timeout``.
     * ``1`` other internal error.
     """
-    del cached, json_mode  # FR-04 cache flag deferred to FR-04 implementation.
+    del json_mode  # FR-05 json output deferred to FR-05 implementation.
 
     # FR-03: consult the global breaker before doing any work. OPEN
     # state rejects the run immediately, without invoking subprocess.
@@ -179,7 +222,7 @@ def run_cmd(
         if not pending:
             return 0
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(_run_for_store, t) for t in pending]
+            futures = [pool.submit(_run_for_store, t, cached) for t in pending]
             for fut in futures:
                 # Propagate exceptions so the pool surfaces failures.
                 fut.result()
@@ -191,7 +234,24 @@ def run_cmd(
         if target is None:
             print(f"unknown task id: {task_id}", file=sys.stderr)
             return 2
+        cmd_str = target["command"]
+        cache = Cache()
+
+        if cached:
+            signature = compute_signature(cmd_str)
+            hit = cache.get(signature)
+            if hit is not None:
+                store.update_task(task_id, **_replay_from_cache(hit))
+                return 0
+
         result = run_task(target)
+        if cached and result.get("status") == "done":
+            cache.put(
+                signature if cached else compute_signature(cmd_str),
+                cmd_str,
+                result,
+                task_id,
+            )
         store.update_task(task_id, **result)
         # SPEC §3 FR-02 / FR-05: single-task timeout → exit 4.
         if result.get("status") == "timeout":
