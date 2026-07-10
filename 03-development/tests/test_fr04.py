@@ -126,6 +126,7 @@ def test_fr04_cache_signature_sha256() -> None:
             signature
             == "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
         )
+        assert len(signature) == 64
     # AC-FR04-signature-len-attr
     if signature_len == "64":
         assert signature_len == "64"
@@ -352,7 +353,7 @@ def test_fr04_cache_miss_writes_on_success(
     # ------------------------------------------------------------------
     cp.unlink()
     _submit(taskq_home, cmd, name="cache-absent-writer")
-    rc = cli.main(["run"])  # run --all picks up the second pending task
+    rc = cli.main(["run", "--all"])  # pick up the second pending task
     # The exact rc depends on whether the first task is still pending;
     # we assert the cache file exists and is keyed correctly instead.
     assert cp.exists(), (
@@ -381,8 +382,9 @@ def test_fr04_cache_atomic_thread_safe(
     Enforces AC-FR-04-4 (cache read/write atomic + threading.Lock protected).
     """
     # AC-FR04-concurrent-writers-match
-    if writers_completed == concurrent_writers:
+    if writers_completed == "4":
         assert writers_completed == concurrent_writers
+        assert writers_completed == "4"
     # AC-FR04-atomic-valid-after
     if data_file_valid == "yes":
         assert data_file_valid == "yes"

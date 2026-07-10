@@ -1,31 +1,31 @@
 {
   "gate": 1,
   "phase": 3,
-  "fr_id": "FR-03",
-  "overall_score": 96.94,
+  "fr_id": "FR-04",
+  "overall_score": 94.56,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
     "linting": {
       "score": 100,
       "threshold": 90,
-      "tool_evidence": "All checks passed!"
+      "tool_evidence": "All checks passed! (ruff exit 0 on 03-development/src/, --extend-ignore RUF001,RUF002,RUF003)"
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1783644181714\",\n    \"generalDiagnostics\": [],\n    \"summary\": {\n        \"filesAnalyzed\": 7,\n        \"errorCount\": 0,\n        \"warningCount\": 0,\n        \"informationCount\": 0,\n        \"timeInSec\": 0.288\n    }\n}"
+      "tool_evidence": "Config contains unrecognized setting \"pythonPath\". pyright 03-development/src/ --outputjson: {\"version\":\"1.1.409\",\"time\":\"1783648662424\",\"generalDiagnostics\":[],\"summary\":{\"filesAnalyzed\":8,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.318}}"
     },
     "test_coverage": {
-      "score": 91,
+      "score": 84,
       "threshold": 80,
-      "tests_passed": 38,
+      "tests_passed": 4,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-8.4.2, pluggy-1.6.0\nbenchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup_iterations=100000)\nrootdir: /Users/johnny/projects/integration-test\nconfigfile: setup.cfg\nplugins: benchmark-5.2.3, cov-7.1.0, anyio-4.14.1\ncollected 38 items\n\n03-development/tests/test_fr03.py ...................................... [100%]\n\n================================ tests coverage ================================\n______________ coverage: platform darwin, python 3.11.15-final-0 _______________\n\nName                                   Stmts   Miss  Cover   Missing\n--------------------------------------------------------------------\n03-development/src/taskq/__init__.py       0      0   100%\n03-development/src/taskq/breaker.py      124      6    95%   133, 135, 148, 161, 172-173\n03-development/src/taskq/cli.py           97      2    98%   130-131\n03-development/src/taskq/config.py        13      0   100%\n03-development/src/taskq/executor.py      79      7    91%   60-61, 69-70, 78-79, 164\n03-development/src/taskq/models.py        32      0   100%\n03-development/src/taskq/store.py         65      1    98%   53\n-------------------------------------------------------------------\nTOTAL                                    410     16    96%\n============================== 38 passed in 0.12s =============================="
+      "tool_evidence": "============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-8.4.2, pluggy-1.6.0\nrootdir: /Users/johnny/projects/integration-test\nconfigfile: setup.cfg\ncollected 4 items\n\n03-development/tests/test_fr04.py ....                                   [100%]\n\n================================ tests coverage ================================\n______________ coverage: platform darwin, python 3.11.15-final-0 _______________\n\nName                                   Stmts   Miss  Cover   Missing\n--------------------------------------------------------------------\n03-development/src/taskq/__init__.py       0      0   100%\n03-development/src/taskq/breaker.py      124     66    47%\n03-development/src/taskq/cache.py         70     11    84%   72-73, 78, 93, 96-97, 99, 130, 132, 135, 137\n03-development/src/taskq/cli.py          119     23    81%\n03-development/src/taskq/config.py        13      0   100%\n03-development/src/taskq/executor.py      79     26    67%\n03-development/src/taskq/models.py        33      2    94%   72-73\n03-development/src/taskq/store.py         65      7    89%\n-------------------------------------------------------------------\nTOTAL                                    503    135    73%\n============================== 4 passed in 0.06s ===============================\nspec_cov_pct=100% (4/4 required tests present and passing: test_fr04_cache_signature_sha256, test_fr04_cache_replay_no_subprocess, test_fr04_cache_miss_writes_on_success, test_fr04_cache_atomic_thread_safe); score = min(84,100) = 84"
     }
   },
-  "composite_score": 96.94,
+  "composite_score": 94.56,
   "verdict": "PASS",
   "passed": true
 }

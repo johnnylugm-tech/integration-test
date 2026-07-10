@@ -47,6 +47,9 @@ class Task:
     # Internal: attempt counter for FR-03 retry bookkeeping.
     attempts: int = 0
     last_error: Optional[str] = field(default=None)
+    # [FR-04] cache-replay flag — True when run --cached served this task
+    # from $TASKQ_HOME/cache.json (defaults False on live execution).
+    cached: bool = False
 
     @classmethod
     def new_pending(cls, command: str, name: Optional[str]) -> "Task":
