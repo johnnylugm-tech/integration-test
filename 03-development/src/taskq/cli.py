@@ -1,7 +1,9 @@
-"""[FR-01] Task submission and validation.
+"""[FR-01/FR-02] CLI dispatch: `submit` (FR-01) and `run` (FR-02).
 
-Citations: SPEC.md §3 FR-01 (FR-01: Task Submission and Validation).
-NFR-02 (injection-char rejection) — SPEC.md §3 NFR-02.
+Citations:
+  - SPEC.md §3 FR-01 (FR-01: Task Submission and Validation)
+  - SPEC.md §3 FR-02 (FR-02: Task Executor)
+  - NFR-02 (injection-char rejection) — SPEC.md §3 NFR-02
 """
 from __future__ import annotations
 
@@ -140,10 +142,34 @@ def _parse_submit_args(submit_args: list[str]) -> tuple[str, str | None] | int:
     return command, name
 
 
-def main(argv: list[str] | None = None) -> int:
-    """[FR-01] CLI entry point. Returns the process exit code.
+def _run_single(task_id: str, timeout: float) -> int:
+    """[FR-02] Dispatch a single-task `run <id>` invocation.
 
-    Citations: SPEC.md §3 FR-01.
+    Returns the process exit code (timeout → 4, else 0).
+    """
+    from taskq import store
+    from taskq.executor import execute_task
+
+    tasks = store.load_tasks()
+    if task_id not in tasks:
+        print(f"error: unknown task: {task_id}", file=sys.stderr)
+        return 2
+    status = execute_task(task_id, tasks[task_id]["command"], timeout)
+    return 4 if status == "timeout" else 0
+
+
+def _run_all(timeout: float, max_workers: int) -> int:
+    """[FR-02] Dispatch a `run --all` invocation."""
+    from taskq.executor import run_all
+
+    run_all(timeout=timeout, max_workers=max_workers)
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """[FR-01/FR-02] CLI entry point. Returns the process exit code.
+
+    Citations: SPEC.md §3 FR-01 / FR-02.
     """
     if argv is None:
         argv = sys.argv[1:]
@@ -153,12 +179,26 @@ def main(argv: list[str] | None = None) -> int:
         json_mode = True
         argv = argv[1:]
 
-    if not argv or argv[0] != "submit":
-        print("error: unsupported command (only `submit` is implemented)", file=sys.stderr)
+    if not argv:
+        print("error: missing subcommand (expected `submit` or `run`)", file=sys.stderr)
         return 2
 
-    parsed = _parse_submit_args(argv[1:])
-    if isinstance(parsed, int):
-        return parsed
-    command, name = parsed
-    return _submit(command, name, json_mode)
+    if argv[0] == "submit":
+        parsed = _parse_submit_args(argv[1:])
+        if isinstance(parsed, int):
+            return parsed
+        command, name = parsed
+        return _submit(command, name, json_mode)
+
+    if argv[0] == "run":
+        if len(argv) < 2:
+            print("error: `run` requires a task id or `--all`", file=sys.stderr)
+            return 2
+        timeout = float(os.environ.get("TASKQ_TASK_TIMEOUT", "10.0"))
+        max_workers = int(os.environ.get("TASKQ_MAX_WORKERS", "4"))
+        if argv[1] == "--all":
+            return _run_all(timeout, max_workers)
+        return _run_single(argv[1], timeout)
+
+    print(f"error: unsupported command: {argv[0]!r}", file=sys.stderr)
+    return 2
