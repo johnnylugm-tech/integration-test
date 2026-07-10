@@ -63,6 +63,7 @@ class Task:
         )
 
     def to_dict(self) -> dict:
+        """[FR-01] Serialise the Task to a plain dict for $TASKQ_HOME/tasks.json."""
         return asdict(self)
 
     @classmethod
