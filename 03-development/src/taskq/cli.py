@@ -1,6 +1,8 @@
-"""taskq CLI — submission command.
+"""taskq CLI — submission + run commands.
 
 [FR-01] Citations: SPEC.md §3 FR-01 (Task Submission and Validation).
+[FR-02] Citations: SPEC.md §3 FR-02 (run single task by id; run --all
+with ThreadPoolExecutor; single-task timeout → exit 4).
 """
 
 from __future__ import annotations
@@ -9,9 +11,13 @@ import json
 import os
 import sys
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from .executor import run_task
+from .store import TaskStore
 
 # Maximum allowed command length per SPEC §3 FR-01 (長度規則).
 MAX_COMMAND_LEN = 1000
@@ -112,3 +118,71 @@ def submit_cmd(cmd: str, name: str | None, json_mode: bool) -> int:
     else:
         print(task_id)
     return 0
+
+
+# Default max workers for ``run --all`` (SPEC §5.1 TASKQ_MAX_WORKERS).
+_DEFAULT_MAX_WORKERS = 4
+
+
+def _run_for_store(task: dict) -> None:
+    """Execute ``task`` (dict form, from store) and persist the result.
+
+    Worker-pool callback. Errors are propagated to the caller of
+    ``Future.result()`` so the pool surfaces failures instead of silently
+    swallowing them. Concurrent writers serialise on
+    ``TaskStore._lock`` (NFR-03).
+    """
+    result = run_task(task)
+    TaskStore().update_task(task["id"], **result)
+
+
+def run_cmd(
+    task_id: str | None,
+    all_mode: bool,
+    cached: bool,
+    json_mode: bool,
+) -> int:
+    """Run a single task by id, or all pending tasks concurrently.
+
+    [FR-02] Citations: SPEC.md §3 FR-02 (run single: exit 4 on timeout;
+    run --all: ThreadPoolExecutor(max_workers=TASKQ_MAX_WORKERS),
+    thread-safe writes); NFR-03 (Lock-protected store updates).
+
+    Returns the process exit code per SPEC §3 FR-05:
+
+    * ``0`` success (single task done/failed, or --all completed).
+    * ``2`` unknown task id (single mode).
+    * ``4`` single task finished in ``timeout``.
+    * ``1`` other internal error.
+    """
+    del cached, json_mode  # FR-04 cache flag deferred to FR-04 implementation.
+
+    store = TaskStore()
+
+    if all_mode:
+        workers = int(os.environ.get("TASKQ_MAX_WORKERS", _DEFAULT_MAX_WORKERS))
+        tasks = store.load_tasks()
+        pending = [t for t in tasks if t.get("status") == "pending"]
+        if not pending:
+            return 0
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(_run_for_store, t) for t in pending]
+            for fut in futures:
+                # Propagate exceptions so the pool surfaces failures.
+                fut.result()
+        return 0
+
+    if task_id is not None:
+        tasks = store.load_tasks()
+        target = next((t for t in tasks if t.get("id") == task_id), None)
+        if target is None:
+            print(f"unknown task id: {task_id}", file=sys.stderr)
+            return 2
+        result = run_task(target)
+        store.update_task(task_id, **result)
+        # SPEC §3 FR-02 / FR-05: single-task timeout → exit 4.
+        if result.get("status") == "timeout":
+            return 4
+        return 0
+
+    return 1
