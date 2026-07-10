@@ -128,6 +128,7 @@ def test_fr02(
     tasks_valid_after,
     timeout_seconds,
     sleep_command,
+    expected_exit,
 ):
     # Re-isolate TASKQ_HOME inside the parametrize body for clarity.
     monkeypatch.setenv("TASKQ_HOME", str(tmp_path))

@@ -15,6 +15,11 @@ from typing import Any, Optional
 
 _TASKS_FILE = "tasks.json"
 
+# Shared lock so concurrent ThreadPoolExecutor workers (FR-02 ``run --all``)
+# serialise on the SAME mutex. Per-instance locks would let each worker
+# win its own race and clobber the others' writes.
+_SHARED_LOCK = threading.Lock()
+
 
 def _store_path() -> Path:
     """Return the path to ``tasks.json`` inside ``$TASKQ_HOME``.
@@ -40,7 +45,10 @@ class TaskStore:
     def __init__(self) -> None:
         # NFR-03 contract: every TaskStore instance exposes a
         # ``threading.Lock`` for serialising concurrent writers.
-        self._lock = threading.Lock()
+        # Use the module-level shared lock so all instances serialise
+        # on the same mutex (per-instance locks would let concurrent
+        # ``run --all`` workers race on the file and clobber each other).
+        self._lock = _SHARED_LOCK
 
     # ----- public API --------------------------------------------------
 
@@ -88,9 +96,22 @@ class TaskStore:
             return json.load(fh)
 
     def _save_unsafe(self, tasks: list[dict[str, Any]]) -> None:
+        import tempfile
+
         path = _store_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(tasks, fh, ensure_ascii=False)
-        os.replace(tmp, path)
+        # Unique tmp per writer: concurrent ThreadPoolExecutor workers
+        # must not race on a shared ``tasks.json.tmp`` (NFR-03).
+        fd, tmp_str = tempfile.mkstemp(
+            prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(tasks, fh, ensure_ascii=False)
+            os.replace(tmp_str, path)
+        except BaseException:
+            try:
+                os.unlink(tmp_str)
+            except OSError:
+                pass
+            raise

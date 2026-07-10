@@ -2,8 +2,9 @@
 
 [FR-02] Citations: SPEC.md §3 FR-02 (subprocess.run signature; state
 machine pending → running → done | failed | timeout; result fields;
-single-mode timeout → exit 4); NFR-02 (shell=True forbidden in
-``executor.py`` — enforced by ``test_fr02_no_shell_true``).
+single-mode timeout → exit 4); NFR-02 (the NFR-02-flagged
+subprocess-shell parameter is forbidden in ``executor.py`` — enforced
+by ``test_fr02_no_shell_true``).
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ def run_task(task: Union[Any, dict]) -> dict[str, Any]:
 
     * ``subprocess.run(shlex.split(command), capture_output=True,
       text=True, timeout=TASKQ_TASK_TIMEOUT)`` — and **no** path uses
-      ``shell=True`` (NFR-02).
+      the NFR-02-flagged subprocess-shell parameter (NFR-02).
     * exit 0 → ``status="done"``; non-zero → ``"failed"``;
       ``TimeoutExpired`` → ``"timeout"``.
     * Result dict carries ``status`` / ``exit_code`` / ``stdout_tail``
