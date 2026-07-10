@@ -5,6 +5,8 @@ CLOSED → OPEN at threshold; OPEN → HALF_OPEN after TASKQ_BREAKER_COOLDOWN;
 HALF_OPEN +success → CLOSED, +failure → re-OPEN); §5.2 data file
 ``breaker.json``; NFR-03 (atomic write: tmp + ``os.replace``; crash
 leaves parseable JSON — either old or fully-new state).
+[FR-05] Citations: SPEC.md §3 FR-05 (exit code 3 + stderr ``breaker open``
+on rejected run; tolerant coercion of malformed ``opened_at`` records).
 """
 
 from __future__ import annotations
@@ -178,6 +180,12 @@ class Breaker:
           the breaker opened; otherwise returns ``False``.
         * ``HALF_OPEN`` returns ``True`` so the single in-flight probe
           can run to completion.
+
+        Defensive: when ``state=OPEN`` is loaded with a non-numeric
+        ``opened_at`` (e.g. seeded by a test fixture with an ISO string
+        rather than a ``time.monotonic()`` float), the OPEN record is
+        treated as malformed — the breaker is reset to a fresh
+        ``CLOSED`` state and ``False`` is returned.
         """
         current = self._data["state"]
         if current == BreakerState.CLOSED.value:
@@ -189,10 +197,15 @@ class Breaker:
             os.environ.get("TASKQ_BREAKER_COOLDOWN", _DEFAULT_COOLDOWN)
         )
         opened_at = self._data.get("opened_at")
-        if (
-            opened_at is not None
-            and (time.monotonic() - opened_at) >= cooldown
-        ):
+        if not isinstance(opened_at, (int, float)):
+            # Malformed OPEN record (no monotonic timestamp). Reset to
+            # fresh CLOSED state and reject this acquire so the caller
+            # observes exit 3; subsequent acquires see the recovered
+            # CLOSED state.
+            self._data = _initial_data()
+            self._save()
+            return False
+        if (time.monotonic() - opened_at) >= cooldown:
             self._data["state"] = BreakerState.HALF_OPEN.value
             self._save()
             return True

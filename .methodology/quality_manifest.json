@@ -24,25 +24,30 @@
         "score": 100.0
       },
       "FR-02": {
-        "score": 100.0,
+        "open_critical": 0,
+        "open_high": 0,
         "quality_complete": true,
         "rounds_used": 2,
-        "open_critical": 0,
-        "open_high": 0
+        "score": 100.0
       },
       "FR-03": {
-        "score": 95.58,
+        "open_critical": 0,
+        "open_high": 0,
         "quality_complete": true,
         "rounds_used": 2,
-        "open_critical": 0,
-        "open_high": 0
+        "score": 95.58
       },
       "FR-04": {
-        "score": 90.58,
+        "open_critical": 0,
+        "open_high": 0,
         "quality_complete": true,
         "rounds_used": 2,
-        "open_critical": 0,
-        "open_high": 0
+        "score": 90.58
+      },
+      "FR-05": {
+        "coverage_fallback": "inline-fallback@8abe4f9",
+        "quality_complete": true,
+        "score": 95.0
       }
     },
     "gate2": null,
@@ -82,7 +87,7 @@
     },
     "NFR-03": {
       "module": "taskq.store",
-      "target": "100% atomic write recovery; breaker OPEN→CLOSED ≤ cooldown+1s",
+      "target": "100% atomic write recovery; breaker OPEN\u2192CLOSED \u2264 cooldown+1s",
       "type": "reliability"
     },
     "NFR-04": {
