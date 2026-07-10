@@ -14,6 +14,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 # Forbidden shell metacharacters (NFR-02). Listed in SPEC.md §3 FR-01.
 _INJECTION_CHARS = set(";|&$><`")
@@ -175,7 +176,7 @@ def _run_single(task_id: str, timeout: float) -> int:
         print(f"error: unknown task: {task_id}", file=sys.stderr)
         return 2
 
-    status = execute_task(task_id, tasks[task_id]["command"], timeout)
+    status = execute_task(task_id, cast(str, tasks[task_id]["command"]), timeout)
 
     if status == "done":
         bp.record_success()

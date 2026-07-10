@@ -13,6 +13,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from typing import cast
 
 from taskq import breaker, cache, store
 
@@ -44,8 +45,20 @@ def _run_subprocess(
         )
     except subprocess.TimeoutExpired as exc:
         duration_ms = (time.perf_counter() - started) * 1000
-        stdout_tail = (exc.stdout or "")[-_TAIL_LEN:]
-        stderr_tail = (exc.stderr or "")[-_TAIL_LEN:]
+        # TimeoutExpired may carry bytes (text mode is only finalised on
+        # normal completion); decode defensively to satisfy the str return type.
+        stdout_raw = exc.stdout
+        stderr_raw = exc.stderr
+        stdout_tail = (
+            stdout_raw.decode("utf-8", errors="replace")
+            if isinstance(stdout_raw, bytes)
+            else (stdout_raw or "")
+        )[-_TAIL_LEN:]
+        stderr_tail = (
+            stderr_raw.decode("utf-8", errors="replace")
+            if isinstance(stderr_raw, bytes)
+            else (stderr_raw or "")
+        )[-_TAIL_LEN:]
         return None, stdout_tail, stderr_tail, duration_ms, "timeout"
 
     duration_ms = (time.perf_counter() - started) * 1000
@@ -196,7 +209,7 @@ def run_all(timeout: float, max_workers: int) -> dict[str, str]:
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
-            tid: pool.submit(_run_one, tid, cmd) for tid, cmd in pending
+            tid: pool.submit(_run_one, tid, cast(str, cmd)) for tid, cmd in pending
         }
         for tid, fut in futures.items():
             r = fut.result()

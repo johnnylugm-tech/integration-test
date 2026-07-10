@@ -1,31 +1,31 @@
 {
   "gate": 1,
   "phase": 3,
-  "fr_id": "FR-01",
-  "overall_score": 99.66,
+  "fr_id": "FR-04",
+  "overall_score": 97.075,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
     "linting": {
-      "score": 100,
+      "score": 95,
       "threshold": 90,
-      "tool_evidence": "All checks passed!\n(ruff check 03-development/src/ --extend-ignore RUF001,RUF002,RUF003)"
+      "tool_evidence": "F401 [*] `typing.cast` imported but unused\n  --> 03-development/src/taskq/cache.py:17:20\n   |\n15 | from datetime import datetime, timezone\n16 | from pathlib import Path\n17 | from typing import cast\n   |                    ^^^^\n18 |\n19 | # Process-wide lock guarding the atomic tmp + os.replace sequence for\n   |\nhelp: Remove unused import: `typing.cast`\n\nFound 1 error.\n[*] 1 fixable with the `--fix` option."
     },
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1783678201093\",\n    \"generalDiagnostics\": [],\n    \"summary\": {\n        \"filesAnalyzed\": 3,\n        \"errorCount\": 0,\n        \"warningCount\": 0,\n        \"informationCount\": 0,\n        \"timeInSec\": 0.179\n    }\n}"
+      "tool_evidence": "Config contains unrecognized setting \"pythonPath\".\n{\n    \"version\": \"1.1.409\",\n    \"time\": \"1783683449386\",\n    \"generalDiagnostics\": [],\n    \"summary\": {\n        \"filesAnalyzed\": 7,\n        \"errorCount\": 0,\n        \"warningCount\": 0,\n        \"informationCount\": 0,\n        \"timeInSec\": 0.276\n    }\n}"
     },
     "test_coverage": {
-      "score": 99,
+      "score": 96.25,
       "threshold": 80,
-      "tests_passed": 49,
+      "tests_passed": 4,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-8.4.2, pluggy-1.6.0\nbenchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=8 warmup=False warmup_iterations=100000)\nrootdir: /Users/johnny/projects/integration-test\nconfigfile: setup.cfg\nplugins: benchmark-5.2.3, cov-7.1.0, anyio-4.14.1\ncollected 49 items\n\n03-development/tests/test_fr01.py ...................................... [ 77%]\n...........                                                              [100%]\n\n============================== 49 passed in 0.19s ==============================\n\nCoverage (--include=03-development/src/taskq/cli.py):\nName                              Stmts   Miss  Cover\n03-development/src/taskq/cli.py      91      1    99%\nTOTAL                                91      1    99%\n\nspec_cov: 6/6 required tests present (test_fr01_empty_command_exit2, test_fr01_command_too_long_exit2, test_fr01_injection_char_exit2, test_fr01_duplicate_name_exit2, test_fr01_valid_submit_pending, test_fr01_json_output_single_line) -> 100%"
+      "tool_evidence": "============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-8.4.2, pluggy-1.6.0\nrootdir: /Users/johnny/projects/integration-test\nconfigfile: setup.cfg\nplugins: benchmark-5.2.3, cov-7.1.0, anyio-4.14.1\ncollected 4 items\n\n03-development/tests/test_fr04.py ....                                   [100%]\n\n============================== 4 passed in 0.06s ===============================\n\nCoverage totals: covered_lines=77, num_statements=80, percent_covered=96.25, missing_lines=3"
     }
   },
-  "composite_score": 99.66,
+  "composite_score": 97.075,
   "verdict": "PASS",
   "passed": true
 }
