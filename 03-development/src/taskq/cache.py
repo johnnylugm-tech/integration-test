@@ -14,6 +14,7 @@ import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 # Process-wide lock guarding the atomic tmp + os.replace sequence for
 # cache.json. FR-04 requires thread-safe writes concurrent with FR-02
@@ -116,12 +117,17 @@ class CacheEntry:
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> "CacheEntry":
         """[FR-04] Build a CacheEntry from the on-disk dict shape."""
+        sig_raw = data.get("signature", "")
+        code_raw = data.get("exit_code", 0)
+        out_raw = data.get("stdout_tail", "")
+        err_raw = data.get("stderr_tail", "")
+        cached_raw = data.get("cached_at")
         return cls(
-            signature=str(data.get("signature", "")),
-            exit_code=int(data.get("exit_code", 0)),
-            stdout_tail=str(data.get("stdout_tail", "")),
-            stderr_tail=str(data.get("stderr_tail", "")),
-            cached_at=data.get("cached_at"),
+            signature=sig_raw if isinstance(sig_raw, str) else str(sig_raw),
+            exit_code=code_raw if isinstance(code_raw, int) and not isinstance(code_raw, bool) else int(str(code_raw)),
+            stdout_tail=out_raw if isinstance(out_raw, str) else str(out_raw),
+            stderr_tail=err_raw if isinstance(err_raw, str) else str(err_raw),
+            cached_at=cached_raw if isinstance(cached_raw, str) else None,
         )
 
 
@@ -181,11 +187,16 @@ class Cache:
             entries[sig] = entry.to_dict()
         else:
             # dict path — used by tests that build the on-disk shape directly.
+            sig_raw = entry.get("signature", sig)
+            code_raw = entry.get("exit_code", 0)
+            out_raw = entry.get("stdout_tail", "")
+            err_raw = entry.get("stderr_tail", "")
+            cached_raw = entry.get("cached_at")
             entries[sig] = {
-                "signature": entry.get("signature", sig),
-                "exit_code": int(entry.get("exit_code", 0)),
-                "stdout_tail": str(entry.get("stdout_tail", "")),
-                "stderr_tail": str(entry.get("stderr_tail", "")),
-                "cached_at": entry.get("cached_at") or _now_iso(),
+                "signature": sig_raw if isinstance(sig_raw, str) else str(sig_raw),
+                "exit_code": code_raw if isinstance(code_raw, int) and not isinstance(code_raw, bool) else int(str(code_raw)),
+                "stdout_tail": out_raw if isinstance(out_raw, str) else str(out_raw),
+                "stderr_tail": err_raw if isinstance(err_raw, str) else str(err_raw),
+                "cached_at": (cached_raw if isinstance(cached_raw, str) else None) or _now_iso(),
             }
         _atomic_write(self.path, entries)
