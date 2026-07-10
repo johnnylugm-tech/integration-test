@@ -194,9 +194,9 @@ def _run_for_store(task: dict, cached: bool) -> None:
     """
     cmd_str = task["command"]
     cache = Cache()
+    signature = compute_signature(cmd_str) if cached else ""
 
     if cached:
-        signature = compute_signature(cmd_str)
         hit = cache.get(signature)
         if hit is not None:
             TaskStore().update_task(task["id"], **_replay_from_cache(hit))
@@ -205,7 +205,7 @@ def _run_for_store(task: dict, cached: bool) -> None:
     result = executor.run_task(task)
     if cached and result.get("status") == "done":
         cache.put(
-            signature if cached else compute_signature(cmd_str),
+            signature,
             cmd_str,
             result,
             task["id"],
@@ -267,9 +267,9 @@ def run_cmd(
             return 2
         cmd_str = target["command"]
         cache = Cache()
+        signature = compute_signature(cmd_str) if cached else ""
 
         if cached:
-            signature = compute_signature(cmd_str)
             hit = cache.get(signature)
             if hit is not None:
                 store.update_task(task_id, **_replay_from_cache(hit))
@@ -278,7 +278,7 @@ def run_cmd(
         result = executor.run_task(target)
         if cached and result.get("status") == "done":
             cache.put(
-                signature if cached else compute_signature(cmd_str),
+                signature,
                 cmd_str,
                 result,
                 task_id,

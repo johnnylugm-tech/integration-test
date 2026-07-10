@@ -44,7 +44,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import subprocess
 import threading
 import time
 from pathlib import Path
@@ -232,7 +231,7 @@ def test_fr04(
         # Seed tasks.json with one pending task + cache.json with a
         # TTL-fresh done entry under the matching signature. cli.run_cmd
         # with cached=True must NOT call subprocess.run.
-        from taskq.models import Status, Task  # type: ignore  # RED import OK
+        from taskq.models import Status, Task  # type: ignore  # RED import OK  # noqa: F401
 
         command = "echo replay_hit"
         task_id = "a0000000"
@@ -521,7 +520,7 @@ def test_fr04_cache_signature_sha256():
 
 def test_fr04_cache_replay_no_subprocess(tmp_path, monkeypatch, capsys):
     """[FR-04] case 2: TTL-fresh done cache → replay, no subprocess, cached:true."""
-    from taskq.models import Status, Task  # type: ignore  # RED import OK
+    from taskq.models import Status, Task  # type: ignore  # RED import OK  # noqa: F401
 
     monkeypatch.setenv("TASKQ_CACHE_TTL", "3600")
     command = "python -V"
@@ -650,7 +649,6 @@ def test_fr04_cache_miss_writes_on_success(tmp_path, monkeypatch):
         return SimpleNamespace(returncode=1, stdout="", stderr="boom")
 
     monkeypatch.setattr("taskq.executor.subprocess.run", fake_run_fail)
-    cache_path = tmp_path / "cache.json"
     sigs_before = {entry.get("signature") for entry in _read_cache(tmp_path)}
     exit_code = cli.run_cmd(
         task_id="a0000099", all_mode=False, cached=True, json_mode=False

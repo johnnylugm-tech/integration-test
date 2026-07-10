@@ -51,8 +51,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
-import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -560,7 +558,7 @@ def test_fr03_breaker_atomic_write(tmp_path, monkeypatch):
             pass
 
     assert target.exists(), (
-        f"FR-03 atomic write: breaker.json must exist after a crash"
+        "FR-03 atomic write: breaker.json must exist after a crash"
     )
     try:
         parsed = json.loads(target.read_text(encoding="utf-8"))

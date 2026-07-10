@@ -51,7 +51,6 @@ Per-test GREEN TODOs:
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -441,7 +440,7 @@ def test_fr05(
         from taskq import cli as cli_mod  # RED import — silent until GREEN
         from taskq.cache import compute_signature  # noqa: F401  -- FR-04 surface
         from taskq.executor import run_task  # noqa: F401  -- FR-02/03 surface
-        from taskq.models import Status, Task  # type: ignore  # RED import OK
+        from taskq.models import Status, Task  # type: ignore  # RED import OK  # noqa: F401
 
         # 0: success path — submit happy ⇒ exit 0
         monkeypatch.setattr("sys.argv", ["taskq", "submit", "echo matrix_probe"])
