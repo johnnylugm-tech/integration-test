@@ -77,8 +77,10 @@ def _submit(taskq_home: Path, command: str, name: str | None = None) -> str:
     rc = cli.main(argv)
     assert rc == 0, f"submit must succeed so a pending task exists; got rc={rc}"
     tasks = store.load_tasks(path=taskq_home / "tasks.json")
-    assert len(tasks) == 1, f"expected exactly 1 task after submit, got {len(tasks)}"
-    return next(iter(tasks.keys()))
+    # Return the most recently created task — older tasks from previous
+    # _submit calls may remain in the store (this helper is reused inside
+    # multi-iteration loops in tests like breaker_opens_at_threshold).
+    return next(reversed(tasks.keys()))
 
 
 def _load_tasks(taskq_home: Path) -> dict[str, dict]:
@@ -139,6 +141,9 @@ def test_fr03_retry_up_to_limit(
     # module scope) so monkeypatch.setattr can replace it; the retry loop
     # must wrap each call in a try/except that catches TimeoutExpired too.
     monkeypatch.setattr(executor.subprocess, "run", _fail_run)
+    # GREEN TODO: executor.run_task must call its `sleep` reference (read from
+    # a module-level hook so tests can monkeypatch it without poking time.sleep).
+    monkeypatch.setattr(executor, "_sleep", _injected_sleep)
 
     # Submit + run. The executor must call sleep before each of the 3 retries
     # (4 attempts total = 1 initial + 3 retries → 3 backoff calls).
@@ -525,6 +530,7 @@ _FR03_MIRROR: dict[str, dict[str, str]] = {
     "half_open_after_cooldown": {
         "cooldown_elapsed": "yes",
         "state": "HALF_OPEN",
+        "next_state": "CLOSED",
     },
     "half_open_success_closes": {
         "state": "HALF_OPEN",

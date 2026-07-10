@@ -1,18 +1,18 @@
-"""taskq.cli — argv-driven entry point. Current scope: FR-01 `submit`.
-
-This module exposes the argparse-based entry point. The FR-01 surface
-(`taskq submit "<cmd>" [--name N] [--json]`) validates 4 rules and writes a
-pending task to `$TASKQ_HOME/tasks.json` per SPEC §3.
+"""taskq.cli — argv-driven entry point.
 
 FR coverage:
   - [FR-01] submit command + 4-rule validation + atomic write via store
-  - [FR-05] argparse subcommand dispatcher scaffold (full surface in later FRs)
+  - [FR-02] run single + run --all with ThreadPoolExecutor
+  - [FR-03] run pre-check: breaker OPEN → exit 3 + stderr "breaker open"
+  - [FR-05] argparse subcommand dispatcher scaffold
 
 Citations:
 - SPEC.md §3 FR-01 lines 55-72: submit syntax + 4-rule validation
 - SPEC.md §3 FR-01 line 72: stdout prints id; `--json` prints single-line JSON
+- SPEC.md §3 FR-02 lines 74-83: state machine + result fields
+- SPEC.md §3 FR-03 lines 86-99: retry + circuit breaker
 - SPEC.md §3 FR-05 lines 104-112: full CLI surface (submit/run/status/list/clear)
-- TEST_SPEC.md FR-01 cases 1-6 (lines 87-114): exit 0 / exit 2 contracts
+- TEST_SPEC.md FR-01/02/03 cases (lines 87-204)
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from typing import Sequence
 
-from taskq import executor, store
+from taskq import breaker, executor, store
 from taskq.models import Task
 
 # FR-01 rule 3 (NFR-02) — injection blacklist (SPEC §3 line 65).
@@ -104,13 +104,16 @@ def _cmd_submit(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    """[FR-02] Execute a single pending task, or every pending task via `--all`.
+    """[FR-02/FR-03] Execute a pending task, or every pending task via `--all`.
 
-    Single-task mode: exit 0 on done/failed, exit 4 on timeout.
+    Single-task mode: exit 0 on done/failed, exit 4 on timeout, exit 3 if
+    the breaker is OPEN (no subprocess executed).
     `--all` mode: ThreadPoolExecutor with `TASKQ_MAX_WORKERS` workers; each
     worker re-reads + re-writes `tasks.json` under the shared store lock,
     so concurrent writers never corrupt the file (NFR-03 + NP-13).
     """
+    breaker.reload_config()
+
     if args.all:
         pending = store.list_pending()
         max_workers = int(os.environ.get("TASKQ_MAX_WORKERS", "4"))
@@ -138,6 +141,11 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"error: unknown task id '{args.task_id}'", file=sys.stderr)
         return _EXIT_VALIDATION
 
+    decision = breaker.check_and_admit()
+    if decision == breaker.REJECT:
+        print("breaker open", file=sys.stderr)
+        return _EXIT_BREAKER
+
     task = Task(**record)
     executor.run_task(task)
     store.update_task(task)
@@ -152,7 +160,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Entry point. Returns the process exit code (0 / 2 / ...)."""
+    """Entry point. Returns the process exit code (0 / 2 / 3 / 4)."""
     parser = _build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.command == "submit":
