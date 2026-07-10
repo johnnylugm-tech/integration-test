@@ -30,15 +30,49 @@ export const meta = {
   ],
 }
 
-// ---- args / REPO / PY ----
-// REPO precedence: args.repo override wins, then DEFAULT_REPO canonical path.
-// process.env.HARNESS_REPO cannot be read here — playbook §4 forbids process.*
-// in workflow JS. Caller scripts (run-e2e.mjs / harness-e2e.js /
-// phase1-workflow.mjs) read HARNESS_REPO and inject it via args.repo.
-const DEFAULT_REPO = '.'
-let REPO = DEFAULT_REPO
-if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
-if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) REPO = args.repo
+// ---- REPO auto-resolver (canonical pattern — keep verbatim across phase*.js) ----
+// CWD-INDEPENDENT detection: sub-agents inherit arbitrary CWDs from the
+// Workflow tool launcher, so a `./` default is fragile (see 2026-07-10
+// silent-fail bug). This resolver walks up from any CWD via a sub-agent
+// round-trip to find the project root by its markers (harness_cli.py +
+// .methodology/), then returns the absolute path. args.repo is accepted as
+// an absolute-path override (escape hatch) — relative args.repo is rejected
+// loudly. Single round-trip per workflow run (~10-30s) for guaranteed
+// correctness across CWD drift, integration-test path changes, and CI clones.
+async function resolveRepo() {
+  if (typeof args === 'string') { try { args = JSON.parse(args) } catch {} }
+  let argRepo = ''
+  if (args && typeof args === 'object' && typeof args.repo === 'string' && args.repo.length > 0) argRepo = args.repo
+  if (argRepo) {
+    if (!argRepo.startsWith('/')) {
+      throw new Error(
+        '[phase3-implementation] args.repo must be an absolute path (got: "' + argRepo + '").\n'
+        + '  Workflow tool sub-agents inherit arbitrary CWDs — relative paths break silently.'
+      )
+    }
+    log('  REPO: from args.repo override = ' + argRepo)
+    return argRepo
+  }
+  const r = await agent(
+    'You are the REPO RESOLVER. Find the project root by walking up from your current CWD until a directory contains BOTH `harness_cli.py` AND `.methodology/`.\n'
+    + 'Run EXACTLY this command via Bash (single line, copy-paste verbatim):\n'
+    + 'cd "$(pwd)"; while [ "$(pwd)" != "/" ] && ! { [ -f harness_cli.py ] && [ -d .methodology ]; }; do cd ..; done; '
+    + 'if [ -f harness_cli.py ] && [ -d .methodology ]; then echo "REPO=$(pwd)"; else echo "REPO_NOT_FOUND cwd=$(pwd)"; fi\n'
+    + 'Report the literal stdout as your final message (no commentary, no transformation).',
+    { label: 'resolve-repo', agentType: 'general-purpose' }
+  )
+  const text = String(r ?? '').trim()
+  const match = text.match(/REPO=(\S+)/)
+  if (match && match[1].startsWith('/')) {
+    log('  REPO: auto-detected via walk-up = ' + match[1])
+    return match[1]
+  }
+  throw new Error(
+    '[phase3-implementation] REPO not auto-detected (resolver returned: "' + text.slice(0, 200) + '")\n'
+    + '  Either pass args.repo = absolute path, or run from inside the project repo so harness_cli.py is reachable.'
+  )
+}
+const REPO = await resolveRepo()
 const PY = REPO + '/.venv/bin/python'
 log('REPO = ' + REPO + ' | PY = ' + PY)
 
@@ -306,6 +340,7 @@ for (const frId of frIds) {
     gate1Pass.push(frId)
   } else {
         log('  === ' + frId + ' (' + (frTitle[frId] || '') + ') — TDD chain ===')
+    const frNum = frId.match(/\d+/)[0].padStart(2, '0')
     const frReport = await agent(
       'YOU ARE THE IMPLEMENTER for ' + frId + ' (' + (frTitle[frId] || '') + '). Run the full TDD chain for THIS ONE FR.\n'
       + 'REPO: ' + REPO + '\nPYTHON: ' + PY + '\n\n'
@@ -330,7 +365,7 @@ for (const frId of frIds) {
       + '6. ORCH-POST (after GATE1 PASS, per phase3_plan.md [ORCH-POST]):\n'
       + '   a. `' + PY + ' ' + REPO + '/harness_cli.py spec-coverage-check --project ' + REPO + ' --threshold 40.0 --fr-id ' + frId + '` (per-FR D4 ≥40%). FAIL → add the missing test implementations for ' + frId + ', re-run.\n'
       + '   b. `' + PY + ' ' + REPO + '/harness/scripts/generate_sab.py --project ' + REPO + ' --overwrite` (regenerate SAB.json).\n\n'
-      + 'Implement the module per SPEC.md (read ' + REPO + '/SPEC.md for ' + frId + ') + SAD.md module mapping. Write source under the project\'s `src/` tree as specified in SAD §2 (do not assume a fixed project layout — read SAD §2 for the module path; e.g. for the canonical `03-development/src/<module>/` layout, use that; otherwise follow whatever SAD §2 specifies). Tests under `tests/` per project layout. Docstrings must include [' + frId + '] reference (NFR-05).\n\n'
+      + 'Implement the module per SPEC.md (read ' + REPO + '/SPEC.md for ' + frId + ') + SAD.md module mapping. Write source under the project\'s `src/` tree as specified in SAD §2 (do not assume a fixed project layout — read SAD §2 for the module path; e.g. for the canonical `03-development/src/<module>/` layout, use that; otherwise follow whatever SAD §2 specifies). Tests under `tests/` per project layout. All tests for ' + frId + ' MUST live in the single canonical file `tests/test_fr' + frNum + '.py` — this is the only filename the harness coverage/RED-check/GATE1-DELTA diff tooling recognizes. Do not create satellite files like `test_fr' + frNum + '_unit.py`; add more test functions to the one file instead. Docstrings must include [' + frId + '] reference (NFR-05).\n\n'
       + 'Report final line: "' + frId + ' GATE1: PASS" or "' + frId + ' GATE1: FAIL — <reason>".\n\n'
       + 'SCOPE RULES:\n- DO NOT implement any FR OTHER than ' + frId + '.\n- DO NOT run run-gate (Gate 2), advance-phase, or push-milestone.\n- DO NOT edit .methodology/quality_manifest.json or .sessi-work/gate1_result.json to fake/reset scores — fix the underlying code/tests instead.\n- DO NOT modify harness/ (HR-17).\n- ONLY the 6 steps above for ' + frId + ' (spec-coverage-check + generate_sab.py in step 6 are allowed).',
       { label: 'tdd-' + frId, phase: 'Per-FR TDD', agentType: 'general-purpose' },
