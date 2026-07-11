@@ -1,7 +1,7 @@
 # Project Brief — taskq
 
 ## canonical_spec
-SPEC.md (v3.0.0, 2026-07-04, 5 FR / 6 NFR / 8 env vars)
+SPEC.md (v4.0.0, 2026-07-11, 5 FR / **10 NFR** / 8 env vars)
 
 ## Project Domain
 Local task queue CLI tool: submit shell commands as tasks; run with
@@ -38,6 +38,21 @@ cache; query status; clear storage.
 - **Architecture**: `no_circular_dependencies` among the 8 modules;
   `taskq.executor` and `taskq.store` are framework-classified
   high-risk modules
+- **Resilience**: Three data files must survive fault-injection
+  scenarios (mid-write corruption / `OSError` / disk-full) — either
+  recover from backup or fail-fast with explicit stderr + non-zero
+  exit; never silently rebuild or swallow errors (NFR-07)
+- **Concurrency**: Multiple `python -m taskq` processes operating on
+  the same `$TASKQ_HOME` must not corrupt the three data files; use
+  `fcntl.flock` / `msvcrt.locking` as best-effort enhancement layered
+  on top of NFR-03 atomic write (NFR-08)
+- **Scalability**: 1000-task scale `submit` + `status` p95 < 100ms;
+  `run --all` on 100 tasks leaves `tasks.json` valid with no task
+  loss; streaming iterator (no full load in memory) (NFR-09)
+- **Evolvability**: Data files carry a `version` field at root;
+  reading `version < 1` triggers automatic migration; reading
+  `version > 1` refuses with upgrade prompt; pre-migration backup
+  as `<file>.v<n>.bak` retained on failure (NFR-10)
 
 ## FR Inventory (canonical: SPEC.md §3)
 
@@ -59,6 +74,10 @@ cache; query status; clear storage.
 | NFR-04 | security | stdout_tail/stderr_tail 落盤前 redact 敏感行 |
 | NFR-05 | maintainability | 公開函式 docstring 全部含 `[FR-XX]` 引用 |
 | NFR-06 | deployability | 8 個 `TASKQ_*` 環境變數;`.env.example` 完整宣告 |
+| NFR-07 | resilience | 三資料檔在 fault injection 情境下正確處理(恢復或 fail-fast,不可靜默) |
+| NFR-08 | concurrency | 跨 process flock 安全;POSIX `fcntl.flock` / Windows `msvcrt.locking` |
+| NFR-09 | scalability | 1000 tasks p95 < 100ms;`run --all` 100 tasks 無遺失;streaming |
+| NFR-10 | evolvability | 資料檔 `version` 欄位;v0→v1 自動 migrate;備份保留 |
 
 ## Env Var Inventory (canonical: SPEC.md §5.1 + .env.example)
 
@@ -75,11 +94,11 @@ cache; query status; clear storage.
 
 ## Data Files (canonical: SPEC.md §5.2)
 
-| File | Content | FR |
-|------|---------|----|
-| `$TASKQ_HOME/tasks.json` | id → full task fields | FR-01/02 |
-| `$TASKQ_HOME/breaker.json` | state / failure_count / opened_at | FR-03 |
-| `$TASKQ_HOME/cache.json` | command signature → done result + cached_at | FR-04 |
+| File | Content | FR | version (NFR-10) |
+|------|---------|----|----|
+| `$TASKQ_HOME/tasks.json` | `{version:1, tasks:{id→全欄位}}` | FR-01/02 | `1` |
+| `$TASKQ_HOME/breaker.json` | `{version:1, state, failure_count, opened_at}` | FR-03 | `1` |
+| `$TASKQ_HOME/cache.json` | `{version:1, entries:{簽名→done 結果 + cached_at}}` | FR-04 | `1` |
 
 ## Module Layout (canonical: SPEC.md §6)
 
@@ -122,16 +141,20 @@ integrity; docstring FR-cross-ref coverage.
 | R3 | breaker false-lock | cooldown + HALF_OPEN (FR-03) |
 | R4 | cache stale results | TTL expiry forces re-execute (FR-04) |
 | R5 | secret-on-disk leak | stdout_tail/stderr_tail redaction (NFR-04) |
+| R6 | fault injection 干擾正常測試 | 觸發僅透過顯式 CLI flag 或 monkeypatch;正式執行不接受 (NFR-07) |
+| R7 | cross-process flock 在網路 fs 失效 | flock 為 best-effort;偵測到網路 fs 降級並 WARNING (NFR-08) |
+| R8 | scale 1000 tasks 觸發 memory limit | streaming iterator,不一次載入全部 (NFR-09) |
+| R9 | schema migration 失敗導致資料遺失 | migrate 前備份為 `<file>.v<n>.bak`;失敗時保留備份 exit 1 (NFR-10) |
 
 ## Source of Truth
 
 All functional and non-functional requirements are fully specified in
-`SPEC.md` (v3.0.0, 2026-07-04) at the project root — including the §10
+`SPEC.md` (v4.0.0, 2026-07-11) at the project root — including the §10
 framework alignment table and §11 monitoring thresholds.
 
 Phase 1 workflow rules:
 - Agent A must operate in INGESTION MODE: transcribe 100% of
-  `### FR-01..FR-05` and `### NFR-01..NFR-06` headings from SPEC.md —
+  `### FR-01..FR-05` and `### NFR-01..NFR-10` headings from SPEC.md —
   no invention, no omission.
 - TBD / TODO / `<placeholder>` markers from SPEC.md must be captured as
   `NFR-99` or `FR-XX-deferred` (not silently dropped).

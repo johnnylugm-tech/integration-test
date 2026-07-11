@@ -9,14 +9,14 @@
 
 | 欄位 | 值 |
 |------|-----|
-| 文件版本 | v3.0.0 |
-| 採用基線 | v1.0.0 完整版(commit `acbd454`,2026-06-12) |
-| 變更說明 | 從 v2.0.0 精簡版(3 FR / 3 NFR / 3 env)升級為 v1.0.0 完整版(5 FR / 6 NFR / 8 env);新增框架對齊與監控門檻 section |
-| 制訂日期 | 2026-07-04 |
-| 取代版本 | v2.0.0 (commit `dd268cf`, 2026-06-26) |
-| 配套檔案 | `.env.example` (8 vars), `PROJECT_BRIEF.md` (5/6/8 sync) |
+| 文件版本 | v4.0.0 |
+| 採用基線 | v3.0.0 完整版(commit `2fa726c`,2026-07-11) |
+| 變更說明 | 從 v3.0.0 (5 FR / 6 NFR / 8 env)升級為 v4.0.0 (5 FR / **10 NFR** / 8 env);新增 4 個進階健康驗證 NFR(fault injection / cross-process safety / scalability / schema migration)以覆蓋 harness-methodology 的混沌、檔案鎖、大規模、版本演進路徑;**未新增 FR**,P3 實作量不增加 |
+| 制訂日期 | 2026-07-11 |
+| 取代版本 | v3.0.0 (commit `2fa726c`, 2026-07-11) |
+| 配套檔案 | `.env.example` (8 vars, unchanged), `PROJECT_BRIEF.md` (5/10/8 sync) |
 | 文件責任 | 規格單一真實來源(Single Source of Truth);所有實作以此為準 |
-| Phase 1 規範 | Agent A INGESTION MODE — 100% transcribe 全部 `### FR-01..FR-05` 與 `### NFR-01..NFR-06` heading,no invention,no omission |
+| Phase 1 規範 | Agent A INGESTION MODE — 100% transcribe 全部 `### FR-01..FR-05` 與 `### NFR-01..NFR-10` heading,no invention,no omission |
 
 ### 變更日誌
 
@@ -25,6 +25,7 @@
 | v1.0.0 | 2026-06-12 | complete initial | 5 FR / 6 NFR / 8 env(commit acbd454) |
 | v2.0.0 | 2026-06-15 | simplify | 3 FR / 3 NFR / 3 env(commit dd268cf) |
 | v3.0.0 | 2026-07-04 | restore + modernize | 5 FR / 6 NFR / 8 env(+ framework alignment + monitoring thresholds) |
+| v4.0.0 | 2026-07-11 | advanced health coverage | 5 FR / **10 NFR** / 8 env(+ fault injection / cross-process / scalability / schema migration;**no new FR**) |
 
 ---
 
@@ -126,12 +127,18 @@ argparse 子命令(入口 `python -m taskq`):
 | NFR-04 | security | `stdout_tail`/`stderr_tail` 落盤前,匹配 `(sk-[A-Za-z0-9_-]{8,}|token=\S+)` 的行整行以 `[REDACTED]` 取代 |
 | NFR-05 | maintainability | `src/taskq` 全部公開函式/類別有 docstring 且含 `[FR-XX]` 引用 |
 | NFR-06 | deployability | 全部 8 個 `TASKQ_*` 參數讀自環境變數(config.py 統一讀取,含預設值);`.env.example` 逐一宣告並附註解 |
+| NFR-07 | resilience | 三個資料檔必須在 fault injection 情境下正確處理:`tasks.json` / `breaker.json` / `cache.json` 寫入中途損壞(模擬 `OSError` / 模擬磁碟滿 / 中途 kill -9 模擬) → 要麼自動恢復(下次啟動偵測 + 從備份還原)要麼 fail-fast(明確 stderr + 明確 exit code),**不可靜默重建或靜默吞錯**;fault injection 觸發點透過 CLI flag `--inject-fault=<scenario>` 或單元測試的 monkeypatch,正式執行路徑完全不啟用 |
+| NFR-08 | concurrency | **跨行程**(cross-process)安全:多個 `python -m taskq` process 同時操作同一 `$TASKQ_HOME` 不得損壞三個資料檔;使用 `fcntl.flock`(POSIX)/ `msvcrt.locking`(Windows)的檔案鎖;寫入前取得 exclusive lock,讀取前取得 shared lock;**best-effort 增強**,主防線仍為 NFR-03 原子寫;NFS / 網路檔案系統下降級為「無 flock 但維持 atomic write」並發出 `WARNING` |
+| NFR-09 | scalability | 規模擴展:1000 個 task 規模下 `submit` + `status` 組合操作(不含 subprocess 執行)p95 < **100ms**(單一 100 iter 規模 < 50ms 仍由 NFR-01 覆蓋);`run --all` 處理 100 個 task 後 `tasks.json` 為合法 JSON 且 **無任務遺失**;記憶體使用 < 100MB peak(streaming iterator,不在記憶體中載入全部 task) |
+| NFR-10 | evolvability | **Schema migration**:三個資料檔 root 必須包含 `version` 欄位(目前 v1);讀到 `version < 1` 時自動升級到 v1 並寫回;讀到 `version > 1`(未來版本)時拒絕讀取並提示升級工具;migrate 前備份原檔為 `<file>.v<n>.bak`;版本升級失敗時保留備份並以 exit 1 fail-fast |
 
 ---
 
 ## 5. 參數配置
 
 ### 5.1 環境變數(config.py 讀取;`.env.example` 完整宣告)
+
+> **NFR-07 fault injection 觸發不透過環境變數**,改用 CLI flag `--inject-fault=<scenario>`(見 §5.3);NFR-08 flock 開啟/關閉則透過既有 `TASKQ_HOME` 路徑隱式判斷(本地 fs 啟用,網路 fs 自動降級)。本表 8 vars 不變。
 
 | 變數 | 預設 | 說明 |
 |------|------|------|
@@ -146,11 +153,17 @@ argparse 子命令(入口 `python -m taskq`):
 
 ### 5.2 資料檔(`$TASKQ_HOME/`)
 
-| 檔案 | 內容 |
-|------|------|
-| `tasks.json` | 任務記錄(id → 全欄位) |
-| `breaker.json` | 斷路器狀態(state/失敗計數/opened_at) |
-| `cache.json` | 簽名 → 最近 done 結果 + cached_at |
+| 檔案 | 內容 | version (NFR-10) |
+|------|------|----------------|
+| `tasks.json` | `{version:1, tasks:{id→全欄位}}` | `1` |
+| `breaker.json` | `{version:1, state, failure_count, opened_at}` | `1` |
+| `cache.json` | `{version:1, entries:{簽名→done 結果 + cached_at}}` | `1` |
+
+### 5.3 CLI flag(NFR-07 fault injection 觸發介面)
+
+| flag | 值 | 說明 |
+|------|-----|------|
+| `--inject-fault` | `corrupt-mid-write` / `oserror-on-write` / `disk-full` / `kill-mid-write` | 觸發對應 fault scenario;僅測試路徑使用,正式執行不接受此 flag |
 
 ---
 
@@ -213,6 +226,10 @@ integration-test/
 | R3 | breaker 誤鎖死 | 中 | 低 | cooldown + HALF_OPEN(FR-03) |
 | R4 | 快取回放陳舊結果 | 低 | 中 | TTL 過期重執行(FR-04) |
 | R5 | secret 落盤洩漏 | 高 | 中 | stdout_tail/stderr_tail redaction(NFR-04) |
+| R6 | fault injection 干擾正常測試 | 中 | 中 | 觸發僅透過顯式 CLI flag `--inject-fault` 或測試 monkeypatch;正式執行不接受此 flag(NFR-07) |
+| R7 | cross-process flock 在 NFS / 網路檔案系統失效 | 中 | 中 | flock 為 best-effort 增強;偵測到網路 fs 時降級為「無 flock 但維持 atomic write」並 `WARNING`(NFR-08) |
+| R8 | scale 1000 tasks 觸發 memory limit | 中 | 低 | streaming iterator;不一次載入全部 task 到記憶體(NFR-09) |
+| R9 | schema migration 失敗導致資料遺失 | 高 | 低 | migrate 前備份原檔為 `<file>.v<n>.bak`;失敗時保留備份並 exit 1 fail-fast(NFR-10) |
 
 ---
 
@@ -225,9 +242,11 @@ integration-test/
 | Architecture Constraint: `no_circular_dependencies` | harness/CLAUDE.md | §6 8 模組單向依賴:cli → executor/breaker/cache/store,無循環 |
 | High-Risk Module: `taskq.executor` | harness/CLAUDE.md | FR-02(subprocess 執行 + 重試), Gate 1 重點驗證 |
 | High-Risk Module: `taskq.store` | harness/CLAUDE.md | FR-01/02(原子寫 + Lock + 並發安全), Gate 2 / Gate 4 重點驗證 |
-| NFR → dimension: `performance` | harness/CLAUDE.md | NFR-01(p95 latency) |
+| NFR → dimension: `performance` | harness/CLAUDE.md | NFR-01(p95 100 iter) + NFR-09(p95 1000 iter + run --all 100 tasks) |
 | NFR → dimension: `security` | harness/CLAUDE.md | NFR-02(injection blacklist) + NFR-04(secret redaction) |
-| NFR → dimension: `error_handling` | harness/CLAUDE.md | NFR-03(原子寫 + breaker recovery) |
+| NFR → dimension: `error_handling` | harness/CLAUDE.md | NFR-03(原子寫 + breaker recovery) + NFR-08(cross-process flock) |
+| NFR → dimension: `reliability` | harness/CLAUDE.md 14-dim | NFR-07(fault injection resilience) |
+| NFR → dimension: `maintainability` | harness/CLAUDE.md 14-dim | NFR-05(docstring FR-XX 引用) + NFR-10(schema migration 向後相容) |
 
 ---
 
@@ -235,8 +254,12 @@ integration-test/
 
 | 指標 | 閾值 | 量測方式 |
 |------|------|---------|
-| `submit` + `status` p95 latency | < 50ms / 100 iter | pytest-benchmark |
-| `run --all` 並發後 tasks.json 合法率 | 100%(無損) | fault-injection + json.load |
+| `submit` + `status` p95 latency(100 iter) | < 50ms | pytest-benchmark(NFR-01) |
+| `submit` + `status` p95 latency(1000 iter) | < 100ms | pytest-benchmark scaled(NFR-09) |
+| `run --all` 100 tasks 後 tasks.json 合法率 | 100%(無損) | fault-injection + json.load(NFR-09) |
+| 4 process 並發操作後三資料檔合法率 | 100%(cross-process flock) | subprocess test(NFR-08) |
+| fault injection 後資料恢復率 / fail-fast 率 | 100%(無靜默丟失) | CLI flag `--inject-fault` + monkeypatch(NFR-07) |
+| schema migration v0→v1 成功率 | 100%(備份存在 + 資料可讀) | fixture-based migration test(NFR-10) |
 | breaker `OPEN → CLOSED` 恢復時間 | ≤ `TASKQ_BREAKER_COOLDOWN` + 1s | integration test |
 | secret redaction 命中率 | 100%(sk-* / token=) | unit test on stdout_tail |
 | shell=True 使用率 | 0(全 codebase grep) | CI gate |
@@ -244,4 +267,4 @@ integration-test/
 
 ---
 
-*文件版本:v3.0.0(5 FR / 6 NFR / 8 env 完整版)| 2026-07-04*
+*文件版本:v4.0.0(5 FR / **10 NFR** / 8 env 進階健康驗證版)| 2026-07-11*
