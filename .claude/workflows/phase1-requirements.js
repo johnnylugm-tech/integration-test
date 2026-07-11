@@ -422,7 +422,9 @@ async function runSubTask(cfg) {
     // validates prefix/size/SHA; eliminates LLM-as-parser failure mode).
     content = await loadFileViaPython(cfg.diskPath, cfg.diskPrefix, cfg.phaseName)
     if (content.startsWith('FILE_MISSING') || content.startsWith('ERROR:') || content.length < 50) {
-      return { error: cfg.name + ': not found on disk after A (round ' + round + ')', loader_preview: content.slice(0, 200) }
+      if (round === MAX_B_ROUNDS) return { error: cfg.name + ': not found on disk after A — exhausted ' + MAX_B_ROUNDS + ' rounds', loader_preview: content.slice(0, 200) }
+      log('  A disk empty (parse-fail + no file) → retrying next round')
+      continue
     }
     log('  A status=' + (a && a.status ? a.status : 'assumed-OK') + ' | ' + cfg.diskPath + ' loaded: ' + content.length + ' chars')
 
