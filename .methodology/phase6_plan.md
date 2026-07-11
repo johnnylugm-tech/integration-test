@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-04
+> **Date**: 2026-07-12
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 6 - Quality Assurance
 > **Status**: Full version (including Phase 6 detailed tasks)
@@ -12,7 +12,7 @@
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
 > - HR-05: harness-methodology wins all conflicts — if a project decision contradicts SKILL.md / INIT / this plan, the harness wins.
-> - HR-16: Trace 4a = 100% required (G2/G3/G4 only). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs to 100%, accept gate block, or escalate to human. No automated override.
+> - HR-16: Trace dimension = `min(4a, 4b, 4c)` — ALL THREE must pass (G2/G3/G4 only): 4a = 100% over IN_PROGRESS+VERIFIED FRs, 4b = TEST_SPEC→test coverage (60/80/90% at G2/G3/G4), 4c = NFR→test coverage (60/80/90% at G2/G3/G4, NFR-99 placeholder excluded). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs/tests to pass, accept gate block, or escalate to human. No automated override.
 > - HR-17: NEVER modify files inside `harness/` — debug the framework, never hot-patch the submodule.
 
 ---
@@ -43,11 +43,11 @@ Agent B peer review of the QA deliverables (HR-01) — both are required to exit
 
 ### Pre-Phase Preflight
 
-- **[PREFLIGHT]** Run phase hooks (FSM, Constitution, Kill-Switch, Drift, CI Readiness):
+- **[PREFLIGHT]** Run phase hooks (FSM, Kill-Switch, Drift):
   ```bash
   python3 harness_cli.py run-phase --phase 6 --project .
   ```
-  If FAILED: fix FSM/Constitution/Drift issues. There is no gate bypass flag.
+  If FAILED: fix FSM/Drift issues. There is no gate bypass flag.
   Re-run `run-phase` after each fix. Max 3 attempts.
   After 3 FAIL: escalate to human — provide last `run-phase --phase 6` full output.
   Human fix → re-run `run-phase --phase 6 --project .` → PASS required before continuing.
@@ -86,7 +86,8 @@ Agent B peer review of the QA deliverables (HR-01) — both are required to exit
 python3 harness_cli.py load-context --phase 6 --project . --json \
   > .sessi-work/phase6_ctx.json
 ```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
+> Outputs `fr_ids`, `fr_details`, `modules`, and `lessons` from current project state.
+> **IMPORTANT (Direction C)**: Please carefully review the `lessons` (past failure modes) and DO NOT repeat them.
 
 ### P6 Phase End Audit (+ A/B Review)
 
@@ -121,7 +122,8 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
   > **Orchestrator Pattern** (architecture/error_handling score = 0 due to hub-and-spoke):
   > complete the DA challenge AND add `"da_waiver": {"architecture": true}` to bypass the
   > score threshold — the waiver also requires the `devil_advocate_evidence.architecture` artifact.
-  > See `harness/ssi/prompts/evaluate_dimension.md` §Orchestrator.
+  > The same waiver mechanism is honored at Gate 3 (read from `.sessi-work/gate3_result.json`).
+  > See `harness/harness/ssi/prompts/evaluate_dimension.md` §Orchestrator.
 
   > _Optional (not a gate step)_ — **[A5]** `issue_registry`: for a useful audit
   > trail, populate `.sessi-work/issue_registry.json` via `issue_tracker.py add`
@@ -141,7 +143,7 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
   (CRG recon triggered inside run-gate automatically — no separate action needed)
 
 - **G4b** Evaluate all Gate 4 dimensions inline:
-  - Follow `harness/ssi/prompts/evaluate_dimension.md`
+  - Follow `harness/harness/ssi/prompts/evaluate_dimension.md`
   - Write result to `.sessi-work/gate4_result.json`
   - Failing dim: fix code → re-evaluate → re-score
   > Failing dims: fix the root cause in code, then re-evaluate → re-score.
@@ -150,8 +152,10 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
   > (`harness/crg_independent.py`) and overrides any agent-recorded score with
   > `community_cohesion`. error_handling is tool-scored (`ast-error-handling`), not CRG.
   > If architecture = 0 due to Orchestrator/hub-and-spoke pattern: complete DA challenge (A3 above)
-  > and set `da_waiver` in quality_manifest.json to bypass the threshold.
-  > See `harness/ssi/prompts/evaluate_dimension.md` §Orchestrator Pattern False Positive.
+  > and set `devil_advocate` + `da_waiver` + `devil_advocate_evidence` in
+  > `.sessi-work/gate{N}_result.json` (gate3_result.json at Gate 3, gate4_result.json at Gate 4)
+  > to bypass the threshold — the harness reads the waiver from that file, NOT quality_manifest.json.
+  > See `harness/harness/ssi/prompts/evaluate_dimension.md` §Orchestrator Pattern False Positive.
   > **traceability** is also framework-owned: the harness calls `compute_trace_dimension()`
   > inside `finalize-gate` and injects the score automatically. Do NOT report a traceability
   > score in gate_result.json. If the gate is blocked by traceability, fix gaps then run:
@@ -186,7 +190,7 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
 | Dimension | Fix |
 |-----------|-----|
 | mutation_testing | Framework-owned score: `python3 harness_cli.py mutation-test-score --project .` runs `compute_mutation_score()` (harness-managed workdir + setup.cfg rewrite + sqlite cache parse). To investigate surviving mutants manually: `mutmut results` (legacy). Exclude data-only files (constants, dicts, Pydantic models) via `paths_to_exclude` in setup.cfg. Target: kill rate ≥ threshold. |
-| architecture (G3/G4 only) | Community cohesion low → add cross-module integration tests, break hub-and-spoke coupling, or file a DA waiver if the pattern is intentional (Orchestrator). |
+| architecture (G3/G4 only) | Community cohesion low → add cross-module integration tests, break hub-and-spoke coupling, or file an artifact-backed DA waiver in `.sessi-work/gate{N}_result.json` if the pattern is intentional (Orchestrator); calibrate `crg_excludes` / `crg_cohesion_healthy` in `.methodology/harness_config.json` for cohesion-scorer false positives (tooling counted as product, small-package over-fragmentation). |
 | error_handling | (1) **Presence**: add try/except blocks. `grep -r 'try:' 03-development/src/` to see coverage. (2) **Anti-patterns** (v2.9 A1, −5 each): remove `except BaseException:` (flagged even with re-raise), bare `except:` without re-raise, `except Exception: pass`. Run `python3 harness_cli.py run-tool ast-error-handling --project .` to see exact deductions. |
 | documentation | Add docstrings to public functions/classes. `python3 -m ast_docstrings` or manual: every `def`/`class` in `03-development/src/` needs a docstring. |
 | readability | Refactor complex functions (readability_v2 < 65). Run `python3 -m harness.toolchains.readability_v2 03-development/src/` to see scores per file. |
@@ -258,6 +262,13 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
   >   → fix artifacts → re-run `advance-phase`
   >   → If 3 consecutive failures: escalate to human with `phase_truth_verifier` log
 
+### Post-Gate 4 Git Tagging
+- After Gate 4 PASS, generate the annotated git tag with composite scores:
+  ```bash
+  python3 harness_cli.py gate4-tag --project .
+  ```
+  → Verify: `git tag -l -n9` shows the new `gate4-pass-*` tag.
+
 ### Phase 6 Deliverables
 - Gate 4 PASS (composite ≥ 85, all 15 dims, CRG recon done)
 - `06-quality/QUALITY_REPORT.md` - Quality report (auto-generated by Gate 4)
@@ -275,7 +286,7 @@ python3 harness_cli.py load-context --phase 6 --project . --json \
   ```
 
 - **[TDD-PRECHECK]** Verify TDD checks pass — advance-phase enforces:
-  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 17)
+  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 21)
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)

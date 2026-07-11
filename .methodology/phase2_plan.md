@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-04
+> **Date**: 2026-07-12
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 2 - Architecture Design
 > **Status**: Full version (including Phase 2 detailed tasks)
@@ -12,7 +12,7 @@
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
 > - HR-05: harness-methodology wins all conflicts — if a project decision contradicts SKILL.md / INIT / this plan, the harness wins.
-> - HR-16: Trace 4a = 100% required (G2/G3/G4 only). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs to 100%, accept gate block, or escalate to human. No automated override.
+> - HR-16: Trace dimension = `min(4a, 4b, 4c)` — ALL THREE must pass (G2/G3/G4 only): 4a = 100% over IN_PROGRESS+VERIFIED FRs, 4b = TEST_SPEC→test coverage (60/80/90% at G2/G3/G4), 4c = NFR→test coverage (60/80/90% at G2/G3/G4, NFR-99 placeholder excluded). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs/tests to pass, accept gate block, or escalate to human. No automated override.
 > - HR-17: NEVER modify files inside `harness/` — debug the framework, never hot-patch the submodule.
 
 ---
@@ -46,11 +46,11 @@ Phase 2 designs the system architecture based on SRS, producing SAD and ADR.
 
 ### Pre-Phase Preflight
 
-- **[PREFLIGHT]** Run phase hooks (FSM, Constitution, Kill-Switch, Drift, CI Readiness):
+- **[PREFLIGHT]** Run phase hooks (FSM, Kill-Switch, Drift):
   ```bash
   python3 harness_cli.py run-phase --phase 2 --project .
   ```
-  If FAILED: fix FSM/Constitution/Drift issues. There is no gate bypass flag.
+  If FAILED: fix FSM/Drift issues. There is no gate bypass flag.
   Re-run `run-phase` after each fix. Max 3 attempts.
   After 3 FAIL: escalate to human — provide last `run-phase --phase 2` full output.
   Human fix → re-run `run-phase --phase 2 --project .` → PASS required before continuing.
@@ -75,7 +75,8 @@ Phase 2 designs the system architecture based on SRS, producing SAD and ADR.
 python3 harness_cli.py load-context --phase 2 --project . --json \
   > .sessi-work/phase2_ctx.json
 ```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
+> Outputs `fr_ids`, `fr_details`, `modules`, and `lessons` from current project state.
+> **IMPORTANT (Direction C)**: Please carefully review the `lessons` (past failure modes) and DO NOT repeat them.
 
 ### Task Decomposition (Dependency Analysis)
 
@@ -260,7 +261,7 @@ are not re-opened. This bounds backtracking to a single step.
 **Agent B**: TECH_LEAD
 
 **A/B Work** (HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews):
-- **[A-1]** Agent A (ARCHITECT): Generate TEST_SPEC.md via derive_test_cases.md skill → preserve TEST_INVENTORY.yaml names where specified → apply Step 1b Architecture-Risk Triggers FIRST (scan SAD modules: shared mutable state → force NP-13; external process → force NP-15; network client/cache → force NP-07; forced cases go in tests/integration/ and are tagged SAD: in Pattern Activation table) → apply 8-Question Protocol per FR (Q1-Q8 + Step 2.5 Interface Contracts + Step 4 Infrastructure Wiring) → fill concrete Inputs + a Sub-assertion predicate table per FR → run check-test-spec-consistency → populate cross-cutting section. **v2.9.1 B.3**: parser expects `### FR-XX: ...` followed by table rows. A prose strategy doc with no table rows will FAIL the D4 spec-coverage check (no vacuous pass when FRs are defined) — re-run this skill if TEST_SPEC.md is wrong shape.
+- **[A-1]** Agent A (ARCHITECT): Generate TEST_SPEC.md via derive_test_cases.md skill → preserve TEST_INVENTORY.yaml names where specified → apply Step 1b Architecture-Risk Triggers FIRST (scan SAD modules: shared mutable state → force NP-13; external process → force NP-15; network client/cache → force NP-07; forced cases go in tests/integration/ and are tagged SAD: in Pattern Activation table) → apply 8-Question Protocol per FR (Q1-Q8 + Step 2.5 Interface Contracts + Step 4 Infrastructure Wiring) → fill concrete Inputs + a Sub-assertion predicate table per FR → run check-test-spec-consistency → populate cross-cutting section. **v2.9.1 B.3**: parser expects `### FR-XX: ...` followed by table rows. A prose strategy doc with no table rows will FAIL the D4 spec-coverage check (no vacuous pass when FRs are defined) — re-run this skill if TEST_SPEC.md is wrong shape. **Direction B (Properties)**: If an FR has algebraic invariants, declare a `**Properties**` table for it.
   - FORBIDDEN: vague/non-testable acceptance criteria
 - **[A-2]** Agent A returns `{status, files, confidence, citations, summary}`
 - **[B-1]** Agent B (TECH_LEAD) — dispatch as **STATELESS** subagent:
@@ -308,6 +309,7 @@ are not re-opened. This bounds backtracking to a single step.
   - Every case has concrete Inputs in TRUE form (key="value"), NOT pytest-id form (underscore-replaced)?
   - Sub-assertions table populated per FR (rule_id + predicate + applies_to referencing real case #s)?
   - Self-consistency gate passes? (python3 harness_cli.py check-test-spec-consistency --project .)
+  - Direction B property gate passes? (python3 harness_cli.py check-property-spec --project .)
   - Cross-cutting sections complete (NFR Integration + Deployment Smoke + Backward Compatibility if multi-phase)?
   - Summary table populated with counts per type?
   - All upstream deliverables consistent with each other? No contradictory decisions?

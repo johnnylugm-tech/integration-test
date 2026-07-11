@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-04
+> **Date**: 2026-07-12
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 5 - Verification & Delivery
 > **Status**: Full version (including Phase 5 detailed tasks)
@@ -12,7 +12,7 @@
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
 > - HR-05: harness-methodology wins all conflicts — if a project decision contradicts SKILL.md / INIT / this plan, the harness wins.
-> - HR-16: Trace 4a = 100% required (G2/G3/G4 only). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs to 100%, accept gate block, or escalate to human. No automated override.
+> - HR-16: Trace dimension = `min(4a, 4b, 4c)` — ALL THREE must pass (G2/G3/G4 only): 4a = 100% over IN_PROGRESS+VERIFIED FRs, 4b = TEST_SPEC→test coverage (60/80/90% at G2/G3/G4), 4c = NFR→test coverage (60/80/90% at G2/G3/G4, NFR-99 placeholder excluded). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs/tests to pass, accept gate block, or escalate to human. No automated override.
 > - HR-17: NEVER modify files inside `harness/` — debug the framework, never hot-patch the submodule.
 
 ---
@@ -41,11 +41,11 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). No harness run-gate — P
 
 ### Pre-Phase Preflight
 
-- **[PREFLIGHT]** Run phase hooks (FSM, Constitution, Kill-Switch, Drift, CI Readiness):
+- **[PREFLIGHT]** Run phase hooks (FSM, Kill-Switch, Drift):
   ```bash
   python3 harness_cli.py run-phase --phase 5 --project .
   ```
-  If FAILED: fix FSM/Constitution/Drift issues. There is no gate bypass flag.
+  If FAILED: fix FSM/Drift issues. There is no gate bypass flag.
   Re-run `run-phase` after each fix. Max 3 attempts.
   After 3 FAIL: escalate to human — provide last `run-phase --phase 5` full output.
   Human fix → re-run `run-phase --phase 5 --project .` → PASS required before continuing.
@@ -84,7 +84,8 @@ Each FR ends with a Gate 1 re-evaluation (CHECKPOINT). No harness run-gate — P
 python3 harness_cli.py load-context --phase 5 --project . --json \
   > .sessi-work/phase5_ctx.json
 ```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
+> Outputs `fr_ids`, `fr_details`, `modules`, and `lessons` from current project state.
+> **IMPORTANT (Direction C)**: Please carefully review the `lessons` (past failure modes) and DO NOT repeat them.
 > All `{FR-ID}` references in tasks below come from this file.
 
 ### FR Tasks — Expanded at Execution Time
@@ -162,7 +163,7 @@ python3 harness_cli.py load-context --phase 5 --project . --json \
   > If below 90%: add missing test implementations before advancing to Phase 6.
 
 - **[TDD-PRECHECK]** Verify TDD checks pass — advance-phase enforces:
-  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 17)
+  - diagnostic script check: orphan diagnostic scripts (e.g. `_diag_xxx.py`) at repo root will BLOCK (exit 21)
   - secrets scanning: `gitleaks detect --source .` (exit 20) — whole-repo, runs before linting
   - linting: `ruff check .` (exit 18) — fix violations before advancing
   - type safety: `python3 -m mypy . --ignore-missing-imports` (exit 19)

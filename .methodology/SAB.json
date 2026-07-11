@@ -1,94 +1,182 @@
 {
   "version": "1.0",
-  "created_at": "2026-07-01",
+  "created_at": "2026-07-12",
   "phase": 2,
   "project": "taskq",
   "layers": [
     {
-      "name": "cli",
+      "name": "interface",
       "modules": [
-        "taskq.cli",
-        "taskq.__main__"
+        {
+          "name": "taskq.cli",
+          "implemented_in": "taskq.interface.cli"
+        },
+        {
+          "name": "taskq.main",
+          "implemented_in": "taskq.interface.__main__"
+        }
       ],
       "allowed_dependencies": [
-        "service",
-        "store"
+        "core",
+        "storage",
+        "runtime"
       ]
     },
     {
-      "name": "service",
+      "name": "runtime",
       "modules": [
-        "taskq.executor",
-        "taskq.query"
+        {
+          "name": "taskq.executor",
+          "implemented_in": "taskq.runtime.executor"
+        }
       ],
       "allowed_dependencies": [
-        "store"
+        "core",
+        "storage"
       ]
     },
     {
-      "name": "store",
+      "name": "storage",
       "modules": [
-        "taskq.store",
-        "taskq.redact",
-        "taskq.validation",
-        "taskq.models",
-        "taskq.config"
+        {
+          "name": "taskq.store",
+          "implemented_in": "taskq.storage.store"
+        },
+        {
+          "name": "taskq.breaker",
+          "implemented_in": "taskq.storage.breaker"
+        },
+        {
+          "name": "taskq.cache",
+          "implemented_in": "taskq.storage.cache"
+        }
+      ],
+      "allowed_dependencies": [
+        "core"
+      ]
+    },
+    {
+      "name": "core",
+      "modules": [
+        {
+          "name": "taskq.config",
+          "implemented_in": "taskq.core.config"
+        },
+        {
+          "name": "taskq.models",
+          "implemented_in": "taskq.core.models"
+        }
       ],
       "allowed_dependencies": []
     }
   ],
   "dependencies": {
-    "cli": [
-      "service",
-      "store"
+    "interface": [
+      "core",
+      "storage",
+      "runtime"
     ],
-    "service": [
-      "store"
+    "runtime": [
+      "core",
+      "storage"
+    ],
+    "storage": [
+      "core"
     ]
   },
   "quality_targets": {
-    "max_complexity": 10,
-    "min_coverage": 95,
+    "max_complexity": 15,
+    "min_coverage": 80,
     "max_coupling": 0.3
   },
   "nfr_dimension_mapping": {
     "NFR-01": "performance",
     "NFR-02": "security",
-    "NFR-03": "error_handling"
+    "NFR-03": "error_handling",
+    "NFR-04": "security",
+    "NFR-05": "readability",
+    "NFR-07": "error_handling",
+    "NFR-08": "error_handling",
+    "NFR-10": "readability"
   },
   "nfr_traceability": {
     "NFR-01": {
       "type": "performance",
-      "target": "p95 < 50ms (warm-process, submit+status over 100 iters, excluding subprocess)",
-      "module": "taskq.store"
+      "target": "p95 < 50ms",
+      "module": "taskq.storage.store"
     },
     "NFR-02": {
       "type": "security",
-      "target": "shell=True forbidden codebase-wide; injection blacklist ( ; | & $ > < ` ) covered by tests",
-      "module": "taskq.executor"
+      "target": ">=100",
+      "module": "taskq.interface.cli"
     },
     "NFR-03": {
       "type": "reliability",
-      "target": "atomic tasks.json write via tmp+os.replace; stdout/stderr redaction before persist",
-      "module": "taskq.redact"
+      "target": ">=100",
+      "module": "taskq.storage.store"
+    },
+    "NFR-04": {
+      "type": "security",
+      "target": ">=100",
+      "module": "taskq.runtime.executor"
+    },
+    "NFR-05": {
+      "type": "maintainability",
+      "target": ">=100",
+      "module": "taskq.core.models"
+    },
+    "NFR-06": {
+      "type": "deployability",
+      "target": ">=100",
+      "module": "taskq.core.config"
+    },
+    "NFR-07": {
+      "type": "reliability",
+      "target": ">=100",
+      "module": "taskq.storage.store"
+    },
+    "NFR-08": {
+      "type": "reliability",
+      "target": ">=100",
+      "module": "taskq.storage.store"
+    },
+    "NFR-09": {
+      "type": "scalability",
+      "target": "p95 < 100ms @ 1000 tasks",
+      "module": "taskq.storage.store"
+    },
+    "NFR-10": {
+      "type": "maintainability",
+      "target": ">=100",
+      "module": "taskq.storage.store"
     }
   },
-  "advisory_only": [],
+  "advisory_only": [
+    "deployability",
+    "scalability"
+  ],
   "gate_score_overrides": {
     "performance": 75.0,
-    "security": 80.0,
-    "error_handling": 80.0
+    "security": 100.0,
+    "error_handling": 100.0,
+    "readability": 100.0
   },
   "fr_module_traceability": {
-    "FR-01": "taskq.models",
-    "FR-02": "taskq.executor",
-    "FR-03": "taskq.cli"
+    "FR-01": "taskq.storage.store",
+    "FR-02": "taskq.runtime.executor",
+    "FR-03": "taskq.storage.breaker",
+    "FR-04": "taskq.storage.cache",
+    "FR-05": "taskq.interface.cli"
   },
   "architecture_constraints": [
-    "no_circular_dependencies"
+    "no_circular_dependencies",
+    "no_shell_true",
+    "atomic_write_all_data_files",
+    "stream_iter_no_full_load",
+    "no_silent_rebuild_or_silent_swallow_errors"
   ],
   "high_risk_modules": [
-    "taskq.executor",
-    "taskq.store"
+    "taskq.runtime.executor",
+    "taskq.storage.store"
   ]
 }

@@ -2,7 +2,7 @@
 
 > **Version**: v2.12.0 (project plan)
 > **Project**: integration-test
-> **Date**: 2026-07-04
+> **Date**: 2026-07-12
 > **Framework**: harness-methodology v2.12.0
 > **Phase**: 1 - Requirements Specification
 > **Status**: Full version (including Phase 1 detailed tasks)
@@ -12,7 +12,7 @@
 > **Hard Rules in Force (this plan)** — explicit reminders:
 > - HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews. Never role-play A or B yourself.
 > - HR-05: harness-methodology wins all conflicts — if a project decision contradicts SKILL.md / INIT / this plan, the harness wins.
-> - HR-16: Trace 4a = 100% required (G2/G3/G4 only). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs to 100%, accept gate block, or escalate to human. No automated override.
+> - HR-16: Trace dimension = `min(4a, 4b, 4c)` — ALL THREE must pass (G2/G3/G4 only): 4a = 100% over IN_PROGRESS+VERIFIED FRs, 4b = TEST_SPEC→test coverage (60/80/90% at G2/G3/G4), 4c = NFR→test coverage (60/80/90% at G2/G3/G4, NFR-99 placeholder excluded). `gate_score_overrides` is a **threshold floor (raises, not lowers)** per `sab_parser.derive_gate_score_overrides` — cannot bypass a failing trace dim. Remediation: fix code/FRs/tests to pass, accept gate block, or escalate to human. No automated override.
 > - HR-17: NEVER modify files inside `harness/` — debug the framework, never hot-patch the submodule.
 
 ---
@@ -40,11 +40,11 @@ Phase 1 is the project starting point. Define complete SRS.
 
 ### Pre-Phase Preflight
 
-- **[PREFLIGHT]** Run phase hooks (FSM, Constitution, Kill-Switch, Drift, CI Readiness):
+- **[PREFLIGHT]** Run phase hooks (FSM, Kill-Switch, Drift):
   ```bash
   python3 harness_cli.py run-phase --phase 1 --project .
   ```
-  If FAILED: fix FSM/Constitution/Drift issues. There is no gate bypass flag.
+  If FAILED: fix FSM/Drift issues. There is no gate bypass flag.
   Re-run `run-phase` after each fix. Max 3 attempts.
   After 3 FAIL: escalate to human — provide last `run-phase --phase 1` full output.
   Human fix → re-run `run-phase --phase 1 --project .` → PASS required before continuing.
@@ -67,7 +67,8 @@ Phase 1 is the project starting point. Define complete SRS.
 python3 harness_cli.py load-context --phase 1 --project . --json \
   > .sessi-work/phase1_ctx.json
 ```
-> Outputs `fr_ids`, `fr_details`, `modules` from current project state.
+> Outputs `fr_ids`, `fr_details`, `modules`, and `lessons` from current project state.
+> **IMPORTANT (Direction C)**: Please carefully review the `lessons` (past failure modes) and DO NOT repeat them.
 
 ### Task Decomposition (Dependency Analysis)
 
@@ -169,7 +170,7 @@ are not re-opened. This bounds backtracking to a single step.
 **Agent B**: BUSINESS_ANALYST
 
 **A/B Work** (HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews):
-- **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Build spec tracking matrix from SRS.md FRs → assign status/owner per FR → validate completeness
+- **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Build spec tracking matrix from SRS.md FRs → assign status/owner per FR → validate completeness. Use the STANDARD template columns; do NOT invent a Gate-score column as authority — Status is machine-refreshed from build_traceability at advance-phase, and score authority is quality_manifest.json (this file is a human-readable view, not the SSOT).
   - FORBIDDEN: vague/non-testable acceptance criteria
 - **[A-2]** Agent A returns `{status, files, confidence, citations, summary}`
 - **[B-1]** Agent B (BUSINESS_ANALYST) — dispatch as **STATELESS** subagent:
@@ -205,6 +206,7 @@ are not re-opened. This bounds backtracking to a single step.
   - Status field populated per FR?
   - Owner assigned per FR?
   - No orphan FRs (in SRS but not tracked)?
+  - Standard template columns used (no invented Gate-score authority column)?
 
   Return JSON only:
   {"review_status":"APPROVE"|"REJECT",
@@ -237,7 +239,7 @@ are not re-opened. This bounds backtracking to a single step.
 **Agent B**: BUSINESS_ANALYST
 
 **A/B Work** (HR-04: HybridWorkflow ON — Agent A authors, a separate Agent B sub-agent reviews):
-- **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Build bidirectional traceability matrix → link FRs → design elements → test cases → validate coverage
+- **[A-1]** Agent A (REQUIREMENTS_ENGINEER): Build bidirectional traceability matrix → link FRs → design elements → test cases → validate coverage. Forward-reference downstream artifacts by their CANONICAL framework filename (the P2 architecture doc is SAD.md, NOT ARCHITECTURE.md); run `check-artifact-consistency` to verify no invented filenames 404 downstream.
   - FORBIDDEN: vague/non-testable acceptance criteria
 - **[A-2]** Agent A returns `{status, files, confidence, citations, summary}`
 - **[B-1]** Agent B (BUSINESS_ANALYST) — dispatch as **STATELESS** subagent:
@@ -281,6 +283,7 @@ are not re-opened. This bounds backtracking to a single step.
   - Every FR has ≥1 downstream link?
   - No orphan requirements?
   - Coverage complete (all FRs traceable)?
+  - Forward references use canonical filenames? (check-artifact-consistency passes)
 
   Return JSON only:
   {"review_status":"APPROVE"|"REJECT",

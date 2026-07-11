@@ -1,5 +1,64 @@
 # TEST_INVENTORY.yaml — Generated from SRS.md + TRACEABILITY_MATRIX.md (1:1 AC mapping)
 
+# Top-level per-FR test function name inventory (consumed by validate_handoff P1->P2).
+# Schema: fr_tests[FR-XX] -> layer (unit|integration|bench|static) -> [function_name, ...]
+fr_tests:
+  FR-01:
+    unit:
+      - test_fr01_02_submit_json_output
+      - test_fr01_03_submit_empty_command
+      - test_fr01_04_submit_whitespace_only
+      - test_fr01_05_submit_too_long
+      - test_fr01_06_submit_injection_semicolon
+      - test_fr01_07_submit_injection_chars
+      - test_fr01_08_submit_name_duplicate
+      - test_fr01_09_submit_atomic_write
+    integration:
+      - test_fr01_01_happy_submit_echo_hi
+  FR-02:
+    unit:
+      - test_fr02_04_stdout_tail_2000_chars
+      - test_fr02_08_duration_and_finished_at
+    integration:
+      - test_fr02_01_happy_single_run
+      - test_fr02_02_failed_run
+      - test_fr02_03_timeout_run
+      - test_fr02_05_run_all_3_tasks
+      - test_fr02_06_run_all_thread_safety
+    static:
+      - test_fr02_07_shell_true_absent
+  FR-03:
+    unit:
+      - test_fr03_01_retry_on_failed
+      - test_fr03_02_retry_on_timeout
+      - test_fr03_03_backoff_sequence
+      - test_fr03_06_breaker_half_open_failure
+    integration:
+      - test_fr03_04_breaker_open
+      - test_fr03_05_breaker_half_open_success
+      - test_fr03_07_breaker_persistence
+      - test_fr03_08_recovery_time
+  FR-04:
+    unit:
+      - test_fr04_01_cache_hit_fresh
+      - test_fr04_02_cache_miss_expired
+      - test_fr04_03_cache_signature
+      - test_fr04_04_only_done_cached
+      - test_fr04_05_cache_atomic_write
+    integration:
+      - test_fr04_06_cache_thread_safety
+  FR-05:
+    unit:
+      - test_fr05_02_status_json
+      - test_fr05_06_unknown_task_id
+    integration:
+      - test_fr05_01_status_all_fields
+      - test_fr05_03_list_happy
+      - test_fr05_04_list_filter_done
+      - test_fr05_05_clear
+      - test_fr05_07_exit_code_map
+cross_cutting: {}
+
 test_inventory:
   schema_version: "1.0"
   generated_from:
