@@ -1,7 +1,7 @@
 {
   "schema": "harness/traceability/attestation/v1",
-  "git_sha": "4555a7f2a318753c7431c5fd757d53b4ef7a4db6",
-  "content_sha256": "0e9af736eaab7aa3d93c579d16720fc95de0264177c7db5a3839c04f7612b92a",
+  "git_sha": "f3d073340130b1f20d8fc8a50f4606ed02523214",
+  "content_sha256": "50561dee4e43db3681717d774305ee299b742f0256a54c705f30736231a389c2",
   "tool": "scripts/build_trace_attestation.py",
   "overlay_used": null,
   "overlay_errors": [],
@@ -9,24 +9,94 @@
     "schema_version": "harness/traceability/overlay/v1",
     "project_id": "integration-test",
     "completeness": {
-      "total_requirements": 0,
-      "srs_coverage": "0%",
-      "code_coverage": "0%",
-      "test_coverage": "0%",
-      "verification_rate": "0%",
-      "total_links": 0,
+      "total_requirements": 5,
+      "srs_coverage": "100.0%",
+      "code_coverage": "0.0%",
+      "test_coverage": "0.0%",
+      "verification_rate": "0.0%",
+      "total_links": 5,
       "missing_mappings": {
         "fr_without_srs": [],
-        "fr_without_code": [],
-        "fr_without_test": []
+        "fr_without_code": [
+          "FR-01",
+          "FR-02",
+          "FR-03",
+          "FR-04",
+          "FR-05"
+        ],
+        "fr_without_test": [
+          "FR-01",
+          "FR-02",
+          "FR-03",
+          "FR-04",
+          "FR-05"
+        ]
       }
     },
     "missing": {
       "fr_without_srs": [],
-      "fr_without_code": [],
-      "fr_without_test": []
+      "fr_without_code": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05"
+      ],
+      "fr_without_test": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05"
+      ]
     },
-    "requirements": {},
+    "requirements": {
+      "FR-01": {
+        "fr_id": "FR-01",
+        "status": "pending",
+        "srs_section": "SAD.md",
+        "code_files": [],
+        "test_files": [],
+        "sad_module": "—",
+        "priority": "HIGH"
+      },
+      "FR-02": {
+        "fr_id": "FR-02",
+        "status": "pending",
+        "srs_section": "SAD.md",
+        "code_files": [],
+        "test_files": [],
+        "sad_module": "—",
+        "priority": "HIGH"
+      },
+      "FR-03": {
+        "fr_id": "FR-03",
+        "status": "pending",
+        "srs_section": "SAD.md",
+        "code_files": [],
+        "test_files": [],
+        "sad_module": "—",
+        "priority": "HIGH"
+      },
+      "FR-04": {
+        "fr_id": "FR-04",
+        "status": "pending",
+        "srs_section": "SAD.md",
+        "code_files": [],
+        "test_files": [],
+        "sad_module": "—",
+        "priority": "HIGH"
+      },
+      "FR-05": {
+        "fr_id": "FR-05",
+        "status": "pending",
+        "srs_section": "SAD.md",
+        "code_files": [],
+        "test_files": [],
+        "sad_module": "—",
+        "priority": "HIGH"
+      }
+    },
     "annotations": {}
   }
 }
