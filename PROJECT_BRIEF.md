@@ -100,21 +100,6 @@ cache; query status; clear storage.
 | `$TASKQ_HOME/breaker.json` | `{version:1, state, failure_count, opened_at}` | FR-03 | `1` |
 | `$TASKQ_HOME/cache.json` | `{version:1, entries:{簽名→done 結果 + cached_at}}` | FR-04 | `1` |
 
-## Module Layout (canonical: SPEC.md §6)
-
-```
-src/taskq/
-├── __init__.py
-├── __main__.py        # python -m taskq entry
-├── config.py          # TASKQ_* env (NFR-06)
-├── models.py          # task / status dataclasses
-├── store.py           # tasks.json atomic + Lock (FR-01/02) — high-risk
-├── executor.py        # subprocess + retry (FR-02/03) — high-risk
-├── breaker.py         # circuit breaker (FR-03)
-├── cache.py           # TTL cache (FR-04)
-└── cli.py             # argparse (FR-05)
-```
-
 ## Exit Code Map (canonical: SPEC.md §3 / §7)
 
 | Code | Meaning |

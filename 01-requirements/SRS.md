@@ -1,6 +1,6 @@
 # Software Requirements Specification (SRS) — taskq
 
-> **Source of truth**: `SPEC.md` v4.0.0 (2026-07-11), 5 FR / 10 NFR / 8 env vars.
+> **Source of truth**: `SPEC.md` v4.1.0 (2026-07-12), 5 FR / 10 NFR / 8 env vars.
 > **Mode**: INGESTION MODE — 100% transcription of all `### FR-01..FR-05` and `### NFR-01..NFR-10` headings from `SPEC.md`.
 > **Citation style**: `[SPEC §X.Y]` (or `[SPEC §X table]`).
 
@@ -411,23 +411,6 @@ Prompt-injection scan: clean — 0 hits in canonical `SPEC.md`.
 | `--json` | CLI 全域 flag,要求單行 JSON 輸出 |
 
 ---
-
-## Appendix A: Module Layout(對應 SPEC §6)
-
-```
-src/taskq/
-├── __init__.py
-├── __main__.py        # python -m taskq 入口
-├── config.py          # TASKQ_* env 讀取(NFR-06)
-├── models.py          # 任務/狀態資料類別
-├── store.py           # tasks.json 原子存儲 + Lock(FR-01/02) — high-risk
-├── executor.py        # subprocess 執行 + 重試(FR-02/03) — high-risk
-├── breaker.py         # 斷路器(FR-03)
-├── cache.py           # TTL 快取(FR-04)
-└── cli.py             # argparse(FR-05)
-```
-
-**Framework alignment** [SPEC §10]:high-risk 模組 `taskq.executor` / `taskq.store` 需 Gate 1 重點驗證。
 
 ## Appendix B: Environment Variables(對應 SPEC §5.1)
 

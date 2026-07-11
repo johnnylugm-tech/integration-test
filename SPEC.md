@@ -9,11 +9,11 @@
 
 | 欄位 | 值 |
 |------|-----|
-| 文件版本 | v4.0.0 |
-| 採用基線 | v3.0.0 完整版(commit `2fa726c`,2026-07-11) |
-| 變更說明 | 從 v3.0.0 (5 FR / 6 NFR / 8 env)升級為 v4.0.0 (5 FR / **10 NFR** / 8 env);新增 4 個進階健康驗證 NFR(fault injection / cross-process safety / scalability / schema migration)以覆蓋 harness-methodology 的混沌、檔案鎖、大規模、版本演進路徑;**未新增 FR**,P3 實作量不增加 |
-| 制訂日期 | 2026-07-11 |
-| 取代版本 | v3.0.0 (commit `2fa726c`, 2026-07-11) |
+| 文件版本 | v4.1.0 |
+| 採用基線 | v4.0.0 完整版(2026-07-11) |
+| 變更說明 | 從 v4.0.0 升級為 v4.1.0:移除 §6 資料夾結構(改由 Phase 2 SAD.md 決定模組/目錄佈局,SPEC.md 收斂為純 PRD,不規定架構與設計實現);§10 framework 對齊表同步移除對 §6 的引用;**FR/NFR 數量不變**,P1 內容(FR/NFR heading)不受影響 |
+| 制訂日期 | 2026-07-12 |
+| 取代版本 | v4.0.0 (2026-07-11) |
 | 配套檔案 | `.env.example` (8 vars, unchanged), `PROJECT_BRIEF.md` (5/10/8 sync) |
 | 文件責任 | 規格單一真實來源(Single Source of Truth);所有實作以此為準 |
 | Phase 1 規範 | Agent A INGESTION MODE — 100% transcribe 全部 `### FR-01..FR-05` 與 `### NFR-01..NFR-10` heading,no invention,no omission |
@@ -26,6 +26,7 @@
 | v2.0.0 | 2026-06-15 | simplify | 3 FR / 3 NFR / 3 env(commit dd268cf) |
 | v3.0.0 | 2026-07-04 | restore + modernize | 5 FR / 6 NFR / 8 env(+ framework alignment + monitoring thresholds) |
 | v4.0.0 | 2026-07-11 | advanced health coverage | 5 FR / **10 NFR** / 8 env(+ fault injection / cross-process / scalability / schema migration;**no new FR**) |
+| v4.1.0 | 2026-07-12 | PRD purification | 移除 §6 資料夾結構,SPEC.md 收斂為純 PRD;架構/模組佈局決定權移交 Phase 2 SAD.md;**FR/NFR 不變** |
 
 ---
 
@@ -167,28 +168,6 @@ argparse 子命令(入口 `python -m taskq`):
 
 ---
 
-## 6. 資料夾結構
-
-```
-integration-test/
-├── src/taskq/
-│   ├── __init__.py
-│   ├── __main__.py        # python -m taskq 入口
-│   ├── config.py          # TASKQ_* env 讀取(NFR-06)
-│   ├── models.py          # 任務/狀態資料類別
-│   ├── store.py           # tasks.json 原子存儲 + Lock(FR-01/02)
-│   ├── executor.py        # subprocess 執行 + 重試(FR-02/03)
-│   ├── breaker.py         # 斷路器(FR-03)
-│   ├── cache.py           # TTL 快取(FR-04)
-│   └── cli.py             # argparse(FR-05)
-├── tests/
-├── .env.example
-├── SPEC.md                # 本文件(單一事實來源)
-└── harness-e2e.js         # 管線驗證 workflow
-```
-
----
-
 ## 7. 錯誤處理
 
 | 情況 | 行為 |
@@ -239,9 +218,9 @@ integration-test/
 
 | framework 項 | 來源 | 本規格實作位置 |
 |-------------|------|---------------|
-| Architecture Constraint: `no_circular_dependencies` | harness/CLAUDE.md | §6 8 模組單向依賴:cli → executor/breaker/cache/store,無循環 |
-| High-Risk Module: `taskq.executor` | harness/CLAUDE.md | FR-02(subprocess 執行 + 重試), Gate 1 重點驗證 |
-| High-Risk Module: `taskq.store` | harness/CLAUDE.md | FR-01/02(原子寫 + Lock + 並發安全), Gate 2 / Gate 4 重點驗證 |
+| Architecture Constraint: `no_circular_dependencies` | harness/CLAUDE.md | 模組依賴圖由 Phase 2 SAD.md 設計時保證無循環(本規格不規定模組/目錄結構,屬架構設計範疇) |
+| High-Risk Module(執行 + 重試邏輯) | harness/CLAUDE.md | FR-02(subprocess 執行 + 重試), Gate 1 重點驗證;對應模組由 Phase 2 SAD.md 命名 |
+| High-Risk Module(原子寫 + 並發安全) | harness/CLAUDE.md | FR-01/02(原子寫 + Lock + 並發安全), Gate 2 / Gate 4 重點驗證;對應模組由 Phase 2 SAD.md 命名 |
 | NFR → dimension: `performance` | harness/CLAUDE.md | NFR-01(p95 100 iter) + NFR-09(p95 1000 iter + run --all 100 tasks) |
 | NFR → dimension: `security` | harness/CLAUDE.md | NFR-02(injection blacklist) + NFR-04(secret redaction) |
 | NFR → dimension: `error_handling` | harness/CLAUDE.md | NFR-03(原子寫 + breaker recovery) + NFR-08(cross-process flock) |
