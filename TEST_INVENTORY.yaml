@@ -1,0 +1,925 @@
+# TEST_INVENTORY.yaml — Generated from SRS.md + TRACEABILITY_MATRIX.md (1:1 AC mapping)
+
+test_inventory:
+  schema_version: "1.0"
+  generated_from:
+    - "01-requirements/SRS.md"
+    - "01-requirements/TRACEABILITY_MATRIX.md"
+  language: python
+  test_runner: pytest
+  naming_convention: "test_<req><n>_<seq>_<descriptor>"
+  enumerated_count: 69
+  matrix_section2_1_count: 38
+  matrix_section3_1_count: 31
+  total_test_cases: 69
+
+  tests:
+
+    # ---------- FR-01: 任務提交與驗證 (submit) — 9 ACs ----------
+    - tc_id: TC-FR01-01
+      ac_id: AC-FR01-01
+      fr: FR-01
+      title: "happy submit 'echo hi' → 8-hex id + pending task"
+      function_name: test_fr01_01_happy_submit_echo_hi
+      layer: integration
+      modules: [cli, store, models]
+      cross_ref_nfrs: []
+      description: "python -m taskq submit 'echo hi' → exit 0; stdout = 8-hex id; tasks.json has command='echo hi', status='pending', created_at ISO"
+      ac_citation: "SRS §3 FR-01 AC-FR01-01"
+    - tc_id: TC-FR01-02
+      ac_id: AC-FR01-02
+      fr: FR-01
+      title: "submit --json → single-line JSON output"
+      function_name: test_fr01_02_submit_json_output
+      layer: unit
+      modules: [cli]
+      cross_ref_nfrs: []
+      description: "submit --json 'echo hi' → stdout = single-line {\"id\": \"<8-hex>\", \"status\": \"pending\"}"
+      ac_citation: "SRS §3 FR-01 AC-FR01-02"
+    - tc_id: TC-FR01-03
+      ac_id: AC-FR01-03
+      fr: FR-01
+      title: "empty command → exit 2"
+      function_name: test_fr01_03_submit_empty_command
+      layer: unit
+      modules: [cli, store]
+      cross_ref_nfrs: []
+      description: "submit '' → exit 2; stderr has error; tasks.json unchanged"
+      ac_citation: "SRS §3 FR-01 AC-FR01-03"
+    - tc_id: TC-FR01-04
+      ac_id: AC-FR01-04
+      fr: FR-01
+      title: "whitespace-only command → exit 2"
+      function_name: test_fr01_04_submit_whitespace_only
+      layer: unit
+      modules: [cli, store]
+      cross_ref_nfrs: []
+      description: "submit '   ' → exit 2"
+      ac_citation: "SRS §3 FR-01 AC-FR01-04"
+    - tc_id: TC-FR01-05
+      ac_id: AC-FR01-05
+      fr: FR-01
+      title: "command length > 1000 chars → exit 2"
+      function_name: test_fr01_05_submit_too_long
+      layer: unit
+      modules: [cli, store]
+      cross_ref_nfrs: []
+      description: "1001-char command → exit 2"
+      ac_citation: "SRS §3 FR-01 AC-FR01-05"
+    - tc_id: TC-FR01-06
+      ac_id: AC-FR01-06
+      fr: FR-01
+      title: "injection ';' → exit 2"
+      function_name: test_fr01_06_submit_injection_semicolon
+      layer: unit
+      modules: [cli, store]
+      cross_ref_nfrs: [NFR-02]
+      description: "submit 'echo hi; rm x' → exit 2 (NFR-02 blacklist)"
+      ac_citation: "SRS §3 FR-01 AC-FR01-06"
+    - tc_id: TC-FR01-07
+      ac_id: AC-FR01-07
+      fr: FR-01
+      title: "injection '|' '&' '$' '>' '<' '`' (6 chars) → exit 2"
+      function_name: test_fr01_07_submit_injection_chars
+      layer: unit
+      modules: [cli, store]
+      cross_ref_nfrs: [NFR-02]
+      description: "6 blacklist chars (| & $ > < `) each an independent pytest case (parametrized) → all exit 2"
+      sub_cases: ["pipe", "ampersand", "dollar", "redirect_gt", "redirect_lt", "backtick"]
+      ac_citation: "SRS §3 FR-01 AC-FR01-07"
+    - tc_id: TC-FR01-08
+      ac_id: AC-FR01-08
+      fr: FR-01
+      title: "--name duplicate vs pending/running → exit 2"
+      function_name: test_fr01_08_submit_name_duplicate
+      layer: unit
+      modules: [store]
+      cross_ref_nfrs: []
+      description: "submit --name foo (twice) → second exit 2; no second write"
+      ac_citation: "SRS §3 FR-01 AC-FR01-08"
+    - tc_id: TC-FR01-09
+      ac_id: AC-FR01-09
+      fr: FR-01
+      title: "mid-write OSError → tasks.json still valid"
+      function_name: test_fr01_09_submit_atomic_write
+      layer: unit
+      modules: [store]
+      cross_ref_nfrs: [NFR-03]
+      description: "monkeypatch mid-write OSError → tasks.json still valid JSON (NFR-03 atomic-write evidence)"
+      ac_citation: "SRS §3 FR-01 AC-FR01-09"
+
+    # ---------- FR-02: 任務執行器 (run / run --all) — 8 ACs ----------
+    - tc_id: TC-FR02-01
+      ac_id: AC-FR02-01
+      fr: FR-02
+      title: "happy single run → done + exit_code 0 + stdout 'hi\\n'"
+      function_name: test_fr02_01_happy_single_run
+      layer: integration
+      modules: [executor, store]
+      cross_ref_nfrs: []
+      description: "submit 'echo hi' → run <id> → exit 0; status=done; exit_code=0; stdout_tail contains 'hi\\n'"
+      ac_citation: "SRS §3 FR-02 AC-FR02-01"
+    - tc_id: TC-FR02-02
+      ac_id: AC-FR02-02
+      fr: FR-02
+      title: "failed run → exit_code=1"
+      function_name: test_fr02_02_failed_run
+      layer: integration
+      modules: [executor]
+      cross_ref_nfrs: []
+      description: "submit 'false' → run <id> → status=failed; exit_code=1"
+      ac_citation: "SRS §3 FR-02 AC-FR02-02"
+    - tc_id: TC-FR02-03
+      ac_id: AC-FR02-03
+      fr: FR-02
+      title: "timeout → exit 4"
+      function_name: test_fr02_03_timeout_run
+      layer: integration
+      modules: [executor, config]
+      cross_ref_nfrs: [NFR-06]
+      description: "TASKQ_TASK_TIMEOUT=1 + submit 'sleep 5' → run <id> → status=timeout; exit 4 (single-task mode)"
+      ac_citation: "SRS §3 FR-02 AC-FR02-03"
+    - tc_id: TC-FR02-04
+      ac_id: AC-FR02-04
+      fr: FR-02
+      title: "stdout_tail = last 2000 chars"
+      function_name: test_fr02_04_stdout_tail_2000_chars
+      layer: unit
+      modules: [executor]
+      cross_ref_nfrs: []
+      description: "submit \"printf '%2048s'\" → run <id> → stdout_tail length = 2000 (last 2000 chars)"
+      ac_citation: "SRS §3 FR-02 AC-FR02-04"
+    - tc_id: TC-FR02-05
+      ac_id: AC-FR02-05
+      fr: FR-02
+      title: "run --all 3 tasks → all done + valid JSON"
+      function_name: test_fr02_05_run_all_3_tasks
+      layer: integration
+      modules: [executor, store]
+      cross_ref_nfrs: []
+      description: "3 pending tasks → run --all → all status=done; tasks.json valid JSON"
+      ac_citation: "SRS §3 FR-02 AC-FR02-05"
+    - tc_id: TC-FR02-06
+      ac_id: AC-FR02-06
+      fr: FR-02
+      title: "run --all 10 tasks concurrent → valid JSON, no partial write"
+      function_name: test_fr02_06_run_all_thread_safety
+      layer: integration
+      modules: [executor, store]
+      cross_ref_nfrs: [NFR-08]
+      description: "10 pending tasks → run --all → tasks.json valid JSON, all task fields complete (no half-write)"
+      ac_citation: "SRS §3 FR-02 AC-FR02-06"
+    - tc_id: TC-FR02-07
+      ac_id: AC-FR02-07
+      fr: FR-02
+      title: "grep 'shell=True' src/taskq/ → 0 hits"
+      function_name: test_fr02_07_shell_true_absent
+      layer: static
+      modules: [executor]
+      cross_ref_nfrs: [NFR-02]
+      description: "grep -RE 'shell\\s*=\\s*True' src/taskq/ → 0 hits (NFR-02 codebase ban)"
+      ac_citation: "SRS §3 FR-02 AC-FR02-07"
+    - tc_id: TC-FR02-08
+      ac_id: AC-FR02-08
+      fr: FR-02
+      title: "duration_ms ≥ 0 + finished_at ISO"
+      function_name: test_fr02_08_duration_and_finished_at
+      layer: unit
+      modules: [executor, models]
+      cross_ref_nfrs: []
+      description: "after run success, status <id> shows duration_ms >= 0 and finished_at as ISO timestamp"
+      ac_citation: "SRS §3 FR-02 AC-FR02-08"
+
+    # ---------- FR-03: 重試與斷路器 — 8 ACs ----------
+    - tc_id: TC-FR03-01
+      ac_id: AC-FR03-01
+      fr: FR-03
+      title: "failed auto-retry RETRY_LIMIT times"
+      function_name: test_fr03_01_retry_on_failed
+      layer: unit
+      modules: [executor, config]
+      cross_ref_nfrs: []
+      description: "submit 'false' → run <id> → auto-retry TASKQ_RETRY_LIMIT times → final status=failed"
+      ac_citation: "SRS §3 FR-03 AC-FR03-01"
+    - tc_id: TC-FR03-02
+      ac_id: AC-FR03-02
+      fr: FR-03
+      title: "timeout auto-retry"
+      function_name: test_fr03_02_retry_on_timeout
+      layer: unit
+      modules: [executor, config]
+      cross_ref_nfrs: []
+      description: "TASKQ_TASK_TIMEOUT=1 + submit 'sleep 5' → auto-retry → final status=timeout"
+      ac_citation: "SRS §3 FR-03 AC-FR03-02"
+    - tc_id: TC-FR03-03
+      ac_id: AC-FR03-03
+      fr: FR-03
+      title: "backoff sequence sleep(BACKOFF_BASE × 2^n)"
+      function_name: test_fr03_03_backoff_sequence
+      layer: unit
+      modules: [executor]
+      cross_ref_nfrs: []
+      description: "injected sleep verifies nth retry waits sleep(TASKQ_BACKOFF_BASE × 2^n)"
+      ac_citation: "SRS §3 FR-03 AC-FR03-03"
+    - tc_id: TC-FR03-04
+      ac_id: AC-FR03-04
+      fr: FR-03
+      title: "3 consecutive final failures → 4th run exit 3 + 'breaker open'"
+      function_name: test_fr03_04_breaker_open
+      layer: integration
+      modules: [breaker, executor]
+      cross_ref_nfrs: [NFR-06]
+      description: "TASKQ_BREAKER_THRESHOLD=3 + 3 consecutive final-failure tasks → 4th run → exit 3 + stderr 'breaker open'; no subprocess executed"
+      ac_citation: "SRS §3 FR-03 AC-FR03-04"
+    - tc_id: TC-FR03-05
+      ac_id: AC-FR03-05
+      fr: FR-03
+      title: "OPEN → cooldown → HALF_OPEN success → CLOSED + count reset"
+      function_name: test_fr03_05_breaker_half_open_success
+      layer: integration
+      modules: [breaker]
+      cross_ref_nfrs: []
+      description: "OPEN → TASKQ_BREAKER_COOLDOWN → HALF_OPEN → run 'echo hi' succeeds → CLOSED; failure_count reset to 0"
+      ac_citation: "SRS §3 FR-03 AC-FR03-05"
+    - tc_id: TC-FR03-06
+      ac_id: AC-FR03-06
+      fr: FR-03
+      title: "HALF_OPEN probe failure → re-OPEN + cooldown restart"
+      function_name: test_fr03_06_breaker_half_open_failure
+      layer: unit
+      modules: [breaker]
+      cross_ref_nfrs: []
+      description: "HALF_OPEN probe task final-fails → breaker re-OPEN; new cooldown restarts"
+      ac_citation: "SRS §3 FR-03 AC-FR03-06"
+    - tc_id: TC-FR03-07
+      ac_id: AC-FR03-07
+      fr: FR-03
+      title: "breaker OPEN persisted to breaker.json; cross-process restart still OPEN"
+      function_name: test_fr03_07_breaker_persistence
+      layer: integration
+      modules: [breaker, store]
+      cross_ref_nfrs: [NFR-03]
+      description: "OPEN state written to breaker.json (valid JSON); after process restart, breaker still OPEN"
+      ac_citation: "SRS §3 FR-03 AC-FR03-07"
+    - tc_id: TC-FR03-08
+      ac_id: AC-FR03-08
+      fr: FR-03
+      title: "OPEN → CLOSED recovery ≤ cooldown + 1s"
+      function_name: test_fr03_08_recovery_time
+      layer: integration
+      modules: [breaker]
+      cross_ref_nfrs: [NFR-03]
+      description: "OPEN → CLOSED recovery time ≤ TASKQ_BREAKER_COOLDOWN + 1s (integration measurement)"
+      ac_citation: "SRS §3 FR-03 AC-FR03-08"
+
+    # ---------- FR-04: 結果 TTL 快取 (run --cached) — 6 ACs ----------
+    - tc_id: TC-FR04-01
+      ac_id: AC-FR04-01
+      fr: FR-04
+      title: "TTL-fresh run --cached → no subprocess + cached:true"
+      function_name: test_fr04_01_cache_hit_fresh
+      layer: unit
+      modules: [cache, executor]
+      cross_ref_nfrs: []
+      description: "same command first run + within TTL --cached replay → monkeypatch subprocess.run count = 0; status=done; cached=true"
+      ac_citation: "SRS §3 FR-04 AC-FR04-01"
+    - tc_id: TC-FR04-02
+      ac_id: AC-FR04-02
+      fr: FR-04
+      title: "TTL expired → re-exec + write cache.json"
+      function_name: test_fr04_02_cache_miss_expired
+      layer: unit
+      modules: [cache]
+      cross_ref_nfrs: []
+      description: "TTL expired --cached → re-execute subprocess; write cache.json"
+      ac_citation: "SRS §3 FR-04 AC-FR04-02"
+    - tc_id: TC-FR04-03
+      ac_id: AC-FR04-03
+      fr: FR-04
+      title: "different command → no cross-hit (sha256 signature)"
+      function_name: test_fr04_03_cache_signature
+      layer: unit
+      modules: [cache]
+      cross_ref_nfrs: []
+      description: "different commands --cached → no cross-hit (signature = sha256(command))"
+      ac_citation: "SRS §3 FR-04 AC-FR04-03"
+    - tc_id: TC-FR04-04
+      ac_id: AC-FR04-04
+      fr: FR-04
+      title: "failed/timeout not cached (replay only done)"
+      function_name: test_fr04_04_only_done_cached
+      layer: unit
+      modules: [cache]
+      cross_ref_nfrs: []
+      description: "failed/timeout task results are NOT written to cache.json (replay only hits 'done')"
+      ac_citation: "SRS §3 FR-04 AC-FR04-04"
+    - tc_id: TC-FR04-05
+      ac_id: AC-FR04-05
+      fr: FR-04
+      title: "mid-write OSError → cache.json still valid"
+      function_name: test_fr04_05_cache_atomic_write
+      layer: unit
+      modules: [cache]
+      cross_ref_nfrs: [NFR-03]
+      description: "monkeypatch mid-write OSError on cache.json → file still valid JSON"
+      ac_citation: "SRS §3 FR-04 AC-FR04-05"
+    - tc_id: TC-FR04-06
+      ac_id: AC-FR04-06
+      fr: FR-04
+      title: "run --all concurrent → cache.json valid, no partial entry"
+      function_name: test_fr04_06_cache_thread_safety
+      layer: integration
+      modules: [cache]
+      cross_ref_nfrs: [NFR-08]
+      description: "run --all concurrent scenario → cache.json valid JSON; no half-written entries"
+      ac_citation: "SRS §3 FR-04 AC-FR04-06"
+
+    # ---------- FR-05: CLI 整合 — 7 ACs ----------
+    - tc_id: TC-FR05-01
+      ac_id: AC-FR05-01
+      fr: FR-05
+      title: "status <id> → all fields"
+      function_name: test_fr05_01_status_all_fields
+      layer: integration
+      modules: [cli]
+      cross_ref_nfrs: []
+      description: "after run <id>, status <id> → all task fields (id/command/name/status/exit_code/stdout_tail/stderr_tail/duration_ms/created_at/finished_at)"
+      ac_citation: "SRS §3 FR-05 AC-FR05-01"
+    - tc_id: TC-FR05-02
+      ac_id: AC-FR05-02
+      fr: FR-05
+      title: "status <id> --json → single-line JSON"
+      function_name: test_fr05_02_status_json
+      layer: unit
+      modules: [cli]
+      cross_ref_nfrs: []
+      description: "with --json, status <id> outputs single-line JSON"
+      ac_citation: "SRS §3 FR-05 AC-FR05-02"
+    - tc_id: TC-FR05-03
+      ac_id: AC-FR05-03
+      fr: FR-05
+      title: "list 3 tasks → 3 rows"
+      function_name: test_fr05_03_list_happy
+      layer: integration
+      modules: [cli]
+      cross_ref_nfrs: []
+      description: "3 tasks done → list → 3 rows (one per task)"
+      ac_citation: "SRS §3 FR-05 AC-FR05-03"
+    - tc_id: TC-FR05-04
+      ac_id: AC-FR05-04
+      fr: FR-05
+      title: "list --status done 5→3 → 3 rows"
+      function_name: test_fr05_04_list_filter_done
+      layer: integration
+      modules: [cli]
+      cross_ref_nfrs: []
+      description: "5 tasks with 3 done → list --status done → 3 rows"
+      ac_citation: "SRS §3 FR-05 AC-FR05-04"
+    - tc_id: TC-FR05-05
+      ac_id: AC-FR05-05
+      fr: FR-05
+      title: "clear → 3 data files empty + subsequent list empty"
+      function_name: test_fr05_05_clear
+      layer: integration
+      modules: [cli, store]
+      cross_ref_nfrs: []
+      description: "clear → TASKQ_HOME three data files absent or empty valid JSON; subsequent list → empty output"
+      ac_citation: "SRS §3 FR-05 AC-FR05-05"
+    - tc_id: TC-FR05-06
+      ac_id: AC-FR05-06
+      fr: FR-05
+      title: "status <unknown-id> → exit 2 + 'unknown task: <id>'"
+      function_name: test_fr05_06_unknown_task_id
+      layer: unit
+      modules: [cli]
+      cross_ref_nfrs: []
+      description: "status <non-existent-id> → exit 2 + stderr 'unknown task: <id>'"
+      ac_citation: "SRS §3 FR-05 AC-FR05-06"
+    - tc_id: TC-FR05-07
+      ac_id: AC-FR05-07
+      fr: FR-05
+      title: "exit codes 0/1/2/3/4 five scenarios reproducible"
+      function_name: test_fr05_07_exit_code_map
+      layer: integration
+      modules: [cli, main]
+      cross_ref_nfrs: []
+      description: "five exit codes (0/1/2/3/4) each reproducible: happy / internal error / validation / breaker open / timeout"
+      ac_citation: "SRS §3 FR-05 AC-FR05-07"
+
+    # ---------- NFR-01: performance — 1 AC ----------
+    - tc_id: TC-NFR01-01
+      ac_id: AC-NFR01-01
+      nfr: NFR-01
+      fr_anchors: [FR-01, FR-05]
+      title: "submit + status 100 iter p95 < 50ms (pytest-benchmark)"
+      function_name: test_nfr01_01_submit_status_p95_under_50ms
+      layer: bench
+      modules: [cli, store]
+      cross_ref_frs: [FR-01, FR-05]
+      description: "submit + status combined (no subprocess) 100 iter p95 < 50ms via pytest-benchmark"
+      ac_citation: "SRS §4 NFR-01 AC-NFR01-01"
+
+    # ---------- NFR-02: security — 3 ACs ----------
+    - tc_id: TC-NFR02-01
+      ac_id: AC-NFR02-01
+      nfr: NFR-02
+      fr_anchors: [FR-01, FR-02]
+      title: "grep 'shell=True' src/taskq/ → 0 hits (codebase-wide)"
+      function_name: test_nfr02_01_no_shell_true_codebase
+      layer: static
+      modules: [all]
+      cross_ref_frs: [FR-01, FR-02]
+      cross_ref_acs: [AC-FR02-07]
+      description: "grep -RE 'shell\\s*=\\s*True' src/taskq/ → 0 hits across entire codebase (codebase-wide static check; modules field = [all])"
+      ac_citation: "SRS §4 NFR-02 AC-NFR02-01"
+    - tc_id: TC-NFR02-02
+      ac_id: AC-NFR02-02
+      nfr: NFR-02
+      fr_anchors: [FR-01, FR-02]
+      title: "injection chars blacklist 6 chars each 1 pytest case"
+      function_name: test_nfr02_02_injection_chars_blacklist
+      layer: unit
+      modules: [cli, store]
+      cross_ref_frs: [FR-01, FR-02]
+      cross_ref_acs: [AC-FR01-06, AC-FR01-07]
+      description: "injection chars blacklist (| & $ > < `) 6 chars each has independent pytest case (= AC-FR01-07; semicolon covered separately by AC-FR01-06)"
+      sub_cases: ["pipe", "ampersand", "dollar", "redirect_gt", "redirect_lt", "backtick"]
+      ac_citation: "SRS §4 NFR-02 AC-NFR02-02"
+    - tc_id: TC-NFR02-03
+      ac_id: AC-NFR02-03
+      nfr: NFR-02
+      fr_anchors: [FR-01, FR-02]
+      title: "CI gate blocks shell=True regression"
+      function_name: test_nfr02_03_ci_gate_blocks_shell_true
+      layer: static
+      modules: [cli, store, executor]
+      cross_ref_frs: [FR-01, FR-02]
+      cross_ref_acs: [AC-FR02-07]
+      description: "CI gate blocks shell=True regression (= AC-FR02-07)"
+      ac_citation: "SRS §4 NFR-02 AC-NFR02-03"
+
+    # ---------- NFR-03: reliability — 3 ACs ----------
+    - tc_id: TC-NFR03-01
+      ac_id: AC-NFR03-01
+      nfr: NFR-03
+      fr_anchors: [FR-02, FR-03]
+      title: "3 data files tmp + os.replace; mid-write sim → valid JSON"
+      function_name: test_nfr03_01_three_files_atomic_write
+      layer: unit
+      modules: [store, breaker, cache]
+      cross_ref_frs: [FR-02, FR-03]
+      description: "all 3 data files (tasks.json, breaker.json, cache.json) written via tmp + os.replace; mid-write simulation → file still valid JSON"
+      ac_citation: "SRS §4 NFR-03 AC-NFR03-01"
+    - tc_id: TC-NFR03-02
+      ac_id: AC-NFR03-02
+      nfr: NFR-03
+      fr_anchors: [FR-02, FR-03]
+      title: "OPEN → CLOSED recovery ≤ cooldown + 1s"
+      function_name: test_nfr03_02_recovery_within_cooldown
+      layer: integration
+      modules: [breaker]
+      cross_ref_frs: [FR-02, FR-03]
+      cross_ref_acs: [AC-FR03-08]
+      description: "breaker OPEN → CLOSED recovery time ≤ TASKQ_BREAKER_COOLDOWN + 1s (integration measurement)"
+      ac_citation: "SRS §4 NFR-03 AC-NFR03-02"
+    - tc_id: TC-NFR03-03
+      ac_id: AC-NFR03-03
+      nfr: NFR-03
+      fr_anchors: [FR-02, FR-03]
+      title: "tasks.json corruption → exit 1 + 'store corrupted', no silent rebuild"
+      function_name: test_nfr03_03_tasks_corruption_detected
+      layer: unit
+      modules: [store]
+      cross_ref_frs: [FR-02, FR-03]
+      description: "tasks.json corruption (invalid JSON) → startup detection → exit 1, stderr 'store corrupted'; NO silent rebuild"
+      ac_citation: "SRS §4 NFR-03 AC-NFR03-03"
+
+    # ---------- NFR-04: security (redaction) — 4 ACs ----------
+    - tc_id: TC-NFR04-01
+      ac_id: AC-NFR04-01
+      nfr: NFR-04
+      fr_anchors: [FR-02]
+      title: "stdout_tail with sk-... → that line replaced with [REDACTED]"
+      function_name: test_nfr04_01_redact_sk_pattern
+      layer: unit
+      modules: [executor]
+      cross_ref_frs: [FR-02]
+      description: "stdout_tail line containing 'sk-abcdef1234567890' → that entire line replaced with [REDACTED]"
+      ac_citation: "SRS §4 NFR-04 AC-NFR04-01"
+    - tc_id: TC-NFR04-02
+      ac_id: AC-NFR04-02
+      nfr: NFR-04
+      fr_anchors: [FR-02]
+      title: "stdout_tail with token=... → that line replaced with [REDACTED]"
+      function_name: test_nfr04_02_redact_token_pattern
+      layer: unit
+      modules: [executor]
+      cross_ref_frs: [FR-02]
+      description: "stdout_tail line containing 'token=abc123' → that entire line replaced with [REDACTED]"
+      ac_citation: "SRS §4 NFR-04 AC-NFR04-02"
+    - tc_id: TC-NFR04-03
+      ac_id: AC-NFR04-03
+      nfr: NFR-04
+      fr_anchors: [FR-02]
+      title: "non-matching lines unchanged"
+      function_name: test_nfr04_03_non_matching_unchanged
+      layer: unit
+      modules: [executor]
+      cross_ref_frs: [FR-02]
+      description: "lines not matching (sk-*|token=*) pattern remain unchanged"
+      ac_citation: "SRS §4 NFR-04 AC-NFR04-03"
+    - tc_id: TC-NFR04-04
+      ac_id: AC-NFR04-04
+      nfr: NFR-04
+      fr_anchors: [FR-02]
+      title: "redaction happens before disk write (content check)"
+      function_name: test_nfr04_04_redaction_before_disk_write
+      layer: unit
+      modules: [executor, store, cache]
+      cross_ref_frs: [FR-02]
+      description: "redaction happens BEFORE disk write (cache.json / tasks.json content check via runtime stub stdout trigger)"
+      ac_citation: "SRS §4 NFR-04 AC-NFR04-04"
+
+    # ---------- NFR-05: maintainability — 2 ACs ----------
+    - tc_id: TC-NFR05-01
+      ac_id: AC-NFR05-01
+      nfr: NFR-05
+      fr_anchors: [FR-01, FR-02, FR-03, FR-04, FR-05]
+      title: "100% public-symbol docstring coverage"
+      function_name: test_nfr05_01_docstring_full_coverage
+      layer: static
+      modules: [cli, store, executor, breaker, cache, config, models, main]
+      cross_ref_frs: [FR-01, FR-02, FR-03, FR-04, FR-05]
+      description: "all public def / class symbols in src/taskq/ have docstring → 100% docstring coverage"
+      ac_citation: "SRS §4 NFR-05 AC-NFR05-01"
+    - tc_id: TC-NFR05-02
+      ac_id: AC-NFR05-02
+      nfr: NFR-05
+      fr_anchors: [FR-01, FR-02, FR-03, FR-04, FR-05]
+      title: "each docstring ≥ 1 [FR-XX] or [NFR-XX] ref"
+      function_name: test_nfr05_02_docstring_cites_upstream
+      layer: static
+      modules: [cli, store, executor, breaker, cache, config, models, main]
+      cross_ref_frs: [FR-01, FR-02, FR-03, FR-04, FR-05]
+      description: "every public function docstring contains ≥ 1 [FR-XX] or [NFR-XX] upstream reference"
+      ac_citation: "SRS §4 NFR-05 AC-NFR05-02"
+
+    # ---------- NFR-06: deployability — 2 ACs ----------
+    - tc_id: TC-NFR06-01
+      ac_id: AC-NFR06-01
+      nfr: NFR-06
+      fr_anchors: [FR-02, FR-03, FR-04]
+      title: ".env.example declares 8 TASKQ_* vars + comments"
+      function_name: test_nfr06_01_env_example_all_eight_vars
+      layer: static
+      modules: [config]
+      cross_ref_frs: [FR-02, FR-03, FR-04]
+      description: ".env.example fully declares 8 TASKQ_* variables (TASKQ_HOME, TASKQ_MAX_WORKERS, TASKQ_TASK_TIMEOUT, TASKQ_RETRY_LIMIT, TASKQ_BACKOFF_BASE, TASKQ_BREAKER_THRESHOLD, TASKQ_BREAKER_COOLDOWN, TASKQ_CACHE_TTL) with annotations"
+      ac_citation: "SRS §4 NFR-06 AC-NFR06-01"
+    - tc_id: TC-NFR06-02
+      ac_id: AC-NFR06-02
+      nfr: NFR-06
+      fr_anchors: [FR-02, FR-03, FR-04]
+      title: "config.py centralized read + per-var default"
+      function_name: test_nfr06_02_config_centralized_read
+      layer: unit
+      modules: [config]
+      cross_ref_frs: [FR-02, FR-03, FR-04]
+      description: "config.py centralized read (no scattered os.environ.get shotgun); each variable has default"
+      ac_citation: "SRS §4 NFR-06 AC-NFR06-02"
+
+    # ---------- NFR-07: resilience — 5 ACs ----------
+    - tc_id: TC-NFR07-01
+      ac_id: AC-NFR07-01
+      nfr: NFR-07
+      fr_anchors: [FR-02, FR-04]
+      title: "--inject-fault=corrupt-mid-write → recover or fail-fast"
+      function_name: test_nfr07_01_fault_corrupt_mid_write
+      layer: unit
+      modules: [store, cache, cli]
+      cross_ref_frs: [FR-02, FR-04]
+      description: "--inject-fault=corrupt-mid-write → mid-write corrupted file; next start detects and recovers from backup OR fail-fast (exit 1 + explicit stderr)"
+      ac_citation: "SRS §4 NFR-07 AC-NFR07-01"
+    - tc_id: TC-NFR07-02
+      ac_id: AC-NFR07-02
+      nfr: NFR-07
+      fr_anchors: [FR-02, FR-04]
+      title: "--inject-fault=oserror-on-write → recover or fail-fast"
+      function_name: test_nfr07_02_fault_oserror_on_write
+      layer: unit
+      modules: [store, cache, cli]
+      cross_ref_frs: [FR-02, FR-04]
+      description: "--inject-fault=oserror-on-write → write triggers OSError; recover OR fail-fast"
+      ac_citation: "SRS §4 NFR-07 AC-NFR07-02"
+    - tc_id: TC-NFR07-03
+      ac_id: AC-NFR07-03
+      nfr: NFR-07
+      fr_anchors: [FR-02, FR-04]
+      title: "--inject-fault=disk-full → recover or fail-fast"
+      function_name: test_nfr07_03_fault_disk_full
+      layer: unit
+      modules: [store, cache, cli]
+      cross_ref_frs: [FR-02, FR-04]
+      description: "--inject-fault=disk-full → insufficient write space; recover OR fail-fast"
+      ac_citation: "SRS §4 NFR-07 AC-NFR07-03"
+    - tc_id: TC-NFR07-04
+      ac_id: AC-NFR07-04
+      nfr: NFR-07
+      fr_anchors: [FR-02, FR-04]
+      title: "--inject-fault=kill-mid-write → recover or fail-fast"
+      function_name: test_nfr07_04_fault_kill_mid_write
+      layer: unit
+      modules: [store, cache, cli]
+      cross_ref_frs: [FR-02, FR-04]
+      description: "--inject-fault=kill-mid-write → simulated mid-write kill -9; recover OR fail-fast"
+      ac_citation: "SRS §4 NFR-07 AC-NFR07-04"
+    - tc_id: TC-NFR07-05
+      ac_id: AC-NFR07-05
+      nfr: NFR-07
+      fr_anchors: [FR-02, FR-04]
+      title: "production path (no flag) disables fault injection (0% silent)"
+      function_name: test_nfr07_05_production_no_fault_injection
+      layer: static
+      modules: [cli]
+      cross_ref_frs: [FR-02, FR-04]
+      description: "production path (no --inject-fault flag) completely disables fault injection (silent-rebuild rate 0% / silent-swallow rate 0%)"
+      ac_citation: "SRS §4 NFR-07 AC-NFR07-05"
+
+    # ---------- NFR-08: concurrency — 3 ACs ----------
+    - tc_id: TC-NFR08-01
+      ac_id: AC-NFR08-01
+      nfr: NFR-08
+      fr_anchors: [FR-02, NFR-03]
+      title: "4-process concurrent submit+run+clear → valid JSON, no loss"
+      function_name: test_nfr08_01_four_process_concurrent
+      layer: integration
+      modules: [store, cache]
+      cross_ref_frs: [FR-02, NFR-03]
+      description: "4-process concurrent submit + run + clear operations on same TASKQ_HOME → 3 data files valid JSON; no task loss"
+      ac_citation: "SRS §4 NFR-08 AC-NFR08-01"
+    - tc_id: TC-NFR08-02
+      ac_id: AC-NFR08-02
+      nfr: NFR-08
+      fr_anchors: [FR-02, NFR-03]
+      title: "POSIX fcntl.flock / Windows msvcrt.locking"
+      function_name: test_nfr08_02_fcntl_msvcrt_platform_lock
+      layer: static
+      modules: [store]
+      cross_ref_frs: [FR-02, NFR-03]
+      description: "POSIX path uses fcntl.flock; Windows path uses msvcrt.locking (code review / platform skip)"
+      ac_citation: "SRS §4 NFR-08 AC-NFR08-02"
+    - tc_id: TC-NFR08-03
+      ac_id: AC-NFR08-03
+      nfr: NFR-08
+      fr_anchors: [FR-02, NFR-03]
+      title: "NFS / network fs detect → degrade + WARNING"
+      function_name: test_nfr08_03_nfs_network_fs_degrade
+      layer: unit
+      modules: [store]
+      cross_ref_frs: [FR-02, NFR-03]
+      description: "NFS / network filesystem detected → degrade to 'no flock but atomic write maintained' and emit WARNING to stderr"
+      ac_citation: "SRS §4 NFR-08 AC-NFR08-03"
+
+    # ---------- NFR-09: scalability — 3 ACs ----------
+    - tc_id: TC-NFR09-01
+      ac_id: AC-NFR09-01
+      nfr: NFR-09
+      fr_anchors: [FR-01, FR-02]
+      title: "1000 tasks submit+status p95 < 100ms"
+      function_name: test_nfr09_01_thousand_tasks_p95
+      layer: bench
+      modules: [store, cli]
+      cross_ref_frs: [FR-01, FR-02]
+      description: "1000-task scale submit + status combined (no subprocess) p95 < 100ms (pytest-benchmark scaled)"
+      ac_citation: "SRS §4 NFR-09 AC-NFR09-01"
+    - tc_id: TC-NFR09-02
+      ac_id: AC-NFR09-02
+      nfr: NFR-09
+      fr_anchors: [FR-01, FR-02]
+      title: "run --all 100 tasks → 100% valid, no loss"
+      function_name: test_nfr09_02_run_all_hundred_tasks
+      layer: integration
+      modules: [executor, store]
+      cross_ref_frs: [FR-01, FR-02]
+      description: "run --all on 100 tasks → tasks.json 100% valid JSON; no task loss"
+      ac_citation: "SRS §4 NFR-09 AC-NFR09-02"
+    - tc_id: TC-NFR09-03
+      ac_id: AC-NFR09-03
+      nfr: NFR-09
+      fr_anchors: [FR-01, FR-02]
+      title: "memory peak < 100MB (tracemalloc, streaming iterator)"
+      function_name: test_nfr09_03_memory_peak_under_100mb
+      layer: unit
+      modules: [store]
+      cross_ref_frs: [FR-01, FR-02]
+      description: "memory peak < 100MB via tracemalloc; streaming iterator (no full load in memory)"
+      ac_citation: "SRS §4 NFR-09 AC-NFR09-03"
+
+    # ---------- NFR-10: evolvability (schema migration) — 5 ACs ----------
+    - tc_id: TC-NFR10-01
+      ac_id: AC-NFR10-01
+      nfr: NFR-10
+      fr_anchors: [NFR-03]
+      title: "3 data files root version: 1"
+      function_name: test_nfr10_01_version_field_present
+      layer: unit
+      modules: [store, breaker, cache]
+      cross_ref_frs: [NFR-03]
+      description: "all 3 data files (tasks.json / breaker.json / cache.json) root contains version: 1"
+      ac_citation: "SRS §4 NFR-10 AC-NFR10-01"
+    - tc_id: TC-NFR10-02
+      ac_id: AC-NFR10-02
+      nfr: NFR-10
+      fr_anchors: [NFR-03]
+      title: "version: 0 → auto-migrate v1 + <file>.v0.bak"
+      function_name: test_nfr10_02_v0_auto_migrate
+      layer: unit
+      modules: [store, breaker, cache]
+      cross_ref_frs: [NFR-03]
+      description: "read version: 0 data file → auto-migrate to v1 + backup as <file>.v0.bak"
+      ac_citation: "SRS §4 NFR-10 AC-NFR10-02"
+    - tc_id: TC-NFR10-03
+      ac_id: AC-NFR10-03
+      nfr: NFR-10
+      fr_anchors: [NFR-03]
+      title: "version: 2 → refuse + upgrade prompt + exit 1"
+      function_name: test_nfr10_03_v2_refuse_with_upgrade_prompt
+      layer: unit
+      modules: [store, breaker, cache]
+      cross_ref_frs: [NFR-03]
+      description: "read version: 2 (future version) → refuse read, stderr prompts upgrade tool, exit 1"
+      ac_citation: "SRS §4 NFR-10 AC-NFR10-03"
+    - tc_id: TC-NFR10-04
+      ac_id: AC-NFR10-04
+      nfr: NFR-10
+      fr_anchors: [NFR-03]
+      title: "migrate failure → keep backup + exit 1"
+      function_name: test_nfr10_04_migrate_failure_keeps_backup
+      layer: unit
+      modules: [store, breaker, cache]
+      cross_ref_frs: [NFR-03]
+      description: "migration failure → <file>.v<n>.bak retained + exit 1 fail-fast"
+      ac_citation: "SRS §4 NFR-10 AC-NFR10-04"
+    - tc_id: TC-NFR10-05
+      ac_id: AC-NFR10-05
+      nfr: NFR-10
+      fr_anchors: [NFR-03]
+      title: "pytest fixture v0 → v1 100% + backup + readable"
+      function_name: test_nfr10_05_pytest_fixture_v0_to_v1
+      layer: unit
+      modules: [store, breaker, cache]
+      cross_ref_frs: [NFR-03]
+      description: "pytest fixture-based migration test: version: 0 → 1 100% success + backup exists + data readable"
+      ac_citation: "SRS §4 NFR-10 AC-NFR10-05"
+
+  # ---------- Coverage summaries ----------
+  by_fr:
+    FR-01:
+      tc_count: 9
+      tcs: [TC-FR01-01, TC-FR01-02, TC-FR01-03, TC-FR01-04, TC-FR01-05, TC-FR01-06, TC-FR01-07, TC-FR01-08, TC-FR01-09]
+    FR-02:
+      tc_count: 8
+      tcs: [TC-FR02-01, TC-FR02-02, TC-FR02-03, TC-FR02-04, TC-FR02-05, TC-FR02-06, TC-FR02-07, TC-FR02-08]
+    FR-03:
+      tc_count: 8
+      tcs: [TC-FR03-01, TC-FR03-02, TC-FR03-03, TC-FR03-04, TC-FR03-05, TC-FR03-06, TC-FR03-07, TC-FR03-08]
+    FR-04:
+      tc_count: 6
+      tcs: [TC-FR04-01, TC-FR04-02, TC-FR04-03, TC-FR04-04, TC-FR04-05, TC-FR04-06]
+    FR-05:
+      tc_count: 7
+      tcs: [TC-FR05-01, TC-FR05-02, TC-FR05-03, TC-FR05-04, TC-FR05-05, TC-FR05-06, TC-FR05-07]
+    FR_total: 38
+
+  by_nfr:
+    NFR-01:
+      tc_count: 1
+      tcs: [TC-NFR01-01]
+    NFR-02:
+      tc_count: 3
+      tcs: [TC-NFR02-01, TC-NFR02-02, TC-NFR02-03]
+    NFR-03:
+      tc_count: 3
+      tcs: [TC-NFR03-01, TC-NFR03-02, TC-NFR03-03]
+    NFR-04:
+      tc_count: 4
+      tcs: [TC-NFR04-01, TC-NFR04-02, TC-NFR04-03, TC-NFR04-04]
+    NFR-05:
+      tc_count: 2
+      tcs: [TC-NFR05-01, TC-NFR05-02]
+    NFR-06:
+      tc_count: 2
+      tcs: [TC-NFR06-01, TC-NFR06-02]
+    NFR-07:
+      tc_count: 5
+      tcs: [TC-NFR07-01, TC-NFR07-02, TC-NFR07-03, TC-NFR07-04, TC-NFR07-05]
+    NFR-08:
+      tc_count: 3
+      tcs: [TC-NFR08-01, TC-NFR08-02, TC-NFR08-03]
+    NFR-09:
+      tc_count: 3
+      tcs: [TC-NFR09-01, TC-NFR09-02, TC-NFR09-03]
+    NFR-10:
+      tc_count: 5
+      tcs: [TC-NFR10-01, TC-NFR10-02, TC-NFR10-03, TC-NFR10-04, TC-NFR10-05]
+    NFR_total: 31
+
+  by_layer:
+    unit:
+      count: 40
+      tcs:
+        - TC-FR01-02
+        - TC-FR01-03
+        - TC-FR01-04
+        - TC-FR01-05
+        - TC-FR01-06
+        - TC-FR01-07
+        - TC-FR01-08
+        - TC-FR01-09
+        - TC-FR02-04
+        - TC-FR02-08
+        - TC-FR03-01
+        - TC-FR03-02
+        - TC-FR03-03
+        - TC-FR03-06
+        - TC-FR04-01
+        - TC-FR04-02
+        - TC-FR04-03
+        - TC-FR04-04
+        - TC-FR04-05
+        - TC-FR05-02
+        - TC-FR05-06
+        - TC-NFR02-02
+        - TC-NFR03-01
+        - TC-NFR03-03
+        - TC-NFR04-01
+        - TC-NFR04-02
+        - TC-NFR04-03
+        - TC-NFR04-04
+        - TC-NFR06-02
+        - TC-NFR07-01
+        - TC-NFR07-02
+        - TC-NFR07-03
+        - TC-NFR07-04
+        - TC-NFR08-03
+        - TC-NFR09-03
+        - TC-NFR10-01
+        - TC-NFR10-02
+        - TC-NFR10-03
+        - TC-NFR10-04
+        - TC-NFR10-05
+    integration:
+      count: 19
+      tcs:
+        - TC-FR01-01
+        - TC-FR02-01
+        - TC-FR02-02
+        - TC-FR02-03
+        - TC-FR02-05
+        - TC-FR02-06
+        - TC-FR03-04
+        - TC-FR03-05
+        - TC-FR03-07
+        - TC-FR03-08
+        - TC-FR04-06
+        - TC-FR05-01
+        - TC-FR05-03
+        - TC-FR05-04
+        - TC-FR05-05
+        - TC-FR05-07
+        - TC-NFR03-02
+        - TC-NFR08-01
+        - TC-NFR09-02
+    bench:
+      count: 2
+      tcs:
+        - TC-NFR01-01
+        - TC-NFR09-01
+    static:
+      count: 8
+      tcs:
+        - TC-FR02-07
+        - TC-NFR02-01
+        - TC-NFR02-03
+        - TC-NFR05-01
+        - TC-NFR05-02
+        - TC-NFR06-01
+        - TC-NFR07-05
+        - TC-NFR08-02
+    total: 69
+
+  arithmetic_check:
+    by_fr_total: 38
+    by_nfr_total: 31
+    by_layer_total: 69
+    enumerated_count: 69
+    total_test_cases: 69
+    consistent: true
+
+  citations:
+    - "01-requirements/SRS.md §3 FR-01..05 AC"
+    - "01-requirements/SRS.md §4 NFR-01..10 AC"
+    - "01-requirements/SRS.md §5 Acceptance Criteria Summary (10 SPEC §8 items)"
+    - "01-requirements/TRACEABILITY_MATRIX.md §2.1 (FR per-AC detail, 38 rows)"
+    - "01-requirements/TRACEABILITY_MATRIX.md §3.1 (NFR per-AC detail, 31 rows)"
+    - "01-requirements/TRACEABILITY_MATRIX.md §7 (coverage validation, 69 AC = 38 + 31)"

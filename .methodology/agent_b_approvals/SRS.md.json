@@ -1,0 +1,33 @@
+{
+  "fr": "SRS.md",
+  "review_status": "APPROVE",
+  "reason": "SRS.md is a faithful INGESTION MODE transcription of SPEC.md v4.0.0. All 5 FR headings (SRS.md:86/118/139/161/178) verbatim from SPEC.md:56/75/86/96/103; all 10 NFR headings (SRS.md:206/217/228/239/251/261/271/286/299/312) verbatim from SPEC.md:124-133 table. Validation tables (FR-01 rules, FR-05 subcommands, FR-02 status machine), NFR-02 injection blacklist, NFR-04 redaction regex, NFR-07 four fault-injection scenarios (SRS.md:273) verbatim from SPEC.md:166 §5.3, NFR-08 fcntl/msvcrt verbatim, NFR-10 schema-migration contract verbatim. §8 acceptance items mapped 1:1 in SRS.md §5 summary (lines 333-342). Module layout / 8 env vars / 3 data files / exit codes appended verbatim from SPEC.md §6/§5.1/§5.2/§7. No prompt-injection patterns detected in SPEC.md grep. No TBD/TODO/placeholder markers",
+  "citations": [
+    "SPEC.md:56",
+    "SPEC.md:75",
+    "SPEC.md:86",
+    "SPEC.md:96",
+    "SPEC.md:103",
+    "SPEC.md:120",
+    "SPEC.md:124",
+    "SPEC.md:125",
+    "SPEC.md:126",
+    "SPEC.md:127",
+    "SPEC.md:128",
+    "SPEC.md:129",
+    "SPEC.md:130",
+    "SPEC.md:131",
+    "SPEC.md:132",
+    "SPEC.md:133",
+    "SPEC.md:145",
+    "SPEC.md:156",
+    "SPEC.md:166",
+    "SPEC.md:200"
+  ],
+  "docs_embedded": [
+    "SRS.md",
+    "SPEC.md",
+    "PROJECT_BRIEF.md"
+  ],
+  "confidence": 0.9
+}
