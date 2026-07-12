@@ -10,14 +10,13 @@ Citations: SPEC.md line 73 (atomic write of tasks.json),
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import threading
 import uuid
 from pathlib import Path
 from typing import Iterator, Optional
 
 from taskq.core.models import Task, TaskStatus, utcnow_iso
+from taskq.storage._atomic import atomic_write_json
 
 
 TASKS_FILENAME = "tasks.json"
@@ -112,26 +111,10 @@ class Store:
             self._atomic_write(data)
 
     def _atomic_write(self, data: dict[str, dict]) -> None:
-        """Write tasks.json atomically via temp file + os.replace (NFR-03).
+        """Write tasks.json atomically via the shared helper (NFR-03).
 
         [FR-01, NFR-03]
         Citations: SPEC.md line 73 (atomic write),
                    SAD.md line 82 (atomic write + Lock).
         """
-        self.home.mkdir(parents=True, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(
-            prefix=".tasks-", suffix=".json.tmp", dir=str(self.home)
-        )
-        try:
-            with os.fdopen(fd, "w") as f:
-                json.dump(data, f)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, self.tasks_path)  # atomic rename (NFR-03)
-        except BaseException:
-            # On any failure, remove the temp file; the destination is untouched.
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
+        atomic_write_json(self.home, TASKS_FILENAME, data, tmp_prefix=".tasks-")

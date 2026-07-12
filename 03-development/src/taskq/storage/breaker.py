@@ -10,18 +10,36 @@ Citations: SPEC.md line 91 (FR-03 breaker: threshold/cooldown env vars,
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import time
 from pathlib import Path
 
 from taskq.core.models import utcnow_iso
+from taskq.storage._atomic import atomic_write_json
 
 BREAKER_FILENAME = "breaker.json"
 
 STATE_CLOSED = "CLOSED"
 STATE_OPEN = "OPEN"
 STATE_HALF_OPEN = "HALF_OPEN"
+
+
+def _fresh_state() -> dict:
+    """Initial CLOSED breaker.json shape (SAD.md line 267).
+
+    [FR-03]
+    """
+    return {"version": 1, "state": STATE_CLOSED, "failure_count": 0, "opened_at": None}
+
+
+def _open_now(data: dict) -> None:
+    """Mark ``data`` as freshly OPEN with the current timestamp.
+
+    [FR-03]
+    Used both for the threshold-reached transition and the HALF_OPEN probe
+    failure transition (SRS.md line 146 "失敗 -> 重新 OPEN").
+    """
+    data["state"] = STATE_OPEN
+    data["opened_at"] = utcnow_iso()
 
 
 class Breaker:
@@ -48,35 +66,20 @@ class Breaker:
         Citations: SAD.md line 267 (breaker.json shape).
         """
         if not self.path.exists():
-            return {"version": 1, "state": STATE_CLOSED, "failure_count": 0, "opened_at": None}
+            return _fresh_state()
         text = self.path.read_text()
         if not text.strip():
-            return {"version": 1, "state": STATE_CLOSED, "failure_count": 0, "opened_at": None}
+            return _fresh_state()
         return json.loads(text)
 
     def _save(self, data: dict) -> None:
-        """Persist breaker state atomically via temp file + os.replace.
+        """Persist breaker state atomically via the shared helper (NFR-03).
 
         [FR-03, NFR-03]
         Citations: SPEC.md line 91 (state persisted atomically),
                    SAD.md line 82 (atomic write pattern shared with store).
         """
-        self.home.mkdir(parents=True, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(
-            prefix=".breaker-", suffix=".json.tmp", dir=str(self.home)
-        )
-        try:
-            with os.fdopen(fd, "w") as f:
-                json.dump(data, f)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, self.path)
-        except BaseException:  # pragma: no cover — defensive cleanup; requires fs failure mid-rename
-            try:
-                os.unlink(tmp_path)
-            except OSError:  # pragma: no cover — defensive swallow if temp already gone
-                pass
-            raise
+        atomic_write_json(self.home, BREAKER_FILENAME, data, tmp_prefix=".breaker-")
 
     def allow(self) -> bool:
         """Return whether a `run` may proceed, per the current breaker state.
@@ -128,13 +131,11 @@ class Breaker:
             return
         state = data.get("state", STATE_CLOSED)
         if state == STATE_HALF_OPEN:
-            data["state"] = STATE_OPEN
-            data["opened_at"] = utcnow_iso()
+            _open_now(data)
             self._save(data)
             return
         failure_count = int(data.get("failure_count", 0)) + 1
         data["failure_count"] = failure_count
         if failure_count >= self.threshold:
-            data["state"] = STATE_OPEN
-            data["opened_at"] = utcnow_iso()
+            _open_now(data)
         self._save(data)

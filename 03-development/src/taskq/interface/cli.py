@@ -122,13 +122,23 @@ def _cmd_submit(args: argparse.Namespace) -> int:
     return 0
 
 
+def _env_int(name: str, default: str) -> int:
+    """Read ``$name`` as int, falling back to ``default``."""
+    return int(os.environ.get(name, default))
+
+
+def _env_float(name: str, default: str) -> float:
+    """Read ``$name`` as float, falling back to ``default``."""
+    return float(os.environ.get(name, default))
+
+
 def _task_timeout() -> float:
     """Return the per-task subprocess timeout in seconds (TASKQ_TASK_TIMEOUT).
 
     [FR-02, NFR-06]
     Citations: SPEC.md line 132 (TASKQ_TASK_TIMEOUT default 10.0).
     """
-    return float(os.environ.get("TASKQ_TASK_TIMEOUT", "10.0"))
+    return _env_float("TASKQ_TASK_TIMEOUT", "10.0")
 
 
 def _max_workers() -> int:
@@ -137,7 +147,7 @@ def _max_workers() -> int:
     [FR-02, NFR-06]
     Citations: SPEC.md line 131 (TASKQ_MAX_WORKERS default 4).
     """
-    return int(os.environ.get("TASKQ_MAX_WORKERS", "4"))
+    return _env_int("TASKQ_MAX_WORKERS", "4")
 
 
 def _retry_limit() -> int:
@@ -146,7 +156,7 @@ def _retry_limit() -> int:
     [FR-03]
     Citations: SPEC.md line 149 (TASKQ_RETRY_LIMIT default 2).
     """
-    return int(os.environ.get("TASKQ_RETRY_LIMIT", "2"))
+    return _env_int("TASKQ_RETRY_LIMIT", "2")
 
 
 def _backoff_base() -> float:
@@ -155,7 +165,7 @@ def _backoff_base() -> float:
     [FR-03]
     Citations: SPEC.md line 150 (TASKQ_BACKOFF_BASE default 0.1).
     """
-    return float(os.environ.get("TASKQ_BACKOFF_BASE", "0.1"))
+    return _env_float("TASKQ_BACKOFF_BASE", "0.1")
 
 
 def _breaker_threshold() -> int:
@@ -164,7 +174,7 @@ def _breaker_threshold() -> int:
     [FR-03]
     Citations: SPEC.md line 151 (TASKQ_BREAKER_THRESHOLD default 3).
     """
-    return int(os.environ.get("TASKQ_BREAKER_THRESHOLD", "3"))
+    return _env_int("TASKQ_BREAKER_THRESHOLD", "3")
 
 
 def _breaker_cooldown() -> float:
@@ -173,7 +183,7 @@ def _breaker_cooldown() -> float:
     [FR-03]
     Citations: SPEC.md line 152 (TASKQ_BREAKER_COOLDOWN default 5.0).
     """
-    return float(os.environ.get("TASKQ_BREAKER_COOLDOWN", "5.0"))
+    return _env_float("TASKQ_BREAKER_COOLDOWN", "5.0")
 
 
 def _run_one(store: Store, task: dict, timeout: float) -> RunResult:
