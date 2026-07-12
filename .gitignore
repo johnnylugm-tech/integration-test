@@ -23,4 +23,5 @@ htmlcov/
 # history; tracking them left a perpetually-dirty tree (gate_timestamps.jsonl
 # stays tracked as functional FR-gate state).
 .methodology/sessions_spawn.log
+.methodology/sessions_spawn.log.lock
 .harness/traces/
