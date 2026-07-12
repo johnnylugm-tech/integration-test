@@ -188,17 +188,13 @@ class Cache:
         ``run --all`` (FR-02 NFR-08).
         """
         with self._lock:
-            try:
-                data = self._load()
-            except Exception as exc:  # pragma: no cover - defensive
-                _log.debug("cache.load failed: %s", exc)
-                return
+            data = self._load()
             entry = result.to_fields()
             entry["cached_at"] = datetime.utcnow().isoformat()
             data["entries"][signature] = entry
             try:
                 self._save(data)
-            except Exception as exc:
+            except OSError as exc:
                 _log.debug("cache.save failed: %s", exc)
                 return
 
