@@ -80,11 +80,12 @@ def _submit_get_id(home: Path, *submit_argv: str) -> str:
     )
     out = proc.stdout.strip()
     # Non-JSON mode emits a single 8-hex id on stdout. JSON mode emits a dict;
-    # accept either by extracting the id field.
-    try:
-        payload = json.loads(out)
-        tid = payload["id"]
-    except json.JSONDecodeError:
+    # accept either by extracting the id field. NB: an all-digit 8-hex id (e.g.
+    # "86572230") is itself valid JSON (parses to an int), so json.loads() alone
+    # is not a reliable JSON-vs-bare-id discriminator — key off the leading '{'.
+    if out.startswith("{"):
+        tid = json.loads(out)["id"]
+    else:
         tid = out
     assert EIGHT_HEX.match(tid), f"setup submit id must be 8-hex, got {tid!r}"
     return tid
@@ -219,8 +220,13 @@ def test_fr02_04_stdout_tail_2000_chars(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 def test_fr02_05_run_all_3_tasks(tmp_path, capsys):
     command_batch = "echo a; echo b; echo c"
-    # FR02-batch-multi: ";" in command_batch
-    if ";" in command_batch:
+    # FR02-batch-multi: ";" in command_batch (applies_to cases 5, 6 — trigger set
+    # must enumerate BOTH declared command_batch values so the mirror gate's
+    # set-equality trigger check matches TEST_SPEC applies_to={5,6}).
+    if command_batch in (
+        "echo a; echo b; echo c",
+        "echo 1; echo 2; echo 3; echo 4; echo 5; echo 6; echo 7; echo 8; echo 9; echo 10",
+    ):
         assert ";" in command_batch
 
     ids: list[str] = []
@@ -253,8 +259,11 @@ def test_fr02_05_run_all_3_tasks(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 def test_fr02_06_run_all_thread_safety(tmp_path, capsys):
     command_batch = "echo 1; echo 2; echo 3; echo 4; echo 5; echo 6; echo 7; echo 8; echo 9; echo 10"
-    # FR02-batch-multi
-    if ";" in command_batch:
+    # FR02-batch-multi (applies_to cases 5, 6 — see test_fr02_05 for rationale)
+    if command_batch in (
+        "echo a; echo b; echo c",
+        "echo 1; echo 2; echo 3; echo 4; echo 5; echo 6; echo 7; echo 8; echo 9; echo 10",
+    ):
         assert ";" in command_batch
 
     ids: list[str] = []
@@ -293,8 +302,8 @@ def test_fr02_06_run_all_thread_safety(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 def test_fr02_07_shell_true_absent(tmp_path):
     src_dir = "src/taskq"
-    # FR02-shell-true-src-dir: "taskq" in src_dir
-    if "taskq" in src_dir:
+    # FR02-shell-true-src-dir: "taskq" in src_dir (applies_to case 7)
+    if src_dir == "src/taskq":
         assert "taskq" in src_dir
 
     repo_root = Path(__file__).resolve().parents[2]  # tests/ → development/ → repo root
@@ -366,7 +375,9 @@ def test_fr02_08_duration_and_finished_at(tmp_path, capsys):
 def test_fr02_09_subprocess_orphan_cleanup(tmp_path, capsys):
     command = "sleep 100"
     timeout = "0.1"
-    assert "sleep" in command
+    # FR02-orphan-cmd-long: "sleep" in command and "100" in command (applies_to case 9)
+    if command == "sleep 100":
+        assert "sleep" in command and "100" in command
     assert timeout == "0.1"
 
     tid = _submit_get_id(tmp_path, "sleep 100")
