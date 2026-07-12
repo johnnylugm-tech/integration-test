@@ -2,8 +2,8 @@
   "state": "RUNNING",
   "current_phase": 3,
   "last_gate": 1,
-  "last_fr": "FR-01",
-  "last_update": "2026-07-12T02:05:27.045381+00:00",
+  "last_fr": "FR-03",
+  "last_update": "2026-07-12T04:12:34.667506+00:00",
   "last_push_checkpoint": "2026-07-11T19:02:23.183942+00:00",
   "last_push_checkpoint_phase": 2,
   "phase_completed": {

@@ -1,8 +1,8 @@
 {
   "gate": 1,
   "phase": 3,
-  "fr_id": "FR-01",
-  "overall_score": 96.39,
+  "fr_id": "FR-03",
+  "overall_score": 98.3,
   "quality_complete": true,
   "rounds_used": 1,
   "breakdown": {
@@ -14,19 +14,18 @@
     "type_safety": {
       "score": 100,
       "threshold": 85,
-      "tool_evidence": "0 errors, 0 warnings, 0 informations"
+      "tool_evidence": "{\"version\":\"1.1.409\",\"time\":\"1783829490675\",\"generalDiagnostics\":[],\"summary\":{\"filesAnalyzed\":12,\"errorCount\":0,\"warningCount\":0,\"informationCount\":0,\"timeInSec\":0.292}}"
     },
     "test_coverage": {
-      "score": 89,
+      "score": 95,
       "threshold": 80,
       "tests_passed": 9,
       "tests_failed": 0,
       "tests_skipped": 0,
-      "tool_evidence": "9 passed in 0.03s. Coverage: src/taskq/__init__.py 100%, src/taskq/__main__.py 0%, src/taskq/core/__init__.py 100%, src/taskq/core/models.py 100%, src/taskq/interface/__init__.py 100%, src/taskq/interface/cli.py 93%, src/taskq/storage/__init__.py 100%, src/taskq/storage/store.py 88%. TOTAL 89%. Spec cov 9/9 (100%) — all 9 required test_fr01_* functions present."
+      "tool_evidence": "collected 9 items\n03-development/tests/test_fr03.py ......... [100%]\n============================== 9 passed in 20.17s ==============================\nName                                          Stmts   Miss  Cover\n-----------------------------------------------------------------\n03-development/src/taskq/storage/breaker.py      63      3    95%\n-----------------------------------------------------------------\nTOTAL                                            63      3    95%"
     }
   },
-  "notes": "run-gate command itself BLOCKED with: '[BLOCKED] run-gate: Architecture Amendment Protocol violation. Unregistered modules detected: {\"taskq.__main__\"}'. Dimension tools (ruff, pyright, pytest, coverage) were run directly and passed. This is the known SAB dict-entry bug per MEMORY.md 'SAB dict-entry + CWD-relative prompt bugs — 2026-07-12'. Per STOP RULE, finalize-gate may itself BLOCK — that error will be reported without source code fix attempt.",
-  "composite_score": 96.39,
+  "composite_score": 98.3,
   "verdict": "PASS",
   "passed": true
 }
