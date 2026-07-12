@@ -686,7 +686,6 @@ def test_fr04_unit_cache_quarantine_recovers_from_corrupt(tmp_path):
 def test_fr04_unit_cache_lookup_expired_returns_none(tmp_path):
     """[FR-04] Cache.lookup returns None when (now - cached_at) > ttl."""
     from datetime import datetime, timedelta
-    from taskq.core.models import RunResult, TaskStatus
     from taskq.storage.cache import Cache
 
     cache = Cache(tmp_path, ttl=1)  # ttl=1s
