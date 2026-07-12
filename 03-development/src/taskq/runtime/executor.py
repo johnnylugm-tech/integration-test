@@ -47,6 +47,35 @@ def _redact(text: str) -> str:
     return "\n".join(_REDACTED if _SECRET_RE.search(line) else line for line in lines)
 
 
+def _elapsed_ms(start: float) -> float:
+    """Return milliseconds elapsed since ``start`` (a time.monotonic() reading)."""
+    return (time.monotonic() - start) * 1000.0
+
+
+def _build_result(
+    status: TaskStatus,
+    *,
+    exit_code: int | None,
+    stdout: str | None,
+    stderr: str | None,
+    duration_ms: float,
+) -> RunResult:
+    """Assemble a RunResult, applying tail truncation and secret redaction.
+
+    [FR-02, NFR-04]
+    Single source of truth for the RunResult shape so the timeout and
+    normal-exit branches don't drift apart.
+    """
+    return RunResult(
+        status=status,
+        exit_code=exit_code,
+        stdout_tail=_redact(_tail(stdout)),
+        stderr_tail=_redact(_tail(stderr)),
+        duration_ms=duration_ms,
+        finished_at=utcnow_iso(),
+    )
+
+
 def execute(command: str, *, timeout: float) -> RunResult:
     """Run command in a subprocess and return its RunResult.
 
@@ -71,22 +100,18 @@ def execute(command: str, *, timeout: float) -> RunResult:
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        duration_ms = (time.monotonic() - start) * 1000.0
-        return RunResult(
-            status=TaskStatus.TIMEOUT,
+        return _build_result(
+            TaskStatus.TIMEOUT,
             exit_code=None,
-            stdout_tail=_redact(_tail(exc.stdout)),
-            stderr_tail=_redact(_tail(exc.stderr)),
-            duration_ms=duration_ms,
-            finished_at=utcnow_iso(),
+            stdout=exc.stdout,
+            stderr=exc.stderr,
+            duration_ms=_elapsed_ms(start),
         )
-    duration_ms = (time.monotonic() - start) * 1000.0
     status = TaskStatus.DONE if proc.returncode == 0 else TaskStatus.FAILED
-    return RunResult(
-        status=status,
+    return _build_result(
+        status,
         exit_code=proc.returncode,
-        stdout_tail=_redact(_tail(proc.stdout)),
-        stderr_tail=_redact(_tail(proc.stderr)),
-        duration_ms=duration_ms,
-        finished_at=utcnow_iso(),
+        stdout=proc.stdout,
+        stderr=proc.stderr,
+        duration_ms=_elapsed_ms(start),
     )
