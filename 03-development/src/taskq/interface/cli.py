@@ -118,7 +118,7 @@ def _cmd_submit(args: argparse.Namespace) -> int:
 
     try:
         task = store.submit(command, name=name)
-    except OSError as exc:  # pragma: no cover — defensive fs-write failure during submit
+    except OSError as exc:
         sys.stderr.write(f"error: failed to persist task: {exc}\n")
         return 1
 
