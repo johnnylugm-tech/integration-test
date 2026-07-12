@@ -14,6 +14,10 @@
         {
           "name": "taskq.main",
           "implemented_in": "taskq.interface.__main__"
+        },
+        {
+          "name": "taskq.__main__",
+          "implemented_in": "taskq.__main__"
         }
       ],
       "allowed_dependencies": [
@@ -49,6 +53,10 @@
         {
           "name": "taskq.cache",
           "implemented_in": "taskq.storage.cache"
+        },
+        {
+          "name": "taskq.storage._atomic",
+          "implemented_in": "taskq.storage._atomic"
         }
       ],
       "allowed_dependencies": [
