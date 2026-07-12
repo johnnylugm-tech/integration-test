@@ -211,6 +211,22 @@ def _signature(command: str) -> str:
     return hashlib.sha256(command.encode("utf-8")).hexdigest()
 
 
+def _new_cache(home: Path) -> Cache:
+    """Return a TTL cache configured from TASKQ_CACHE_TTL."""
+    return Cache(home, ttl=_cache_ttl())
+
+
+def _replay_cached_task(store: Store, task: dict, cache: Cache) -> bool:
+    """Replay a fresh cached result into ``task`` when present."""
+    cached_result = cache.lookup(_signature(task["command"]))
+    if cached_result is None:
+        return False
+    fields = cached_result.to_fields()
+    fields["cached"] = True
+    store.update_status(task["id"], **fields)
+    return True
+
+
 def _run_one(
     store: Store,
     task: dict,
@@ -271,7 +287,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     store = Store(home)
 
     if args.run_all:
-        cache = Cache(home, ttl=_cache_ttl())
+        cache = _new_cache(home)
         timeout = _task_timeout()
         pending = [
             t for t in store.load().values()
@@ -292,24 +308,18 @@ def _cmd_run(args: argparse.Namespace) -> int:
         sys.stderr.write(f"error: unknown task: {task_id}\n")
         return 2
 
+    cache = _new_cache(home)
     # FR-04 cache-hit path: when --cached is requested and the cache holds a
     # fresh entry, bypass executor + breaker and replay the stored result.
-    if args.cached:
-        cache = Cache(home, ttl=_cache_ttl())
-        cached_result = cache.lookup(_signature(task["command"]))
-        if cached_result is not None:
-            fields = cached_result.to_fields()
-            fields["cached"] = True
-            store.update_status(task["id"], **fields)
-            return 0
-        # Cache miss / expired -> fall through to normal execution.
+    if args.cached and _replay_cached_task(store, task, cache):
+        return 0
+    # Cache miss / expired -> fall through to normal execution.
 
     breaker = Breaker(home, threshold=_breaker_threshold(), cooldown=_breaker_cooldown())
     if not breaker.allow():
         sys.stderr.write("error: breaker open\n")
         return 3
 
-    cache = Cache(home, ttl=_cache_ttl())
     result = _run_one(store, task, _task_timeout(), cache)
     breaker.record(result.status == TaskStatus.DONE)
     # SPEC §5: single-task timeout maps to exit 4; a task that ran (done/failed)
