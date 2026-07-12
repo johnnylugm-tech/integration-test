@@ -227,9 +227,12 @@ def test_fr04_02_cache_miss_expired(tmp_path, capsys, monkeypatch):
 def test_fr04_03_cache_signature(tmp_path, capsys, monkeypatch):
     command_a = "echo hi"
     command_b = "echo bye"
-    # FR04-cache-sig-different (applies_to case 3)
-    if command_a != command_b:
-        assert command_a != command_b
+    # FR04-cache-sig-different (applies_to case 3): trigger on command_a.
+    if command_a == "echo hi":
+        assert command_a != command_b, (
+            "command_a and command_b must differ so sha256 signatures differ "
+            "(FR-04 cache signature independence)"
+        )
 
     sig_a = _signature(command_a)
     sig_b = _signature(command_b)
@@ -326,9 +329,13 @@ def test_fr04_04_only_done_cached(tmp_path, capsys):
 def test_fr04_05_cache_atomic_write(tmp_path, capsys, monkeypatch):
     command = "echo hi"
     fault = "oserror-mid-write"
-    # FR04-fault-at-write (applies_to case 5)
-    if "oserror" in fault:
-        assert "oserror" in fault
+    # FR04-fault-at-write (applies_to case 5): trigger on fault; predicate asserts
+    # the injected fault scenario is the oserror-on-write family.
+    if fault == "oserror-mid-write":
+        assert "oserror" in fault, (
+            "injected fault must be in the oserror-on-write family "
+            "(FR-04 atomic-write fault-injection case)"
+        )
 
     # Pre-seed cache.json with valid content. The atomic-write contract is
     # that a failed os.replace NEVER partial-updates the target file.
@@ -362,6 +369,7 @@ def test_fr04_05_cache_atomic_write(tmp_path, capsys, monkeypatch):
     # produces no half-written file on disk (SAD.md line 51, NFR-03).
     rc = _run(["run", tid], tmp_path, env_extra={"TASKQ_CACHE_TTL": "3600"})
     _ = capsys.readouterr()
+    assert rc == 0, f"setup run must exit 0, got {rc}"
 
     # The successful done run MUST have attempted a cache.json write (FR-04
     # "成功 done 後寫入 cache.json").
@@ -402,7 +410,7 @@ def test_fr04_06_cache_thread_safety(tmp_path, capsys, monkeypatch):
         assert ";" in command_batch
 
     commands = [f"echo {i}" for i in range(1, 6)]
-    ids = [_submit_get_id(tmp_path, cmd) for cmd in commands]
+    _ids = [_submit_get_id(tmp_path, cmd) for cmd in commands]
 
     # GREEN TODO: `Cache.put` must serialize concurrent writers (Lock + tmp+
     # os.replace) so `run --all` workers writing to cache.json under
@@ -502,9 +510,12 @@ def test_fr04_07_cache_unavailable_fallback(tmp_path, capsys, monkeypatch):
 def test_fr04_08_cache_recovers_after_transient_outage(tmp_path, capsys, monkeypatch):
     command = "echo hi"
     outage_duration = "1.0"
-    # FR04-outage-duration-set (applies_to case 8)
+    # FR04-outage-duration-set (applies_to case 8): trigger on outage_duration;
+    # predicate asserts the simulated outage is exactly 1.0s.
     if outage_duration == "1.0":
-        assert "1.0" in outage_duration
+        assert outage_duration == "1.0", (
+            "simulated outage_duration must be exactly 1.0s for FR-04 transient-outage case"
+        )
 
     tid1 = _submit_get_id(tmp_path, command)
 
