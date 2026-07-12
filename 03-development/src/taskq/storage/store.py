@@ -12,9 +12,10 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 
 from taskq.core.models import Task, TaskStatus, utcnow_iso
 
@@ -32,6 +33,9 @@ class Store:
     def __init__(self, home: Path) -> None:
         self.home = Path(home)
         self.tasks_path = self.home / TASKS_FILENAME
+        # FR-02 run --all: serialize concurrent load-modify-write cycles so
+        # parallel worker threads never lose each other's updates (NFR-03).
+        self._lock = threading.Lock()
 
     def load(self) -> dict[str, dict]:
         """Load the tasks dict from disk. Returns {} if file missing or empty.
@@ -71,6 +75,41 @@ class Store:
         data[task_id] = task.to_dict()
         self._atomic_write(data)
         return task
+
+    def get(self, task_id: str) -> Optional[dict]:
+        """Return the stored task record for task_id, or None if absent.
+
+        [FR-02, FR-05]
+        Citations: SAD.md line 168 (Store.get for status lookup),
+                   SPEC.md line 106 (status <id> reads full task fields).
+        """
+        return self.load().get(task_id)
+
+    def list(self, status: Optional[str] = None) -> Iterator[dict]:
+        """Yield task records, optionally filtered by status string.
+
+        [FR-02, FR-05]
+        Citations: SAD.md line 169 (Store.list streaming iterator),
+                   SPEC.md line 106 (list [--status S]).
+        """
+        for task in self.load().values():
+            if status is None or task.get("status") == status:
+                yield task
+
+    def update_status(self, task_id: str, **fields) -> None:
+        """Merge fields into a task record and persist atomically (thread-safe).
+
+        [FR-02, NFR-03]
+        Citations: SPEC.md line 88 (executor writes result fields back),
+                   SAD.md line 170 (Store.update_status signature),
+                   SAD.md line 82 (atomic write + Lock).
+        """
+        with self._lock:
+            data = self.load()
+            if task_id not in data:
+                raise KeyError(task_id)
+            data[task_id].update(fields)
+            self._atomic_write(data)
 
     def _atomic_write(self, data: dict[str, dict]) -> None:
         """Write tasks.json atomically via temp file + os.replace (NFR-03).

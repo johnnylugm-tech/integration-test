@@ -65,3 +65,37 @@ def utcnow_iso() -> str:
     Citations: SPEC.md line 73 (created_at ISO timestamp).
     """
     return datetime.utcnow().isoformat()
+
+
+@dataclass
+class RunResult:
+    """Outcome of executing a task's command (FR-02 result shape).
+
+    [FR-02, NFR-05]
+    Citations: SPEC.md line 88 (FR-02 result fields: exit_code, stdout_tail,
+                   stderr_tail, duration_ms, finished_at + status machine),
+               SAD.md line 161 (RunResult dataclass),
+               TEST_SPEC.md line 77-101 (FR02 sub-assertions).
+    """
+    status: TaskStatus
+    exit_code: Optional[int]
+    stdout_tail: str
+    stderr_tail: str
+    duration_ms: float
+    finished_at: str
+
+    def to_fields(self) -> dict:
+        """Return the result as a flat dict to merge into a task record.
+
+        [FR-02, NFR-05]
+        Citations: SPEC.md line 88 (persisted result fields),
+                   SAD.md line 170 (Store.update_status(**fields)).
+        """
+        return {
+            "status": self.status.value,
+            "exit_code": self.exit_code,
+            "stdout_tail": self.stdout_tail,
+            "stderr_tail": self.stderr_tail,
+            "duration_ms": self.duration_ms,
+            "finished_at": self.finished_at,
+        }
