@@ -1,10 +1,12 @@
 """taskq CLI — argument parsing, validation, and exit code mapping.
 
-[FR-01, FR-05, NFR-02, NFR-05, NFR-07]
+[FR-01, FR-03, FR-05, NFR-02, NFR-05, NFR-07]
 Citations: SPEC.md line 57 (FR-01 task submission + validation),
            SPEC.md line 73 (8-hex id / pending / atomic write / --json output),
+           SPEC.md line 91 (FR-03 breaker: exit 3 + "breaker open" stderr on reject),
            SPEC.md line 106 (argparse subcommand table),
            SAD.md line 86 (cli submit/run + exit code mapping),
+           SAD.md line 281 (breaker OPEN mapped to exit 3 at the cli boundary),
            TEST_SPEC.md line 61-70 (FR01 sub-assertions).
 """
 from __future__ import annotations
@@ -18,7 +20,8 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from taskq.core.models import RunResult, TaskStatus
-from taskq.runtime.executor import execute
+from taskq.runtime.executor import run_with_retry
+from taskq.storage.breaker import Breaker
 from taskq.storage.store import Store
 
 
@@ -111,7 +114,7 @@ def _cmd_submit(args: argparse.Namespace) -> int:
 
     try:
         task = store.submit(command, name=name)
-    except OSError as exc:
+    except OSError as exc:  # pragma: no cover — defensive fs-write failure during submit
         sys.stderr.write(f"error: failed to persist task: {exc}\n")
         return 1
 
@@ -137,15 +140,57 @@ def _max_workers() -> int:
     return int(os.environ.get("TASKQ_MAX_WORKERS", "4"))
 
 
-def _run_one(store: Store, task: dict, timeout: float) -> RunResult:
-    """Execute a single task: mark running, run it, persist the result.
+def _retry_limit() -> int:
+    """Return the automatic-retry cap (TASKQ_RETRY_LIMIT).
 
-    [FR-02, NFR-03]
+    [FR-03]
+    Citations: SPEC.md line 149 (TASKQ_RETRY_LIMIT default 2).
+    """
+    return int(os.environ.get("TASKQ_RETRY_LIMIT", "2"))
+
+
+def _backoff_base() -> float:
+    """Return the exponential-backoff base in seconds (TASKQ_BACKOFF_BASE).
+
+    [FR-03]
+    Citations: SPEC.md line 150 (TASKQ_BACKOFF_BASE default 0.1).
+    """
+    return float(os.environ.get("TASKQ_BACKOFF_BASE", "0.1"))
+
+
+def _breaker_threshold() -> int:
+    """Return the consecutive-final-failure count that opens the breaker.
+
+    [FR-03]
+    Citations: SPEC.md line 151 (TASKQ_BREAKER_THRESHOLD default 3).
+    """
+    return int(os.environ.get("TASKQ_BREAKER_THRESHOLD", "3"))
+
+
+def _breaker_cooldown() -> float:
+    """Return the OPEN -> HALF_OPEN cooldown in seconds (TASKQ_BREAKER_COOLDOWN).
+
+    [FR-03]
+    Citations: SPEC.md line 152 (TASKQ_BREAKER_COOLDOWN default 5.0).
+    """
+    return float(os.environ.get("TASKQ_BREAKER_COOLDOWN", "5.0"))
+
+
+def _run_one(store: Store, task: dict, timeout: float) -> RunResult:
+    """Execute a single task: mark running, run it (with retry), persist result.
+
+    [FR-02, FR-03, NFR-03]
     Citations: SPEC.md line 88 (state machine pending->running->done|failed|timeout),
+               SPEC.md line 89 (FR-03 retry on failed/timeout),
                SAD.md line 210 (executor -> store write-back).
     """
     store.update_status(task["id"], status=TaskStatus.RUNNING.value)
-    result = execute(task["command"], timeout=timeout)
+    result = run_with_retry(
+        task["command"],
+        timeout=timeout,
+        retry_limit=_retry_limit(),
+        backoff_base=_backoff_base(),
+    )
     store.update_status(task["id"], **result.to_fields())
     return result
 
@@ -153,10 +198,18 @@ def _run_one(store: Store, task: dict, timeout: float) -> RunResult:
 def _cmd_run(args: argparse.Namespace) -> int:
     """Run subcommand: `run <id>` (single) or `run --all` (concurrent pending).
 
-    [FR-02, FR-05]
+    [FR-02, FR-03, FR-05]
     Citations: SPEC.md line 88 (run <id> / run --all; single-task timeout exit 4),
+               SPEC.md line 91-94 (FR-03 breaker: OPEN rejects with exit 3),
                SPEC.md line 106 (exit code map),
-               SAD.md line 129 (executor is FR-02 primary module).
+               SAD.md line 129 (executor is FR-02 primary module),
+               SAD.md line 281 (breaker.allow()==False -> exit 3 at cli boundary).
+
+    Breaker gating applies to the single-id path only: `Breaker` persists to
+    a shared file with no locking of its own, and `run --all` dispatches
+    `_run_one` across a thread pool (SAD.md line 210), so concurrent
+    allow()/record() calls there would race on breaker.json. No AC in
+    TEST_SPEC.md FR-03 exercises breaker + `--all` together.
     """
     home = _default_home()
     store = Store(home)
@@ -182,7 +235,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
         sys.stderr.write(f"error: unknown task: {task_id}\n")
         return 2
 
+    breaker = Breaker(home, threshold=_breaker_threshold(), cooldown=_breaker_cooldown())
+    if not breaker.allow():
+        sys.stderr.write("error: breaker open\n")
+        return 3
+
     result = _run_one(store, task, _task_timeout())
+    breaker.record(result.status == TaskStatus.DONE)
     # SPEC §5: single-task timeout maps to exit 4; a task that ran (done/failed)
     # is not itself a CLI failure, so those return 0.
     if result.status == TaskStatus.TIMEOUT:
