@@ -24,8 +24,6 @@ import subprocess
 import time
 from pathlib import Path
 
-import pytest
-
 # GREEN TODO: taskq.interface.cli MUST expose `main(argv: list[str] | None = None) -> int`
 # per SAD §3.1 (FR-05). `run` and `status` subcommands must dispatch into
 # `taskq.runtime.executor` (currently missing).

@@ -25,8 +25,6 @@ import subprocess
 import time
 from pathlib import Path
 
-import pytest
-
 from taskq.interface.cli import main as cli_main
 
 EIGHT_HEX = re.compile(r"^[0-9a-f]{8}$")

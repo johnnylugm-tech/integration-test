@@ -22,8 +22,6 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-import pytest
-
 # GREEN TODO: taskq.interface.cli MUST expose `main(argv: list[str] | None = None) -> int`
 # per SAD §3.1 (FR-05). Return value is the process exit code (0/1/2/3/4).
 from taskq.interface.cli import main as cli_main
