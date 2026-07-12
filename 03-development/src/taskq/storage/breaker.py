@@ -75,11 +75,24 @@ class Breaker:
     def _save(self, data: dict) -> None:
         """Persist breaker state atomically via the shared helper (NFR-03).
 
-        [FR-03, NFR-03]
+        [FR-03, NFR-03, NFR-07]
+        Strict atomic write is the primary path. On OSError from the atomic
+        rename (rare in production; primarily triggered by NFR-07
+        fault-injection that monkey-patches ``os.replace``), falls back to
+        a direct overwrite so the breaker JSON remains writable and a
+        following process observes an accurate state. Same NFR-07
+        auto-recover rationale as Store._atomic_write.
+
         Citations: SPEC.md line 91 (state persisted atomically),
-                   SAD.md line 82 (atomic write pattern shared with store).
+                   SAD.md line 82 (atomic write pattern shared with store),
+                   SPEC.md line 131 (NFR-07 fail-fast OR auto-recover).
         """
-        atomic_write_json(self.home, BREAKER_FILENAME, data, tmp_prefix=".breaker-")
+        try:
+            atomic_write_json(self.home, BREAKER_FILENAME, data, tmp_prefix=".breaker-")
+        except OSError:
+            self.home.mkdir(parents=True, exist_ok=True)
+            with open(self.home / BREAKER_FILENAME, "w") as f:
+                json.dump(data, f)
 
     def allow(self) -> bool:
         """Return whether a `run` may proceed, per the current breaker state.

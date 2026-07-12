@@ -1,17 +1,20 @@
 """taskq CLI — argument parsing, validation, and exit code mapping.
 
-[FR-01, FR-03, FR-05, NFR-02, NFR-05, NFR-07]
+[FR-01, FR-03, FR-04, FR-05, NFR-02, NFR-05, NFR-07]
 Citations: SPEC.md line 57 (FR-01 task submission + validation),
            SPEC.md line 73 (8-hex id / pending / atomic write / --json output),
            SPEC.md line 91 (FR-03 breaker: exit 3 + "breaker open" stderr on reject),
+           SPEC.md line 99 (FR-04 TTL cache + replay),
            SPEC.md line 106 (argparse subcommand table),
            SAD.md line 86 (cli submit/run + exit code mapping),
+           SAD.md line 270 (cache.json shape),
            SAD.md line 281 (breaker OPEN mapped to exit 3 at the cli boundary),
            TEST_SPEC.md line 61-70 (FR01 sub-assertions).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -22,6 +25,7 @@ from typing import Optional, Sequence
 from taskq.core.models import RunResult, TaskStatus
 from taskq.runtime.executor import run_with_retry
 from taskq.storage.breaker import Breaker
+from taskq.storage.cache import Cache
 from taskq.storage.store import Store
 
 
@@ -186,13 +190,41 @@ def _breaker_cooldown() -> float:
     return _env_float("TASKQ_BREAKER_COOLDOWN", "5.0")
 
 
-def _run_one(store: Store, task: dict, timeout: float) -> RunResult:
+def _cache_ttl() -> int:
+    """Return the FR-04 cache TTL in seconds (TASKQ_CACHE_TTL).
+
+    [FR-04]
+    Citations: SPEC.md line 99 (TTL cache; same `command` within TTL -> replay).
+    Default = 0 (cache disabled; every ``--cached`` miss falls through to a
+    fresh execution). This is intentionally conservative per NFR-07: cache
+    is an optimization, opt-in via TASKQ_CACHE_TTL.
+    """
+    return int(os.environ.get("TASKQ_CACHE_TTL", "0"))
+
+
+def _signature(command: str) -> str:
+    """Return the FR-04 cache signature = sha256(command).
+
+    [FR-04]
+    Citations: SPEC.md line 99 (cache signature = sha256(command)).
+    """
+    return hashlib.sha256(command.encode("utf-8")).hexdigest()
+
+
+def _run_one(
+    store: Store,
+    task: dict,
+    timeout: float,
+    cache: Optional[Cache] = None,
+) -> RunResult:
     """Execute a single task: mark running, run it (with retry), persist result.
 
-    [FR-02, FR-03, NFR-03]
+    [FR-02, FR-03, FR-04, NFR-03]
     Citations: SPEC.md line 88 (state machine pending->running->done|failed|timeout),
                SPEC.md line 89 (FR-03 retry on failed/timeout),
-               SAD.md line 210 (executor -> store write-back).
+               SAD.md line 210 (executor -> store write-back),
+               SAD.md line 116 (cache put only when executor actually runs AND
+               result status is done — failures absorb; see Cache.put).
     """
     store.update_status(task["id"], status=TaskStatus.RUNNING.value)
     result = run_with_retry(
@@ -202,17 +234,25 @@ def _run_one(store: Store, task: dict, timeout: float) -> RunResult:
         backoff_base=_backoff_base(),
     )
     store.update_status(task["id"], **result.to_fields())
+    # FR-04: persist the cache entry only when the executor actually ran AND
+    # the final result is `done`. Cache.put is best-effort (NFR-07): write
+    # failures are absorbed inside Cache.put, never propagate to the caller.
+    if cache is not None and result.status == TaskStatus.DONE:
+        cache.put(_signature(task["command"]), result)
     return result
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
     """Run subcommand: `run <id>` (single) or `run --all` (concurrent pending).
 
-    [FR-02, FR-03, FR-05]
+    [FR-02, FR-03, FR-04, FR-05]
     Citations: SPEC.md line 88 (run <id> / run --all; single-task timeout exit 4),
                SPEC.md line 91-94 (FR-03 breaker: OPEN rejects with exit 3),
+               SPEC.md line 99 (FR-04 TTL cache, --cached replay),
                SPEC.md line 106 (exit code map),
                SAD.md line 129 (executor is FR-02 primary module),
+               SAD.md line 225 (cache replay flow: lookup -> update_status
+               done+cached=True OR fall through to executor),
                SAD.md line 281 (breaker.allow()==False -> exit 3 at cli boundary).
 
     Breaker gating applies to the single-id path only: `Breaker` persists to
@@ -220,18 +260,25 @@ def _cmd_run(args: argparse.Namespace) -> int:
     `_run_one` across a thread pool (SAD.md line 210), so concurrent
     allow()/record() calls there would race on breaker.json. No AC in
     TEST_SPEC.md FR-03 exercises breaker + `--all` together.
+
+    FR-04 ``--cached``: on hit (entry present, status==done, within TTL)
+    the cache-hit path skips executor + breaker entirely, applies the
+    replayed RunResult fields to the task record, and marks ``cached=True``
+    (SPEC §3 FR-04 "不執行 subprocess"). On miss/expiry the request falls
+    through to the normal execution path.
     """
     home = _default_home()
     store = Store(home)
 
     if args.run_all:
+        cache = Cache(home, ttl=_cache_ttl())
         timeout = _task_timeout()
         pending = [
             t for t in store.load().values()
             if t.get("status") == TaskStatus.PENDING.value
         ]
         with ThreadPoolExecutor(max_workers=_max_workers()) as pool:
-            futures = [pool.submit(_run_one, store, t, timeout) for t in pending]
+            futures = [pool.submit(_run_one, store, t, timeout, cache) for t in pending]
             for fut in as_completed(futures):
                 fut.result()  # propagate any worker exception
         return 0
@@ -245,12 +292,25 @@ def _cmd_run(args: argparse.Namespace) -> int:
         sys.stderr.write(f"error: unknown task: {task_id}\n")
         return 2
 
+    # FR-04 cache-hit path: when --cached is requested and the cache holds a
+    # fresh entry, bypass executor + breaker and replay the stored result.
+    if args.cached:
+        cache = Cache(home, ttl=_cache_ttl())
+        cached_result = cache.lookup(_signature(task["command"]))
+        if cached_result is not None:
+            fields = cached_result.to_fields()
+            fields["cached"] = True
+            store.update_status(task["id"], **fields)
+            return 0
+        # Cache miss / expired -> fall through to normal execution.
+
     breaker = Breaker(home, threshold=_breaker_threshold(), cooldown=_breaker_cooldown())
     if not breaker.allow():
         sys.stderr.write("error: breaker open\n")
         return 3
 
-    result = _run_one(store, task, _task_timeout())
+    cache = Cache(home, ttl=_cache_ttl())
+    result = _run_one(store, task, _task_timeout(), cache)
     breaker.record(result.status == TaskStatus.DONE)
     # SPEC §5: single-task timeout maps to exit 4; a task that ran (done/failed)
     # is not itself a CLI failure, so those return 0.
@@ -293,6 +353,10 @@ def _build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("task_id", nargs="?", default=None, help="task id to run")
     run_p.add_argument("--all", action="store_true", dest="run_all",
                        help="run all pending tasks concurrently")
+    run_p.add_argument("--cached", action="store_true", dest="cached",
+                       help="[FR-04] consult the TTL result cache first; on a "
+                            "fresh hit replay the cached exit_code/stdout_tail "
+                            "and skip subprocess (requires TASKQ_CACHE_TTL > 0)")
     run_p.add_argument("--json", action="store_true", help="emit JSON to stdout")
 
     status_p = sub.add_parser("status", help="show all fields of a task")

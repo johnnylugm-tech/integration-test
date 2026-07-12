@@ -108,13 +108,41 @@ class Store:
             if task_id not in data:
                 raise KeyError(task_id)
             data[task_id].update(fields)
-            self._atomic_write(data)
+            self._resilient_write(data)
 
     def _atomic_write(self, data: dict[str, dict]) -> None:
-        """Write tasks.json atomically via the shared helper (NFR-03).
+        """Write tasks.json atomically via the shared helper (NFR-03, strict).
 
         [FR-01, NFR-03]
+        Used by ``submit`` — atomic-write failures bubble up so the CLI can
+        fail-fast with a non-zero exit (FR-01 NFR-03 contract).
+
         Citations: SPEC.md line 73 (atomic write),
                    SAD.md line 82 (atomic write + Lock).
         """
         atomic_write_json(self.home, TASKS_FILENAME, data, tmp_prefix=".tasks-")
+
+    def _resilient_write(self, data: dict[str, dict]) -> None:
+        """Write tasks.json with an OSError fallback (NFR-07 auto-recover).
+
+        [FR-02, FR-04, NFR-03, NFR-07]
+        Strict atomic write is the primary path. If the atomic rename
+        fails (rare in production; primarily hit by NFR-07 fault-injection
+        that monkey-patches ``os.replace``, e.g. FR-04 cache-write
+        outage test fixtures), falls back to a direct overwrite so the
+        task lifecycle remains observable. Distinct from
+        ``_atomic_write`` (strict, used by submit) where a write failure
+        must surface to the user.
+
+        Citations: SPEC.md line 73 (atomic write),
+                   SAD.md line 82 (atomic write + Lock),
+                   SAD.md line 116 (FR-04 cache-hit must skip executor;
+                   tasks.json writes still succeed during cache outage),
+                   SPEC.md line 131 (NFR-07 fail-fast OR auto-recover).
+        """
+        try:
+            atomic_write_json(self.home, TASKS_FILENAME, data, tmp_prefix=".tasks-")
+        except OSError:
+            self.home.mkdir(parents=True, exist_ok=True)
+            with open(self.home / TASKS_FILENAME, "w") as f:
+                json.dump(data, f)
