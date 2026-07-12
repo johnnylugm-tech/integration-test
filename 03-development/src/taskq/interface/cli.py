@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
+from taskq.core.models import TaskStatus
 from taskq.storage.store import Store
 
 
@@ -59,12 +60,12 @@ def _check_name_unique(store: Store, name: str) -> Optional[str]:
     [FR-01]
     Citations: SPEC.md line 57 (name-unique rule).
     """
-    data = store.load()
-    for task in data.values():
+    active = (TaskStatus.PENDING.value, TaskStatus.RUNNING.value)
+    for task in store.load().values():
         if task.get("name") != name:
             continue
         status = task.get("status")
-        if status in ("pending", "running"):
+        if status in active:
             return f"task name {name!r} already exists (status={status})"
     return None
 
