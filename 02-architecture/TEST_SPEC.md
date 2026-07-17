@@ -215,13 +215,13 @@
 | 4 | `test_fr05_04_list_filter_done` | task_total="5"; task_done="3"; status_filter="done"; state_mode="isolate_per_test" | happy_path | Q1 |
 | 5 | `test_fr05_05_clear` | command="echo hi"; state_mode="isolate_per_test" | happy_path | Q1 |
 | 6 | `test_fr05_06_unknown_task_id` | unknown_id="deadbeef"; state_mode="isolate_per_test" | validation | Q2 |
-| 11 | `test_fr05_07_exit_code_map` | command="echo hi"; state_mode="isolate_per_test" | integration | Q4 (exit 0 happy) |
-| 12 | `test_fr05_07_exit_code_map` | fault_target="tasks.json"; corruption_kind="invalid_json"; state_mode="isolate_per_test" | integration | Q4 (exit 1 internal) |
-| 13 | `test_fr05_07_exit_code_map` | command=""; state_mode="isolate_per_test" | integration | Q4 (exit 2 validation) |
-| 14 | `test_fr05_07_exit_code_map` | threshold_env="3"; consecutive_failures="3"; state_mode="isolate_per_test"; shared_TASKQ_HOME="false" | integration | Q4 (exit 3 breaker) |
-| 15 | `test_fr05_07_exit_code_map` | command="sleep 5"; timeout_env="1"; state_mode="isolate_per_test" | integration | Q4 (exit 4 timeout) |
+| 7 | `test_fr05_07_exit_code_map` | command="echo hi"; state_mode="isolate_per_test" | integration | Q4 (exit 0 happy) |
+| 8 | `test_fr05_07_exit_code_map` | fault_target="tasks.json"; corruption_kind="invalid_json"; state_mode="isolate_per_test" | integration | Q4 (exit 1 internal) |
+| 9 | `test_fr05_07_exit_code_map` | command=""; state_mode="isolate_per_test" | integration | Q4 (exit 2 validation) |
+| 10 | `test_fr05_07_exit_code_map` | threshold_env="3"; consecutive_failures="3"; state_mode="isolate_per_test"; shared_TASKQ_HOME="false" | integration | Q4 (exit 3 breaker) |
+| 11 | `test_fr05_07_exit_code_map` | command="sleep 5"; timeout_env="1"; state_mode="isolate_per_test" | integration | Q4 (exit 4 timeout) |
 
-> **Multi-scenario expansion (v2.13.0 rule 1)**: AC-FR05-07's five exit codes (0/1/2/3/4) are 5 distinct parametrize rows (cases 11-15), ALL under the single canonical function `test_fr05_07_exit_code_map` (TEST_INVENTORY P1 naming authority, `layer: integration`) — each row has its own `Inputs` set, `state_mode`, and monkeypatch strategy. The Test Function column repeats that one canonical name — no `test_fr05_07_exit_code_N_*` per-scenario name is invented — so P3 Gate-1 spec-coverage matches the P1 naming authority. Collapsing the five into a single Inputs row would FAIL the v2.13.0 shape rules; the rows match the 5 SPEC §7 exit-code rows verbatim.
+> **Multi-scenario expansion (v2.13.0 rule 1)**: AC-FR05-07's five exit codes (0/1/2/3/4) are 5 distinct parametrize rows (cases 7-11, sequentially numbered after the 6 standalone FR-05 cases), ALL under the single canonical function `test_fr05_07_exit_code_map` (TEST_INVENTORY P1 naming authority, `layer: integration`) — each row has its own `Inputs` set, `state_mode`, and monkeypatch strategy. The Test Function column repeats that one canonical name — no `test_fr05_07_exit_code_N_*` per-scenario name is invented — so P3 Gate-1 spec-coverage matches the P1 naming authority. Collapsing the five into a single Inputs row would FAIL the v2.13.0 shape rules; the rows match the 5 SPEC §7 exit-code rows verbatim.
 >
 > **Stateful isolation (v2.13.0 rule 2)**: every FR-05 case declares `state_mode: isolate_per_test`; case 12 is the `tasks.json` corruption-detected-on-startup path — it requires monkeypatch of `open(...)` BEFORE `cli.main()` dispatches, so the test must run with a fresh tmp_path and a pre-corrupted copy of the file.
 
@@ -235,11 +235,11 @@
 | FR05-list-filter-done | `status_filter == "done" and task_done == "3" and task_total == "5" and int(task_done) <= int(task_total)` | 4 |
 | FR05-clear-clears | `command == "echo hi"` | 5 |
 | FR05-unknown-id-format | `len(unknown_id) == 8 and unknown_id == "deadbeef"` | 6 |
-| FR05-exit-0-command | `command == "echo hi"` | 11 |
-| FR05-exit-1-corruption | `corruption_kind == "invalid_json" and fault_target == "tasks.json"` | 12 |
-| FR05-exit-2-empty-command | `command == "" and len(command) == 0` | 13 |
-| FR05-exit-3-breaker-threshold | `threshold_env == "3" and consecutive_failures == "3"` | 14 |
-| FR05-exit-4-timeout-env | `command == "sleep 5" and timeout_env == "1"` | 15 |
+| FR05-exit-0-command | `command == "echo hi"` | 7 |
+| FR05-exit-1-corruption | `corruption_kind == "invalid_json" and fault_target == "tasks.json"` | 8 |
+| FR05-exit-2-empty-command | `command == "" and len(command) == 0` | 9 |
+| FR05-exit-3-breaker-threshold | `threshold_env == "3" and consecutive_failures == "3"` | 10 |
+| FR05-exit-4-timeout-env | `command == "sleep 5" and timeout_env == "1"` | 11 |
 
 > **Naming safety (v2.13.0 rule 4)**: predicate LHS strings `command` / `task_id` / `json_flag` / `task_count` / `task_total` / `task_done` / `status_filter` / `unknown_id` / `fault_target` / `corruption_kind` / `threshold_env` / `consecutive_failures` / `timeout_env` are all case-input free variables. None collide with `RESERVED_NAMES`. The substring test `'len(unknown_id) == 8'` uses the whitelisted builtin `len` (not in `RESERVED_NAMES`).
 
@@ -322,11 +322,11 @@ Function names referenced (deferred to unit / static / bench layer test files in
 | 12 | NFR-05 | `test_nfr05_02_docstring_cites_upstream` | static | every docstring cites `[FR-XX]` or `[NFR-XX]` |
 | 13 | NFR-06 | `test_nfr06_01_env_example_all_eight_vars` | static | `.env.example` declares 8 `TASKQ_*` vars + comments |
 | 14 | NFR-06 | `test_nfr06_02_config_centralized_read` | unit | `config.py` centralized read + per-var default |
-| 15 | NFR-07 | `test_nfr07_01_fault_corrupt_mid_write` | unit | `--inject-fault=corrupt-mid-write` -> recover or fail-fast |
-| 16 | NFR-07 | `test_nfr07_02_fault_oserror_on_write` | unit | `--inject-fault=oserror-on-write` -> recover or fail-fast |
-| 17 | NFR-07 | `test_nfr07_03_fault_disk_full` | unit | `--inject-fault=disk-full` -> recover or fail-fast |
-| 18 | NFR-07 | `test_nfr07_04_fault_kill_mid_write` | unit | `--inject-fault=kill-mid-write` -> recover or fail-fast |
-| 19 | NFR-07 | `test_nfr07_05_production_no_fault_injection` | static | production path (no flag) disables fault injection (0% silent) |
+| 15 | NFR-07 | `test_nfr07_01_fault_corrupt_mid_write` | unit | precondition: TASKQ_ENV∈{dev,test}; `--inject-fault=corrupt-mid-write` -> recover or fail-fast (per ADR-014 TASKQ_ENV gate) |
+| 16 | NFR-07 | `test_nfr07_02_fault_oserror_on_write` | unit | precondition: TASKQ_ENV∈{dev,test}; `--inject-fault=oserror-on-write` -> recover or fail-fast (per ADR-014) |
+| 17 | NFR-07 | `test_nfr07_03_fault_disk_full` | unit | precondition: TASKQ_ENV∈{dev,test}; `--inject-fault=disk-full` -> recover or fail-fast (per ADR-014) |
+| 18 | NFR-07 | `test_nfr07_04_fault_kill_mid_write` | unit | precondition: TASKQ_ENV∈{dev,test}; `--inject-fault=kill-mid-write` -> recover or fail-fast (per ADR-014) |
+| 19 | NFR-07 | `test_nfr07_05_production_no_fault_injection` | static | precondition: covers BOTH branches per SAD §6 T-07: (a) `--inject-fault` absent (any TASKQ_ENV) -> fault injection never triggers; (b) `--inject-fault` present + TASKQ_ENV unset or `prod` -> exit code 2 + stderr BEFORE any other work (per ADR-014 line 552 + SAD §6 T-07 mitigation); (c) `--inject-fault` present + TASKQ_ENV∈{dev,test} -> flag accepted, fault surfaces via cases 15-18 |
 | 20 | NFR-08 | `test_nfr08_02_fcntl_msvcrt_platform_lock` | static | POSIX `fcntl.flock` / Windows `msvcrt.locking` |
 | 21 | NFR-08 | `test_nfr08_03_nfs_network_fs_degrade` | unit | NFS / network fs detect -> degrade + WARNING |
 | 22 | NFR-09 | `test_nfr09_01_thousand_tasks_p95` | bench | 1000-task scale `submit`+`status` p95 < 100ms (pytest-benchmark scaled) |
@@ -381,6 +381,8 @@ Function names referenced (deferred to unit / static / bench layer test files in
 **Active NFR patterns applied**: NP-04, NP-06, NP-07, NP-08, NP-10, NP-13, NP-15
 
 > **Arithmetic reconciliation**: canonical-function count = 38 FR + 31 NFR = **69**, matching `TEST_INVENTORY.yaml` `total_test_cases: 69` (NFR split = 3 integration + 19 unit + 7 static + 2 bench = 31). Case rows total **80** because (a) AC-FR01-07 (6 sub_cases) and AC-FR05-07 (5 exit-code scenarios) each expand to multiple parametrize rows under ONE canonical function (+5 and +4 rows = +9), and (b) 2 deployment-smoke rows are P2-added and not tracked in `TEST_INVENTORY.yaml`. Removing the 9 expansion rows and 2 smoke rows: 80 − 9 − 2 = **69** = `TEST_INVENTORY.yaml` total. The NP-XX patterns are cross-cutting activation markers (see the NFR Pattern Activation table), NOT a disjoint case-type, so they are excluded from the By-type partition to avoid double-counting.
+
+> **Cross-document reconciliation note (P2 Agent A Round 2 → B-2 review gap)**: `02-architecture/SAD.md` §6 threat-model `verified_by` field references test names that DIVERGE from the canonical `TEST_INVENTORY.yaml` naming locked at P1 (e.g. SAD T-01 `test_submit_rejects_injection_chars` vs canonical `test_fr01_07_submit_injection_chars`; T-03 `test_redact_secret_in_output` has no exact TEST_SPEC analogue; T-06 `test_task_records_timestamps` vs FR-02 case 8 `test_fr02_08_duration_and_finished_at` which checks only `duration_ms` + `finished_at` not `created_at` audit trail; T-07 `test_inject_fault_rejected_in_production` vs canonical `test_nfr07_05_production_no_fault_injection` now expanded above to cover BOTH flag-absent and flag-present+production-rejection branches per ADR-014). **TEST_INVENTORY.yaml is the P1-locked naming authority**; this TEST_SPEC canonicalizes test-function names against it. The SAD-side `verified_by` field is an out-of-scope edit for this Sub-Task 3/3 deliverable (Agent A is constrained to TEST_SPEC.md only) — the SAD update is deferred to a follow-up review cycle. Downstream Gate-1 spec-coverage uses `TEST_SPEC.md` + `TEST_INVENTORY.yaml` as the parity source; the SAD §6 names are documentation-only and do not gate P3 implementations.
 
 ---
 

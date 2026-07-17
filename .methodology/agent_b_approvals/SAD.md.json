@@ -1,33 +1,21 @@
 {
   "fr": "SAD.md",
   "review_status": "APPROVE",
-  "reason": "SAD Round 1 maps all 5 FR (FR-01~05) to modules in §2.2 and addresses all 10 NFR (NFR-01~10) with design decisions + module assignments in §4. Dependency graph §2.4 acyclic (cli→executor→store→config/models; executor→breaker/cache); SEC block §6 complete with 3 trust boundaries + 7 STRIDE threats each carrying a single verified_by test name (no comma-separated lists); SAB marker present (intentional placeholder per P2 sub-task 2/3 split). Gaps noted: §1.1 missing Makefile verify-system target (Gate 2 P3-exit requirement); §2.1 flat src/taskq/ violates CRG Principle 1 (3-6 subdirs + hub pattern); §4.1 self-acknowledged contradiction (claims ≤4 NFRs/module but store carries 5: 03/07/08/09/10).",
+  "reason": "Verified SAD.md on disk against SRS.md and sibling deliverables. All 5 FRs map to ≥1 module (§2.2 lines 82-86) and all 10 NFRs are addressed with design decision + module + verification (§4 lines 220-229). Dependency graph (§2.4 line 104-111) and SAB layers (lines 263-288) are acyclic: cli→service/store, service→store, store leaf — no cycle. SAB block present with `<!-- SAB:START -->` (line 254) and `phase: 2` bare int (line 260). All SAB nfr_traceability `type` values are legal enum members (performance/security/reliability/maintainability/deployability/scalability); SRS descriptive names resilience/concurrency/evolvability are correctly translated to legal reliability/reliability/maintainability. SEC block present (`<!-- SEC:START -->` line 366) with 3 boundaries, 7 threats, each with a ",
   "citations": [
-    "SAD.md:51",
-    "SAD.md:52",
-    "SAD.md:53",
-    "SAD.md:54",
-    "SAD.md:55",
-    "SAD.md:189",
-    "SAD.md:190",
-    "SAD.md:192",
-    "SAD.md:193",
-    "SAD.md:194",
-    "SAD.md:195",
-    "SAD.md:196",
-    "SAD.md:197",
-    "SAD.md:198",
-    "SAD.md:215",
-    "SAD.md:223",
-    "SAD.md:243",
-    "SAD.md:260",
-    "SAD.md:317",
-    "harness/templates/SAD.md:13"
+    "02-architecture/SAD.md:260",
+    "02-architecture/SAD.md:254",
+    "02-architecture/SAD.md:366",
+    "02-architecture/SAD.md:111",
+    "02-architecture/SAD.md:246",
+    "01-requirements/SRS.md:61",
+    "02-architecture/SAD.md:308"
   ],
   "docs_embedded": [
-    "SAD.md",
     "SRS.md",
-    "harness/templates/SAD.md"
+    "SAD.md",
+    "ADR.md",
+    "TRACEABILITY_MATRIX.md"
   ],
   "confidence": 0.9
 }

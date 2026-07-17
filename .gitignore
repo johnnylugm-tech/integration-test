@@ -24,3 +24,6 @@ htmlcov/
 # stays tracked as functional FR-gate state).
 .methodology/sessions_spawn.log
 .harness/traces/
+
+# harness-methodology runtime (auto-added by git_strategy)
+.methodology/sessions_spawn.log.lock

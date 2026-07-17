@@ -1,31 +1,18 @@
 {
   "fr": "ADR.md",
   "review_status": "APPROVE",
-  "reason": "ADR.md Round 1 (15 ADRs) covers all load-bearing decisions across runtime (001), module layering (002), parallelism (003), atomic write (004), cross-process locking (005), circuit breaker (006), TTL cache (007), CLI (008), config freeze (009), schema versioning (010), subprocess hardening (011), secret redaction (012), threat model (013), fault-injection gating (014), and dependency layering (015). Each ADR carries Status / Context / Decision / Consequences / Alternatives considered; module names, env-var names, exit codes, regex patterns, and threat IDs are consistent with the upstream SAD §2.1 / §2.4 / §4 / §6 and SRS FR-01..FR-05 / NFR-01..NFR-10. Coverage of the five gaps from the previous B-2 SAD review (Makefile verify-system, CRG 3-6 directories, store 5-NFR bound, SAB placeholder) ",
+  "reason": "ADR.md (15 ADRs ADR-001..ADR-015) comprehensively captures load-bearing architectural decisions for taskq. Each ADR follows Status/Context/Decision/Consequences/Alternatives format with full traceability matrix (§0) covering all 5 FR (FR-01..FR-05 via ADR-002/003/006/007/008/011/012/013) and all 10 NFR (NFR-01..NFR-10 via ADR-001/002/003/004/005/006/007/009/010/011/012/013/014/015) with no orphan ADR/FR/NFR. Decisions align with SAD §2/§3/§4/§6 architecture and SRS §3/§4 anchors (Python 3.11 stdlib, 8-module layering, ThreadPoolExecutor, atomic write tmp+os.replace, fcntl.flock/msvcrt, CLOSED/OPEN/HALF_OPEN circuit breaker, sha256 TTL cache, argparse CLI surface, env-var freeze at startup, schema migrate()+backup, shlex.split+shell=False+injection blacklist, sk-*/token redaction, STRIDE-li",
   "citations": [
-    "02-architecture/adr/ADR.md:44-48",
-    "02-architecture/adr/ADR.md:82-94",
-    "02-architecture/adr/ADR.md:160-168",
-    "02-architecture/adr/ADR.md:202-211",
-    "02-architecture/adr/ADR.md:243-250",
-    "02-architecture/adr/ADR.md:438-442",
-    "02-architecture/adr/ADR.md:468-479",
-    "02-architecture/adr/ADR.md:504-510",
-    "02-architecture/adr/ADR.md:534-549",
-    "02-architecture/SAD.md:30-45",
-    "02-architecture/SAD.md:70-80",
-    "02-architecture/SAD.md:187-198",
-    "02-architecture/SAD.md:243-317",
-    "01-requirements/SRS.md:42-50",
-    "01-requirements/SRS.md:89-117",
-    "01-requirements/SRS.md:432-443",
-    "harness/templates/ADR.md:11-22"
+    "/Users/johnny/projects/integration-test/02-architecture/adr/ADR.md:27",
+    "/Users/johnny/projects/integration-test/02-architecture/adr/ADR.md:549",
+    "/Users/johnny/projects/integration-test/01-requirements/SRS.md:434",
+    "/Users/johnny/projects/integration-test/02-architecture/SAD.md:436"
   ],
   "docs_embedded": [
     "SRS.md",
     "SAD.md",
     "ADR.md",
-    "SPEC.md"
+    "TRACEABILITY_MATRIX.md"
   ],
   "confidence": 0.9
 }
