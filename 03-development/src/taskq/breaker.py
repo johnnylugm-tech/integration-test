@@ -85,24 +85,24 @@ class Breaker:
         self.opened_at: float | None = None
         self._load()
 
+    def _reset_to_closed(self) -> None:
+        """Clear in-memory state to the canonical CLOSED initial state."""
+        self.state = BreakerState.CLOSED
+        self.consecutive_failures = 0
+        self.opened_at = None
+
     def _load(self) -> None:
         """Read the on-disk breaker state. Missing/corrupt file ⇒ CLOSED."""
         if not self.path.exists():
-            self.state = BreakerState.CLOSED
-            self.consecutive_failures = 0
-            self.opened_at = None
+            self._reset_to_closed()
             return
         try:
             data = json.loads(self.path.read_text())
         except (json.JSONDecodeError, OSError):
-            self.state = BreakerState.CLOSED
-            self.consecutive_failures = 0
-            self.opened_at = None
+            self._reset_to_closed()
             return
         if not isinstance(data, dict):
-            self.state = BreakerState.CLOSED
-            self.consecutive_failures = 0
-            self.opened_at = None
+            self._reset_to_closed()
             return
         try:
             self.state = BreakerState(data.get("state", "CLOSED"))

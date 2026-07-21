@@ -171,36 +171,6 @@ def _execute(command: str) -> dict[str, Any]:
     )
 
 
-def retry(command: str, *, sleep: Callable[[float], None] | None = None) -> str:
-    """Run ``command`` with retry + exponential backoff; return final status.
-
-    The n-th retry (1-based; ``n=1..retry_limit``) is preceded by a call to
-    ``sleep(BACKOFF_BASE × 2 ** n)``. The initial attempt is NOT preceded by
-    a sleep. Loop exits early on the first ``done``; otherwise it runs
-    ``1 + retry_limit`` attempts and returns the last terminal status.
-
-    The ``sleep`` parameter shadows the module-level ``sleep`` attribute
-    intentionally: callers (e.g. the FR-03 unit test) pass an explicit
-    recording mock, while the ``run_task`` path passes ``None`` and falls
-    back to the module attribute (which ``monkeypatch.setattr`` can
-    replace for end-to-end coverage).
-
-    Citations:
-      SPEC §3 FR-03 (retry loop + backoff formula; sleep must be injectable).
-    """
-    sleep_fn = _resolve_sleep(sleep)
-    limit = _retry_limit()
-    backoff_base = _backoff_base()
-    last_status = "failed"
-    for n in range(limit + 1):
-        if n > 0:
-            sleep_fn(backoff_base * (2 ** n))
-        last_status = _execute(command)["status"]
-        if last_status == "done":
-            break
-    return last_status
-
-
 def _retry_with_attempts(
     command: str,
     sleep_fn: Callable[[float], None],
@@ -211,6 +181,9 @@ def _retry_with_attempts(
     persistence under the lock) and the attempt count (for the ``attempts``
     record field). ``run_task`` calls this; the public ``retry`` shim
     delegates here for the canonical return type.
+
+    Citations:
+      SPEC §3 FR-03 (retry loop + backoff formula; sleep must be injectable).
     """
     limit = _retry_limit()
     backoff_base = _backoff_base()
@@ -224,6 +197,26 @@ def _retry_with_attempts(
         if last_result["status"] == "done":
             break
     return last_result, attempts
+
+
+def retry(command: str, *, sleep: Callable[[float], None] | None = None) -> str:
+    """Run ``command`` with retry + exponential backoff; return final status.
+
+    The n-th retry (1-based; ``n=1..retry_limit``) is preceded by a call to
+    ``sleep(BACKOFF_BASE × 2 ** n)``. The initial attempt is NOT preceded by
+    a sleep. Loop exits early on the first ``done``; otherwise it runs
+    ``1 + retry_limit`` attempts and returns the last terminal status.
+
+    The ``sleep`` parameter shadows the module-level ``sleep`` attribute
+    intentionally: callers (e.g. the FR-03 unit test) pass an explicit
+    recording mock, while the ``run_task`` path passes ``None`` and falls
+    back to the module attribute (which ``monkeypatch.setattr`` can
+    replace for end-to-end coverage). Delegates to ``_retry_with_attempts``
+    so the retry loop body lives in exactly one place.
+    """
+    sleep_fn = _resolve_sleep(sleep)
+    last_result, _attempts = _retry_with_attempts(command, sleep_fn)
+    return last_result["status"]
 
 
 def run_task(
