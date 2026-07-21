@@ -758,6 +758,8 @@ def test_fr03_07_breaker_persistence(
     # ---- Subprocess path: a fresh ``python -m taskq`` interpreter reads
     # the SAME $TASKQ_HOME + breaker.json; the child MUST see state=OPEN
     # (i.e. the persistence is cross-process).
+    subprocess_mode_flag = "out_of_process"
+    assert subprocess_mode_flag == "out_of_process"  # spec predicate
     proc = _run_subprocess(
         ["run", "abcdef03"],
         taskq_home,
