@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0",
+  "generated_at_phase": 2,
+  "fr_ids": [
+    "FR-01",
+    "FR-02",
+    "FR-03",
+    "FR-04",
+    "FR-05"
+  ],
+  "nfr_dimension_mapping": {
+    "NFR-01": "performance",
+    "NFR-02": "security",
+    "NFR-03": "error_handling",
+    "NFR-04": "security",
+    "NFR-05": "readability",
+    "NFR-07": "error_handling",
+    "NFR-08": "error_handling",
+    "NFR-10": "readability"
+  },
+  "nfr_fr_mapping": {},
+  "nfr_traceability": {
+    "NFR-01": {
+      "type": "performance",
+      "target": "p95 < 50ms (warm-process, submit+status over 100 iters, excluding subprocess)",
+      "module": "taskq.store"
+    },
+    "NFR-02": {
+      "type": "security",
+      "target": "shell=True forbidden codebase-wide; injection blacklist ( ; | & $ > < ` ) covered by tests",
+      "module": "taskq.executor"
+    },
+    "NFR-03": {
+      "type": "reliability",
+      "target": "atomic tasks.json write via tmp+os.replace; OPEN→CLOSED recovery ≤ TASKQ_BREAKER_COOLDOWN+1s",
+      "module": "taskq.store"
+    },
+    "NFR-04": {
+      "type": "security",
+      "target": "100% redaction of stdout_tail/stderr_tail lines matching (sk-[A-Za-z0-9_-]{8,}|token=\\S+) before persist",
+      "module": "taskq.executor"
+    },
+    "NFR-05": {
+      "type": "maintainability",
+      "target": "100% docstring [FR-XX] coverage on public functions/classes in src/taskq/*.py",
+      "module": "taskq.models"
+    },
+    "NFR-06": {
+      "type": "deployability",
+      "target": "all 8 TASKQ_* env vars declared in .env.example and read centrally from config.py",
+      "module": "taskq.config"
+    },
+    "NFR-07": {
+      "type": "reliability",
+      "target": "100% fail-fast or auto-recover for corrupt-mid-write / oserror-on-write / disk-full / kill-mid-write; never silent rebuild",
+      "module": "taskq.store"
+    },
+    "NFR-08": {
+      "type": "reliability",
+      "target": "100% data-file legality after 4 concurrent python -m taskq processes; fcntl.flock with NFS auto-degrade + WARNING",
+      "module": "taskq.store"
+    },
+    "NFR-09": {
+      "type": "scalability",
+      "target": "p95 < 100ms for submit+status over 1000 iters; peak memory < 100MB; run --all 100 tasks leaves tasks.json valid + zero task loss",
+      "module": "taskq.store"
+    },
+    "NFR-10": {
+      "type": "maintainability",
+      "target": "100% successful migration v0→v1 (backup <file>.v<n>.bak present + data readable); version>1 → exit 1 fail-fast",
+      "module": "taskq.store"
+    }
+  },
+  "quality_targets": {
+    "max_complexity": 10,
+    "min_coverage": 90,
+    "max_coupling": 0.3
+  },
+  "fr_module_traceability": {
+    "FR-01": "taskq.cli",
+    "FR-02": "taskq.executor",
+    "FR-03": "taskq.executor",
+    "FR-04": "taskq.cache",
+    "FR-05": "taskq.cli"
+  },
+  "architecture_constraints": [
+    "no_circular_dependencies"
+  ],
+  "high_risk_modules": [
+    "taskq.executor",
+    "taskq.store"
+  ],
+  "gate_score_overrides": {
+    "performance": 75.0,
+    "security": 80.0,
+    "error_handling": 80.0,
+    "readability": 80.0,
+    "test_coverage": 90.0
+  },
+  "gate_results": {
+    "gate1": {},
+    "gate2": null,
+    "gate3": null,
+    "gate4": null
+  }
+}
