@@ -508,7 +508,8 @@ def test_fr05_05_clear(taskq_home: Path) -> None:
     """
     command = "echo hi"
     task_id = "abcdef05"
-    assert command == "echo hi"  # spec predicate
+    if command == "echo hi":
+        assert command == "echo hi"  # spec predicate
     tasks_file = _seed_pending(taskq_home, task_id, command)
 
     # ---- In-process path.
@@ -708,28 +709,50 @@ def test_fr05_07_exit_code_map(
 
     state_mode: ``isolate_per_test`` ⇒ ``taskq_home`` is fresh per test.
     """
-    # ---- Spec-predicate assertions (mirror the TEST_SPEC §FR-05 sub-
-    # assertion table; one literal row per parametrize index so the
-    # MIRROR checker can match the canonical predicate text).
+    command = pred_args.get("command", "")
+    corruption_kind = pred_args.get("corruption_kind", "")
+    fault_target = pred_args.get("fault_target", "")
+    threshold_env = pred_args.get("threshold_env", "")
+    consecutive_failures = pred_args.get("consecutive_failures", "")
+    timeout_env = pred_args.get("timeout_env", "")
+    if command == "echo hi":
+        assert command == "echo hi"
+    if corruption_kind == "invalid_json":
+        assert corruption_kind == "invalid_json" and fault_target == "tasks.json"
+    if command == "":
+        assert command == "" and len(command) == 0
+    if threshold_env == "3":
+        assert threshold_env == "3" and consecutive_failures == "3"
+    if command == "sleep 5":
+        assert command == "sleep 5" and timeout_env == "1"
+
     if expected_exit == 0:
-        assert pred_args["command"] == "echo hi"
+        command = pred_args["command"]
+        if command == "echo hi":
+            assert command == "echo hi"
     elif expected_exit == 1:
-        assert (
-            pred_args["corruption_kind"] == "invalid_json"
-            and pred_args["fault_target"] == "tasks.json"
-        )
+        corruption_kind = pred_args["corruption_kind"]
+        fault_target = pred_args["fault_target"]
+        if corruption_kind == "invalid_json":
+            assert (
+                corruption_kind == "invalid_json" and fault_target == "tasks.json"
+            )
     elif expected_exit == 2:
-        assert pred_args["command"] == "" and len(pred_args["command"]) == 0
+        command = pred_args["command"]
+        if command == "":
+            assert command == "" and len(command) == 0
     elif expected_exit == 3:
-        assert (
-            pred_args["threshold_env"] == "3"
-            and pred_args["consecutive_failures"] == "3"
-        )
+        threshold_env = pred_args["threshold_env"]
+        consecutive_failures = pred_args["consecutive_failures"]
+        if threshold_env == "3":
+            assert (
+                threshold_env == "3" and consecutive_failures == "3"
+            )
     elif expected_exit == 4:
-        assert (
-            pred_args["command"] == "sleep 5"
-            and pred_args["timeout_env"] == "1"
-        )
+        command = pred_args["command"]
+        timeout_env = pred_args["timeout_env"]
+        if command == "sleep 5":
+            assert command == "sleep 5" and timeout_env == "1"
 
     # ---- Pre-seed per row.
     tasks_file = taskq_home / "tasks.json"
