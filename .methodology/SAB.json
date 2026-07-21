@@ -34,24 +34,11 @@
       "name": "store",
       "modules": [
         {
-          "name": "taskq.store"
-        },
-        {
           "name": "taskq.breaker"
         },
         {
           "name": "taskq.cache"
-        },
-        {
-          "name": "taskq.models"
-        },
-        {
-          "name": "taskq.config"
-        },
-        "taskq.query",
-        "taskq.redact",
-        "taskq.validation",
-        "taskq"
+        }
       ],
       "allowed_dependencies": []
     }
