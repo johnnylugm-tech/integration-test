@@ -1,0 +1,142 @@
+{
+  "gate": 2,
+  "phase": 3,
+  "round": 1,
+  "breakdown": {
+    "linting": {
+      "score": 100,
+      "threshold": 90,
+      "weight": 0.12,
+      "tool_evidence": "ruff check returned 0 violations after fix (was 9: F841×4, F401×4, E401×1)",
+      "issues": []
+    },
+    "type_safety": {
+      "score": 100,
+      "threshold": 85,
+      "weight": 0.1,
+      "tool_evidence": "pyright: summary.errorCount=0, warningCount=1 (non-blocking __all__ warning)",
+      "issues": [
+        {
+          "file": "03-development/src/taskq/__init__.py",
+          "line": 8,
+          "severity": "low",
+          "message": "__all__ references 'cli' which is not present in module (informational)",
+          "evidence": "pyright warning reportUnsupportedDunderAll"
+        }
+      ]
+    },
+    "test_coverage": {
+      "score": 97,
+      "threshold": 80,
+      "weight": 0.1,
+      "tests_passed": 67,
+      "tests_failed": 0,
+      "tool_evidence": "coverage totals: 1695/1739 lines = 97.47% (percent_covered_display=97)",
+      "issues": []
+    },
+    "security": {
+      "score": 98,
+      "threshold": 80,
+      "weight": 0.1,
+      "tool_evidence": "bandit: 0 HIGH, 0 MEDIUM, 2 LOW (B404/B603 on executor.py subprocess use)",
+      "issues": [
+        {
+          "file": "03-development/src/taskq/executor.py",
+          "line": 35,
+          "severity": "low",
+          "message": "B404: subprocess module imported",
+          "evidence": "bandit B404"
+        },
+        {
+          "file": "03-development/src/taskq/executor.py",
+          "line": 193,
+          "severity": "low",
+          "message": "B603: subprocess call - untrusted input check",
+          "evidence": "bandit B603"
+        }
+      ]
+    },
+    "secrets_scanning": {
+      "score": 100,
+      "threshold": 100,
+      "weight": 0.08,
+      "tool_evidence": "gitleaks detect --source . returned 0 findings",
+      "issues": []
+    },
+    "license_compliance": {
+      "score": 100,
+      "threshold": 100,
+      "weight": 0.08,
+      "tool_evidence": "scancode: 18 files scanned, 0 unknown licenses, 0 GPL-family",
+      "issues": []
+    },
+    "integration_coverage": {
+      "score": 62,
+      "threshold": 60,
+      "weight": 0.08,
+      "tool_evidence": "AST scan: 32 of 52 test functions exercise subprocess (cross-process) integration path",
+      "issues": [
+        {
+          "file": "03-development/tests",
+          "line": null,
+          "severity": "low",
+          "message": "20 test functions cover in-process path only — no subprocess verification",
+          "evidence": "AST scan: total_tests=52 integration_tests=32, pct=61.5"
+        }
+      ]
+    },
+    "test_assertion_quality": {
+      "score": 100,
+      "threshold": 60,
+      "weight": 0.04,
+      "tool_evidence": "ast-assertions: assertion_density=6.54 zero_assert_ratio=0.000 score=100",
+      "issues": []
+    },
+    "execute_verification_target": {
+      "score": 100,
+      "threshold": 100,
+      "weight": 0.1,
+      "tool_evidence": "make verify-system: 67 tests passed, NFR-02 shell audit OK, smoke round-trip OK (after --help fix)",
+      "issues": []
+    },
+    "traceability": {
+      "score": 100.0,
+      "threshold": 100.0,
+      "weight": 0.1,
+      "tool_evidence": "framework: compute_trace_dimension(gate=2) → 4a=100.0% 4b=100.0% 4c=100.0% merged=100.0%",
+      "issues": [],
+      "framework_override": true
+    }
+  },
+  "disabled_dimensions": {
+    "mutation_testing": "disabled per .methodology/harness_config.json default (features.mutation_testing=false); framework auto-filters via is_dim_disabled()"
+  },
+  "overall_score": 84.96,
+  "composite_score": 84.96,
+  "passed": true,
+  "rounds_used": 1,
+  "crg_review_context": {
+    "status": "ok",
+    "summary": "Review context for 10 changed file(s):\n  - Risk: low\n  - 0 impacted nodes in 0 files",
+    "risk": "low",
+    "changed_file_count": 10,
+    "impacted_file_count": 0,
+    "key_entities": [],
+    "test_gaps": 0,
+    "next_tool_suggestions": [
+      "detect_changes",
+      "get_affected_flows",
+      "get_impact_radius"
+    ]
+  },
+  "crg_impact_radius": {
+    "status": "ok",
+    "summary": "Blast radius for 10 changed file(s):\n  - 0 nodes directly changed\n  - 0 nodes impacted (within 2 hops)\n  - 0 additional files affected",
+    "risk": "low",
+    "impacted_file_count": 0,
+    "key_entities": [],
+    "truncated": false
+  },
+  "quality_complete": true,
+  "verdict": "PASS"
+}

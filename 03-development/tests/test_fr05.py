@@ -57,7 +57,6 @@ import contextlib
 import io
 import json as json_lib
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -193,7 +192,7 @@ def test_fr05_01_status_all_fields(taskq_home: Path) -> None:
     command = "echo hi"
     task_id = "abcdef01"
     assert command == "echo hi" and task_id == "abcdef01"  # spec predicate
-    tasks_file = _seed_pending(taskq_home, task_id, command)
+    _seed_pending(taskq_home, task_id, command)
 
     # ---- In-process path (drives coverage of cli.py / __main__.py).
     stdout_buf = io.StringIO()
@@ -412,7 +411,7 @@ def test_fr05_04_list_filter_done(taskq_home: Path) -> None:
     )  # spec predicate
 
     # 5 records: 3 done + 1 pending + 1 running.
-    tasks_file = _seed_tasks(
+    _seed_tasks(
         taskq_home,
         {
             "aaaaaa01": {

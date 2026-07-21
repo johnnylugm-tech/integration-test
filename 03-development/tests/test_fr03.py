@@ -43,7 +43,6 @@ import contextlib
 import io
 import json as json_lib
 import os
-import re
 import subprocess
 import sys
 import time

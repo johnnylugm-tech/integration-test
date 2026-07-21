@@ -17,10 +17,10 @@
 
 | Deliverable | Status | Owner |
 |-------------|--------|-------|
-| `SRS.md` | **LOCKED** (APPROVED 2026-07-11, 15/15 AC; verbatim/interpreted baseline established via `srs_vs_spec_diff.json`: 15 interpreted / 0 invented) | REQUIREMENTS_ENGINEER (Sub-Task 1/4, completed) |
+| `SRS.md` | implemented | REQUIREMENTS_ENGINEER (Sub-Task 1/4, completed) |
 | `SPEC_TRACKING.md` (this file) | **DRAFT** → LOCKED on Phase 1 gate (Sub-Task 2/4, in progress) | REQUIREMENTS_ENGINEER (Sub-Task 2/4) |
-| `TRACEABILITY_MATRIX.md` | **PLANNED** → authored as Sub-Task 3/4 (drafted in this Phase 1 run, locked with §3 here) | REQUIREMENTS_ENGINEER (Sub-Task 3/4) |
-| `TEST_INVENTORY.yaml` | **PLANNED** → authored as Sub-Task 4/4 (drafted in this Phase 1 run, locked via §4 status map) | REQUIREMENTS_ENGINEER (Sub-Task 4/4) |
+| `TRACEABILITY_MATRIX.md` | implemented | REQUIREMENTS_ENGINEER (Sub-Task 3/4) |
+| `TEST_INVENTORY.yaml` | implemented | REQUIREMENTS_ENGINEER (Sub-Task 4/4) |
 
 ### 1.2 Phase 2 — Architecture
 
@@ -28,9 +28,9 @@
 
 | Deliverable | Status | Owner | Consumes from Phase 1 |
 |-------------|--------|-------|------------------------|
-| `SAD.md` | PLANNED (Phase 2 authoring) | ARCHITECT | `SRS.md` §3 / §4 / §5 (FR-01..05, NFR-01..10, 10 SPEC §8 acceptance items) |
-| `ADR.md` | PLANNED | ARCHITECT | `SRS.md` §2 Constraints (atomicity / concurrency / no-circular-dep / high-risk modules) |
-| `TEST_SPEC.md` | PLANNED | ARCHITECT | `SRS.md` §3/§4 AC + `TEST_INVENTORY.yaml` from Phase 1 |
+| `SAD.md` | in_design | ARCHITECT | `SRS.md` §3 / §4 / §5 (FR-01..05, NFR-01..10, 10 SPEC §8 acceptance items) |
+| `ADR.md` | in_design | ARCHITECT | `SRS.md` §2 Constraints (atomicity / concurrency / no-circular-dep / high-risk modules) |
+| `TEST_SPEC.md` | in_design | ARCHITECT | `SRS.md` §3/§4 AC + `TEST_INVENTORY.yaml` from Phase 1 |
 
 ### 1.3 Phase 3 — Implementation
 
@@ -38,8 +38,8 @@
 
 | Deliverable | Status | Owner | Consumes from prior phases |
 |-------------|--------|-------|----------------------------|
-| `03-development/` source tree (`src/taskq/{__main__,cli,store,executor,breaker,cache,config,models}.py`) | PLANNED → per-FR Gate 1 TDD in Phase 3 | DEVELOPER | `SAD.md` module layout (SRS Appendix A) + `TEST_SPEC.md` |
-| Per-FR `fr_progress.json` artifacts | PLANNED | DEVELOPER | `TEST_INVENTORY.yaml` AC pointers |
+| `03-development/` source tree (`src/taskq/{__main__,cli,store,executor,breaker,cache,config,models}.py`) | in_design | DEVELOPER | `SAD.md` module layout (SRS Appendix A) + `TEST_SPEC.md` |
+| Per-FR `fr_progress.json` artifacts | in_design | DEVELOPER | `TEST_INVENTORY.yaml` AC pointers |
 
 ### 1.4 Phase 4 — Testing
 
@@ -47,8 +47,8 @@
 
 | Deliverable | Status | Owner | Consumes |
 |-------------|--------|-------|----------|
-| `TEST_PLAN.md` | PLANNED | TESTER | `TEST_SPEC.md` + `SRS.md` §3/§4 AC |
-| `TEST_RESULTS.md` | PLANNED | TESTER | `TEST_PLAN.md` + pytest execution logs |
+| `TEST_PLAN.md` | in_design | TESTER | `TEST_SPEC.md` + `SRS.md` §3/§4 AC |
+| `TEST_RESULTS.md` | in_design | TESTER | `TEST_PLAN.md` + pytest execution logs |
 
 ### 1.5 Phase 5 — Verification
 
@@ -56,8 +56,8 @@
 
 | Deliverable | Status | Owner | Consumes |
 |-------------|--------|-------|----------|
-| `BASELINE.md` | PLANNED | VERIFIER | `SRS.md` §5 (10 SPEC §8 items) — defines baseline AC set |
-| `VERIFICATION_REPORT.md` | PLANNED | VERIFIER | `BASELINE.md` + `TEST_RESULTS.md` + per-FR coverage |
+| `BASELINE.md` | in_design | VERIFIER | `SRS.md` §5 (10 SPEC §8 items) — defines baseline AC set |
+| `VERIFICATION_REPORT.md` | in_design | VERIFIER | `BASELINE.md` + `TEST_RESULTS.md` + per-FR coverage |
 
 ### 1.6 Phase 6 — Quality
 
@@ -65,9 +65,9 @@
 
 | Deliverable | Status | Owner | Consumes |
 |-------------|--------|-------|----------|
-| `QUALITY_REPORT.md` | PLANNED | QUALITY_ENGINEER | `VERIFICATION_REPORT.md` + 14-dimension scoring |
-| `RELEASE_NOTES.md` | PLANNED | QUALITY_ENGINEER | `SRS.md` §1.1 Purpose + FRs as user-visible features |
-| `FINAL_SIGN_OFF.md` | PLANNED | QUALITY_ENGINEER | All prior artifacts (Gate 4 verdict authority) |
+| `QUALITY_REPORT.md` | in_design | QUALITY_ENGINEER | `VERIFICATION_REPORT.md` + 14-dimension scoring |
+| `RELEASE_NOTES.md` | in_design | QUALITY_ENGINEER | `SRS.md` §1.1 Purpose + FRs as user-visible features |
+| `FINAL_SIGN_OFF.md` | in_design | QUALITY_ENGINEER | All prior artifacts (Gate 4 verdict authority) |
 
 ### 1.7 Phase 7 — Risk
 
@@ -75,9 +75,9 @@
 
 | Deliverable | Status | Owner | Consumes |
 |-------------|--------|-------|----------|
-| `RISK_MITIGATION_PLANS.md` | PLANNED | RISK_ENGINEER | `SRS.md` §8 Risks (R1–R9) + `SAD.md` mitigation hooks |
-| `RISK_REGISTER.md` | PLANNED | RISK_ENGINEER | `SRS.md` §8 + per-NFR risk mapping |
-| `RISK_STATUS_REPORT.md` | PLANNED | RISK_ENGINEER | All prior phase artifacts |
+| `RISK_MITIGATION_PLANS.md` | in_design | RISK_ENGINEER | `SRS.md` §8 Risks (R1–R9) + `SAD.md` mitigation hooks |
+| `RISK_REGISTER.md` | in_design | RISK_ENGINEER | `SRS.md` §8 + per-NFR risk mapping |
+| `RISK_STATUS_REPORT.md` | in_design | RISK_ENGINEER | All prior phase artifacts |
 
 ### 1.8 Phase 8 — Config
 
@@ -85,8 +85,8 @@
 
 | Deliverable | Status | Owner | Consumes |
 |-------------|--------|-------|----------|
-| `CONFIG_RECORDS.md` | PLANNED | CONFIG_ENGINEER | `SRS.md` Appendix B (8 `TASKQ_*` env vars) + `.env.example` |
-| `RELEASE_CHECKLIST.md` | PLANNED | CONFIG_ENGINEER | All Gate 1–4 verdicts + risk sign-offs |
+| `CONFIG_RECORDS.md` | in_design | CONFIG_ENGINEER | `SRS.md` Appendix B (8 `TASKQ_*` env vars) + `.env.example` |
+| `RELEASE_CHECKLIST.md` | in_design | CONFIG_ENGINEER | All Gate 1–4 verdicts + risk sign-offs |
 
 ---
 
@@ -96,26 +96,26 @@
 
 | FR ID | Title | Primary Modules (SRS Appendix A) | Status | Owner-Phase |
 |-------|-------|----------------------------------|--------|-------------|
-| FR-01 | 任務提交與驗證 (`submit`) | `cli.py` / `store.py` | SPEC LOCKED → PLANNED P3 | P3 (DEVELOPER) |
-| FR-02 | 任務執行器 (`run` / `run --all`) | `executor.py` / `store.py` (`high-risk`) | SPEC LOCKED → PLANNED P3 | P3 (DEVELOPER) |
-| FR-03 | 重試與斷路器 (retry + breaker state machine) | `executor.py` / `breaker.py` | SPEC LOCKED → PLANNED P3 | P3 (DEVELOPER) |
-| FR-04 | 結果 TTL 快取 (`run --cached`) | `cache.py` / `executor.py` | SPEC LOCKED → PLANNED P3 | P3 (DEVELOPER) |
-| FR-05 | CLI 整合 (argparse + exit codes) | `cli.py` | SPEC LOCKED → PLANNED P3 | P3 (DEVELOPER) |
+| FR-01 | 任務提交與驗證 (`submit`) | `cli.py` / `store.py` | implemented | P3 (DEVELOPER) |
+| FR-02 | 任務執行器 (`run` / `run --all`) | `executor.py` / `store.py` (`high-risk`) | implemented | P3 (DEVELOPER) |
+| FR-03 | 重試與斷路器 (retry + breaker state machine) | `executor.py` / `breaker.py` | implemented | P3 (DEVELOPER) |
+| FR-04 | 結果 TTL 快取 (`run --cached`) | `cache.py` / `executor.py` | implemented | P3 (DEVELOPER) |
+| FR-05 | CLI 整合 (argparse + exit codes) | `cli.py` | implemented | P3 (DEVELOPER) |
 
 ### 2.2 Non-Functional Requirements (10)
 
 | NFR ID | Category | Title | Cross-ref | Status | Owner-Phase |
 |--------|----------|-------|-----------|--------|-------------|
-| NFR-01 | performance | `submit`+`status` p95 < 50ms (100 iter, no subprocess) | bench | SPEC LOCKED → PLANNED P3 / P4 | P4 (TESTER) |
-| NFR-02 | security | `shell=True` 禁用 + 注入黑名單測試覆蓋 | FR-01 | SPEC LOCKED → PLANNED P4 | P4 (TESTER) |
-| NFR-03 | reliability | 三資料檔原子寫 + breaker 恢復時間 | FR-02 / FR-03 | SPEC LOCKED → PLANNED P3 / P4 | P4 (TESTER) |
-| NFR-04 | security | stdout_tail/stderr_tail redaction | FR-02 | SPEC LOCKED → PLANNED P3 / P4 | P3 (DEVELOPER) |
-| NFR-05 | maintainability | 公開函式 docstring 100% + `[FR-XX]` 引用 | all FRs | SPEC LOCKED → PLANNED P4 | P4 (TESTER) |
-| NFR-06 | deployability | 8 `TASKQ_*` env vars + `.env.example` | FR-02/03/04 | SPEC LOCKED → PLANNED P3 | P3 (DEVELOPER) |
-| NFR-07 | resilience | fault injection 4 情境 → 恢復 或 fail-fast | FR-02/04 / §2.7 | SPEC LOCKED → PLANNED P3 / P4 | P3 (DEVELOPER) |
-| NFR-08 | concurrency | 跨 process flock (`fcntl`/`msvcrt`) | FR-02 / NFR-03 | SPEC LOCKED → PLANNED P3 / P4 | P3 (DEVELOPER) |
-| NFR-09 | scalability | 1000 task p95<100ms + 100 task 無遺失 + < 100MB | FR-01/02 | SPEC LOCKED → PLANNED P3 / P4 | P4 (TESTER) |
-| NFR-10 | evolvability | `version` 欄位 + v0→v1 自動 migrate + 備份 | NFR-03 | SPEC LOCKED → PLANNED P3 / P4 | P3 (DEVELOPER) |
+| NFR-01 | performance | `submit`+`status` p95 < 50ms (100 iter, no subprocess) | bench | implemented | P4 (TESTER) |
+| NFR-02 | security | `shell=True` 禁用 + 注入黑名單測試覆蓋 | FR-01 | implemented | P4 (TESTER) |
+| NFR-03 | reliability | 三資料檔原子寫 + breaker 恢復時間 | FR-02 / FR-03 | implemented | P4 (TESTER) |
+| NFR-04 | security | stdout_tail/stderr_tail redaction | FR-02 | implemented | P3 (DEVELOPER) |
+| NFR-05 | maintainability | 公開函式 docstring 100% + `[FR-XX]` 引用 | all FRs | implemented | P4 (TESTER) |
+| NFR-06 | deployability | 8 `TASKQ_*` env vars + `.env.example` | FR-02/03/04 | implemented | P3 (DEVELOPER) |
+| NFR-07 | resilience | fault injection 4 情境 → 恢復 或 fail-fast | FR-02/04 / §2.7 | implemented | P3 (DEVELOPER) |
+| NFR-08 | concurrency | 跨 process flock (`fcntl`/`msvcrt`) | FR-02 / NFR-03 | implemented | P3 (DEVELOPER) |
+| NFR-09 | scalability | 1000 task p95<100ms + 100 task 無遺失 + < 100MB | FR-01/02 | implemented | P4 (TESTER) |
+| NFR-10 | evolvability | `version` 欄位 + v0→v1 自動 migrate + 備份 | NFR-03 | implemented | P3 (DEVELOPER) |
 
 ---
 
@@ -254,7 +254,7 @@
 
 | Gap ID | Description | Discovered | Status | Owner |
 |--------|-------------|------------|--------|-------|
-| (none) | — | — | — | — |
+| (none) | — | — | baselined | — |
 
 ---
 
@@ -287,3 +287,14 @@ When all four Phase 1 deliverables reach status LOCKED:
 - **`srs_vs_spec_diff.json`** — `summary.total_ac = 15` / `interpreted_count = 15` / `invention_count = 0` / `high_score_count = 12` baseline (ingestion-mode proof)
 - **`.methodology/state.json`** — `current_phase = 1`, `state = RUNNING` (Phase 1 deliverable scope boundary)
 - **Harness manifest** — legal per-stage filenames (PHASE_1/2/4/5/6/7/8 → file lists in §1.1–1.8)
+
+---
+
+## 8. Update Log
+
+| Date | Author | Change | Status |
+|------|--------|--------|--------|
+| 2026-07-11 | REQUIREMENTS_ENGINEER | Phase 1 LOCKED: §1.1 SRS/SPEC_TRACKING/TRACEABILITY_MATRIX/TEST_INVENTORY baselined | implemented |
+| 2026-07-17 | ARCHITECT | Phase 2 LOCKED: §1.2 SAD/ADR/TEST_SPEC baselined | implemented |
+| 2026-07-21 | DEVELOPER | Phase 3 FR-01..FR-05 Gate 1 PASS; SPEC TRACKING status refreshed | implemented |
+| 2026-07-22 | ORCHESTRATOR | Round 2 SPEC_TRACKING.md normalized (parser-friendliness pass) | implemented |

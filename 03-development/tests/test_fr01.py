@@ -543,7 +543,7 @@ def test_fr01_09_submit_atomic_write(
     stderr_buf = io.StringIO()
     with contextlib.redirect_stderr(stderr_buf):
         try:
-            rc_in = cli.main(["submit", "echo hi"])
+            cli.main(["submit", "echo hi"])
         except OSError:
             # A naive GREEN that surfaces the OSError uncaught would fail the
             # AC. The GREEN implementation must catch the OSError inside the

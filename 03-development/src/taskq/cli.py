@@ -351,6 +351,22 @@ _SUBCOMMANDS: dict[str, "Callable[[Sequence[str]], int]"] = {
     "clear": clear_command,
 }
 
+# Top-level usage string for ``python -m taskq --help``. Kept in sync with
+# the dispatch table above (1 line per subcommand).
+_HELP_TEXT: str = (
+    "taskq — local task queue CLI\n"
+    "\n"
+    "Usage:\n"
+    "  python -m taskq <subcommand> [args...]\n"
+    "\n"
+    "Subcommands:\n"
+    "  submit <command>   enqueue a new task\n"
+    "  run [id | --all]   execute pending tasks\n"
+    "  status <id>        show one task record\n"
+    "  list [filter]      list tasks (default: pending + running)\n"
+    "  clear              remove terminal-state tasks (done / failed)\n"
+)
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Top-level CLI dispatcher.
@@ -368,6 +384,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not argv:
         print("error: no command given", file=sys.stderr)
         return 2
+    if argv[0] in ("--help", "-h"):
+        print(_HELP_TEXT)
+        return 0
     handler = _SUBCOMMANDS.get(argv[0])
     if handler is None:
         print(f"error: unknown command {argv[0]!r}", file=sys.stderr)

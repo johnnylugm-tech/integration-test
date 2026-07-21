@@ -37,8 +37,6 @@ Forbidden patterns (per v2.13.0 test-author rules):
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json as json_lib
 import os
 import re
@@ -330,7 +328,7 @@ def test_fr02_04_stdout_tail_2000_chars(taskq_home: Path) -> None:
     tasks_file = _seed_pending(taskq_home, task_id, command)
 
     # ---- In-process path.
-    rc_in = cli.main(["run", task_id])
+    cli.main(["run", task_id])
     parsed_in = _load_tasks(tasks_file)
     record_in = parsed_in[task_id]
     assert "stdout_tail" in record_in, (

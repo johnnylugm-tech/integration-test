@@ -1,20 +1,14 @@
 {
-  "425beefe": {
-    "command": "echo second",
-    "created_at": "2026-07-21T14:57:17.803634+00:00",
-    "name": "dup-name-1",
-    "status": "pending"
-  },
-  "56b1cb35": {
-    "command": "echo hi",
-    "created_at": "2026-07-21T14:57:17.540339+00:00",
-    "name": "",
-    "status": "pending"
-  },
-  "b554c3b6": {
-    "command": "echo hi",
-    "created_at": "2026-07-21T14:57:17.514433+00:00",
-    "name": "",
-    "status": "pending"
+  "9d272dd6": {
+    "attempts": 1,
+    "command": "echo ok",
+    "created_at": "2026-07-21T16:38:03.947373+00:00",
+    "duration_ms": 2,
+    "exit_code": 0,
+    "finished_at": "2026-07-21T16:38:03.982170+00:00",
+    "name": "smoke",
+    "status": "done",
+    "stderr_tail": "",
+    "stdout_tail": "ok\n"
   }
 }

@@ -1,8 +1,8 @@
 # Harness Methodology — Session Handover
 
-**Checkpoint**: `P3-entry-20260721`  
+**Checkpoint**: `P3-gate2-20260721`  
 **Phase**: P3 — Implementation  
-**Generated**: 2026-07-21T14:40:37Z
+**Generated**: 2026-07-21T17:06:07Z
 
 > ⚠️  **開始下一個工作階段前，請先執行 `/compact` 壓縮上下文**，再從「接下來的工作」繼續。
 
@@ -14,9 +14,9 @@
 # 1. Clone (if working directory cleared)
 git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-test.git && cd integration-test
 
-# 2. Read plan and continue Phase 3
-cat .methodology/phase3_plan.md
-# Follow the active plan and continue from where you left off
+# 2. Read plan and start Phase 4
+cat .methodology/phase4_plan.md
+# Follow SKILL.md §0.1 Phase 4 entry check, then execute
 ```
 
 ---
@@ -31,39 +31,45 @@ git clone --recurse-submodules https://github.com/johnnylugm-tech/integration-te
 git log --oneline -3
 
 # Confirm FSM state
-cat .methodology/state.json   # expected: phase=3 state=RUNNING
+cat .methodology/state.json   # expected: phase=3 state=RUNNING last_gate=2
 
 # Read active plan
-cat .methodology/phase3_plan.md
+cat .methodology/phase4_plan.md
 ```
 
 | 欄位 | 值 |
 |------|----|
 | Remote | `https://github.com/johnnylugm-tech/integration-test.git` |
 | Branch | `main` |
-| State | `phase=3 state=RUNNING` |
-| Plan | `.methodology/phase3_plan.md` |
+| State | `phase=3 state=RUNNING last_gate=2` |
+| Plan | `.methodology/phase4_plan.md` |
 
 ---
 
 ## 任務背景
 
-Phase transition from Phase 2 to Phase 3.
+Gate 2 PASS — quality cycle complete.
 
 ## 目前執行狀況
 
-Phase 2 completed. Ready to begin Phase 3.
+Gate 2 PASS: score=85.0.
 
 ## 接下來的工作
 
-1. Follow SKILL.md §0.1 Phase 3 entry checklist
-2. Read the Phase 3 plan and execute
+1. Proceed to P4: Testing
+2. Build full test suite (Gate 3 target ≥ 80)
+3. On Gate 3 PASS → call commit_and_push_gate(gate_num=3, ...)
 
 ## 注意事項
 
 - 100% follow SKILL.md
 - Do NOT commit `.sessi-work/` or `.methodology/` runtime artifacts
 - Git failures are warnings — they never block the pipeline
+
+## 附加資訊
+
+- **gate**: 2
+- **score**: 85.0
 
 ---
 *由 `HandoverGenerator` 自動生成。下次 push 時此檔案將被覆寫。*
