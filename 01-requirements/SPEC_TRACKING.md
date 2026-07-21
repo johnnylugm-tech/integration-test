@@ -96,11 +96,11 @@
 
 | FR ID | Title | Primary Modules (SRS Appendix A) | Status | Owner-Phase |
 |-------|-------|----------------------------------|--------|-------------|
-| FR-01 | 任務提交與驗證 (`submit`) | `cli.py` / `store.py` | implemented | P3 (DEVELOPER) |
-| FR-02 | 任務執行器 (`run` / `run --all`) | `executor.py` / `store.py` (`high-risk`) | implemented | P3 (DEVELOPER) |
-| FR-03 | 重試與斷路器 (retry + breaker state machine) | `executor.py` / `breaker.py` | implemented | P3 (DEVELOPER) |
-| FR-04 | 結果 TTL 快取 (`run --cached`) | `cache.py` / `executor.py` | implemented | P3 (DEVELOPER) |
-| FR-05 | CLI 整合 (argparse + exit codes) | `cli.py` | implemented | P3 (DEVELOPER) |
+| FR-01 | 任務提交與驗證 (`submit`) | `cli.py` / `store.py` | VERIFIED | P3 (DEVELOPER) |
+| FR-02 | 任務執行器 (`run` / `run --all`) | `executor.py` / `store.py` (`high-risk`) | VERIFIED | P3 (DEVELOPER) |
+| FR-03 | 重試與斷路器 (retry + breaker state machine) | `executor.py` / `breaker.py` | VERIFIED | P3 (DEVELOPER) |
+| FR-04 | 結果 TTL 快取 (`run --cached`) | `cache.py` / `executor.py` | VERIFIED | P3 (DEVELOPER) |
+| FR-05 | CLI 整合 (argparse + exit codes) | `cli.py` | VERIFIED | P3 (DEVELOPER) |
 
 ### 2.2 Non-Functional Requirements (10)
 
