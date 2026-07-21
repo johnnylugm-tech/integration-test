@@ -19,10 +19,13 @@ import argparse
 import json
 import os
 import sys
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
+
+from taskq import executor
 
 # NFR-02: shell-metacharacter blacklist. Each char in this set is a hard
 # reject — submitting a command containing ANY of them exits 2 with stderr
@@ -157,6 +160,40 @@ def submit_command(argv: Sequence[str]) -> int:
     return 0
 
 
+def run_command(argv: Sequence[str]) -> int:
+    """Handle ``taskq run <id>`` and ``taskq run --all`` [FR-02].
+
+    Single-task mode: runs one task by id and returns 4 iff the task hit the
+    ``timeout`` terminal state (SPEC §3 FR-02 single-task timeout → exit 4),
+    else 0 (the run itself completed, even for a ``failed`` inner command).
+    ``--all`` mode: runs every pending task concurrently and returns 0.
+
+    Citations:
+      SPEC §3 FR-02 (run <id> / run --all, state machine, exit 4 on timeout).
+      NFR-08 (shared Lock across ThreadPoolExecutor writers).
+    """
+    parser = argparse.ArgumentParser(prog="taskq run", add_help=False)
+    parser.add_argument("--all", action="store_true", dest="run_all")
+    parser.add_argument("task_id", nargs="?")
+    args = parser.parse_args(list(argv))
+
+    tasks_file = _tasks_path()
+    lock = threading.Lock()
+
+    if args.run_all:
+        executor.run_all(tasks_file, _load_tasks, _atomic_write_json, lock)
+        return 0
+
+    if not args.task_id:
+        print("error: run requires a task id or --all", file=sys.stderr)
+        return 2
+
+    status = executor.run_task(
+        args.task_id, tasks_file, _load_tasks, _atomic_write_json, lock
+    )
+    return 4 if status == "timeout" else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Top-level CLI dispatcher.
 
@@ -167,5 +204,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     subcommand = argv[0]
     if subcommand == "submit":
         return submit_command(argv[1:])
+    if subcommand == "run":
+        return run_command(argv[1:])
     print(f"error: unknown command {subcommand!r}", file=sys.stderr)
     return 2
