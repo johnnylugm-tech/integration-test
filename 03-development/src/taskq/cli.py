@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Sequence
 
 from taskq import breaker as breaker_mod
+from taskq import cache as cache_mod
 from taskq import executor
 
 # NFR-02: shell-metacharacter blacklist. Each char in this set is a hard
@@ -161,28 +162,43 @@ def submit_command(argv: Sequence[str]) -> int:
     return 0
 
 
+def _cache_path() -> Path:
+    """Return the on-disk cache.json path under ``$TASKQ_HOME`` [FR-04]."""
+    return _taskq_home() / "cache.json"
+
+
 def run_command(argv: Sequence[str]) -> int:
-    """Handle ``taskq run <id>`` and ``taskq run --all`` [FR-02].
+    """Handle ``taskq run <id>`` and ``taskq run --all`` [FR-02][FR-04].
 
     Single-task mode: runs one task by id and returns 4 iff the task hit the
     ``timeout`` terminal state (SPEC §3 FR-02 single-task timeout → exit 4),
     else 0 (the run itself completed, even for a ``failed`` inner command).
     ``--all`` mode: runs every pending task concurrently and returns 0.
 
+    [FR-04] ``--cached`` (single-task only) consults the TTL result cache
+    before executing: a fresh ``sha256(command)`` hit replays the cached
+    result with ``cached: true`` and NO subprocess. Successful runs (both
+    single and ``--all``) populate the cache regardless of ``--cached``.
+
     Citations:
       SPEC §3 FR-02 (run <id> / run --all, state machine, exit 4 on timeout).
-      NFR-08 (shared Lock across ThreadPoolExecutor writers).
+      SPEC §3 FR-04 (--cached replay + TTL cache write).
+      NFR-08 (shared Lock across ThreadPoolExecutor + cache writers).
     """
     parser = argparse.ArgumentParser(prog="taskq run", add_help=False)
     parser.add_argument("--all", action="store_true", dest="run_all")
+    parser.add_argument("--cached", action="store_true")
     parser.add_argument("task_id", nargs="?")
     args = parser.parse_args(list(argv))
 
     tasks_file = _tasks_path()
     lock = threading.Lock()
+    cache = cache_mod.Cache(_cache_path())
 
     if args.run_all:
-        executor.run_all(tasks_file, _load_tasks, _atomic_write_json, lock)
+        executor.run_all(
+            tasks_file, _load_tasks, _atomic_write_json, lock, cache=cache
+        )
         return 0
 
     if not args.task_id:
@@ -197,6 +213,8 @@ def run_command(argv: Sequence[str]) -> int:
         _atomic_write_json,
         lock,
         breaker=breaker,
+        cache=cache,
+        use_cache=args.cached,
     )
     if status is None:
         # FR-03 AC-04: ``breaker open`` → exit 3, no subprocess, no task

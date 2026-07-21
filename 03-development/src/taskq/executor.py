@@ -29,15 +29,18 @@ Citations:
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
-import subprocess
+import subprocess as _subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+
+from taskq import cache as cache_mod
 
 # Result-shape invariant (SPEC §3 FR-02 / NFR-04): stdout_tail / stderr_tail
 # hold the LAST 2000 chars of captured output.
@@ -61,6 +64,29 @@ _DEFAULT_BACKOFF_BASE: float = 1.0
 # so unit tests can substitute a no-op or recording mock).
 # ---------------------------------------------------------------------------
 sleep: Callable[[float], None] = time.sleep
+
+
+class _SubprocessSeam:
+    """Injectable indirection over stdlib ``subprocess`` [FR-02][FR-04].
+
+    Exposes ``run`` (delegating to ``subprocess.run``) as a module-owned
+    attribute so tests can monkeypatch ``taskq.executor.subprocess.run`` to
+    count / replace invocations WITHOUT rebinding the global stdlib
+    ``subprocess.run`` (the FR-04 cache-hit counter delegates to the real
+    ``subprocess.run``; a global rebind would recurse). Every other attribute
+    (``TimeoutExpired`` etc.) forwards to the real module unchanged.
+    """
+
+    run = staticmethod(_subprocess.run)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(_subprocess, name)
+
+
+# Module-level seam (like ``sleep`` above); ``_execute`` calls
+# ``subprocess.run`` / references ``subprocess.TimeoutExpired`` through it.
+subprocess = _SubprocessSeam()
+
 
 
 def _iso_now() -> str:
@@ -228,6 +254,8 @@ def run_task(
     *,
     sleep: Callable[[float], None] | None = None,
     breaker: Any | None = None,
+    cache: Any | None = None,
+    use_cache: bool = False,
 ) -> str | None:
     """Execute a pending task with retry + breaker hook; persist terminal state.
 
@@ -240,18 +268,50 @@ def run_task(
     terminal outcome (success → ``record_success``; failure/timeout →
     ``record_failure``).
 
+    [FR-04] Cache integration. When ``use_cache`` is set and a fresh cache
+    entry exists for ``sha256(command)``, the subprocess (and breaker) are
+    bypassed: the cached ``exit_code`` / ``stdout_tail`` / ``stderr_tail`` are
+    replayed into the record with ``cached: true`` and ``status="done"``.
+    Independently of ``use_cache``, a genuine execution that ends ``done`` is
+    written to the cache (best-effort — a cache write ``OSError`` is logged
+    and swallowed so it never fails the task run; NFR-03 keeps ``cache.json``
+    valid, NFR-08 serializes concurrent writers under ``lock``).
+
     Returns the terminal status string (``done`` / ``failed`` / ``timeout``),
     or ``None`` if the breaker rejected the run before any subprocess call.
     """
-    if breaker is not None and not breaker.before_run():
-        return None
-
-    sleep_fn = _resolve_sleep(sleep)
-
     with lock:
         tasks = load_tasks(tasks_file)
         record = tasks.get(task_id)
         command = record.get("command", "") if record else ""
+
+    sig = cache_mod.signature(command) if command else None
+
+    # [FR-04] Cache replay: only when --cached was requested. A fresh hit
+    # bypasses the breaker and subprocess entirely.
+    if use_cache and cache is not None and sig is not None:
+        hit = cache.lookup(sig)
+        if hit is not None:
+            with lock:
+                tasks = load_tasks(tasks_file)
+                record = tasks.get(task_id, {})
+                record.update(
+                    {
+                        "status": "done",
+                        "exit_code": hit.get("exit_code"),
+                        "stdout_tail": hit.get("stdout_tail", ""),
+                        "stderr_tail": hit.get("stderr_tail", ""),
+                        "cached": True,
+                    }
+                )
+                tasks[task_id] = record
+                atomic_write(tasks_file, tasks)
+            return "done"
+
+    if breaker is not None and not breaker.before_run():
+        return None
+
+    sleep_fn = _resolve_sleep(sleep)
 
     last_result, attempts = _retry_with_attempts(command, sleep_fn)
     last_status = last_result["status"]
@@ -269,6 +329,19 @@ def run_task(
         record["attempts"] = attempts
         tasks[task_id] = record
         atomic_write(tasks_file, tasks)
+        # [FR-04] Store ONLY done results; failed/timeout are never cached.
+        # The cache write is best-effort: an OSError here MUST NOT fail the
+        # run (NFR-03 keeps cache.json valid; we log rather than swallow
+        # silently).
+        if cache is not None and sig is not None and last_status == "done":
+            try:
+                cache.store(sig, last_result)
+            except OSError as exc:
+                logging.getLogger(__name__).warning(
+                    "cache write failed for signature %s: %s; continuing",
+                    sig,
+                    exc,
+                )
 
     return last_status
 
@@ -278,12 +351,17 @@ def run_all(
     load_tasks,
     atomic_write,
     lock: threading.Lock,
+    *,
+    cache: Any | None = None,
 ) -> dict[str, str]:
     """Run every ``pending`` task concurrently via ``ThreadPoolExecutor``.
 
     ``max_workers`` comes from ``$TASKQ_MAX_WORKERS`` (NFR-08). All store
     writes funnel through the shared ``lock`` so ``tasks.json`` never lands
-    in a half-written state. Returns ``{task_id: terminal_status}``.
+    in a half-written state. When ``cache`` is provided each successful task
+    is written to ``cache.json`` under the same ``lock`` [FR-04]; replay is
+    NOT attempted in ``--all`` mode (only single ``run <id> --cached`` reads
+    the cache). Returns ``{task_id: terminal_status}``.
     """
     tasks = load_tasks(tasks_file)
     pending_ids = [tid for tid, rec in tasks.items() if rec.get("status") == "pending"]
@@ -294,10 +372,22 @@ def run_all(
 
     with ThreadPoolExecutor(max_workers=_max_workers()) as pool:
         futures = {
-            pool.submit(run_task, tid, tasks_file, load_tasks, atomic_write, lock): tid
+            pool.submit(
+                run_task,
+                tid,
+                tasks_file,
+                load_tasks,
+                atomic_write,
+                lock,
+                cache=cache,
+            ): tid
             for tid in pending_ids
         }
         for future in futures:
             tid = futures[future]
-            results[tid] = future.result()
+            status = future.result()
+            # ``run_all`` passes no breaker, so ``run_task`` never returns
+            # None here; guard keeps the ``dict[str, str]`` contract exact.
+            if status is not None:
+                results[tid] = status
     return results
