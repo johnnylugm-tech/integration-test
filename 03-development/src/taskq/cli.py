@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
+from taskq import breaker as breaker_mod
 from taskq import executor
 
 # NFR-02: shell-metacharacter blacklist. Each char in this set is a hard
@@ -188,9 +189,20 @@ def run_command(argv: Sequence[str]) -> int:
         print("error: run requires a task id or --all", file=sys.stderr)
         return 2
 
+    breaker = breaker_mod.Breaker()
     status = executor.run_task(
-        args.task_id, tasks_file, _load_tasks, _atomic_write_json, lock
+        args.task_id,
+        tasks_file,
+        _load_tasks,
+        _atomic_write_json,
+        lock,
+        breaker=breaker,
     )
+    if status is None:
+        # FR-03 AC-04: ``breaker open`` → exit 3, no subprocess, no task
+        # transition. The substring ``breaker open`` is asserted by tests.
+        print("error: breaker open", file=sys.stderr)
+        return 3
     return 4 if status == "timeout" else 0
 
 
