@@ -153,6 +153,7 @@ def test_fr02_01_happy_single_run(taskq_home: Path) -> None:
     ``stdout_tail`` containing ``hi\\n``.
 
     Rule IDs: ``FR02-exit-0-ok`` (``command == "echo hi"``).
+    Coupled NFR: NFR-03 (atomic write of tasks.json after run transition).
     """
     command = "echo hi"
     task_id = "abcdef01"
@@ -202,6 +203,9 @@ def test_fr02_02_failed_run(taskq_home: Path) -> None:
     subprocess exited non-zero.
 
     Rule IDs: ``FR02-exit-1-fail`` (``command == "false"``).
+    Coupled NFR: NFR-02 (no shell=True path — ``false`` exits 1 via exec form
+    of ``subprocess.run(shlex.split(command), shell=False)``); NFR-03
+    (atomic write after failed transition).
     """
     command = "false"
     task_id = "abcdef02"
@@ -253,6 +257,9 @@ def test_fr02_03_timeout_run(
 
     Rule IDs: ``FR02-timeout-config``
     (``command == "sleep 5" and timeout_env == "1"``).
+
+    Coupled NFR: NFR-03 (atomic write of tasks.json after timeout transition
+    — record must persist even though subprocess was killed).
 
     The timeout env is injected both for the in-process call (via
     ``monkeypatch.setenv``) and the subprocess call (via ``_make_env``
@@ -310,6 +317,10 @@ def test_fr02_04_stdout_tail_2000_chars(taskq_home: Path) -> None:
     any reasonable formatter (2048 chars + a possible trailing newline);
     either way, the AC is ``len(stdout_tail) == 2000`` (last 2000 chars),
     not ``> 2000``.
+
+    Coupled NFR: NFR-04 (NFR-04 redaction targets the ``stdout_tail`` /
+    ``stderr_tail`` fields populated here; this test pins the shape of the
+    redaction-input buffer).
     """
     # 'x' right-padded to width 2048 → 2047 spaces + 'x' = exactly 2048 chars.
     command = "printf '%2048s' x"
@@ -359,6 +370,9 @@ def test_fr02_05_run_all_3_tasks(taskq_home: Path) -> None:
     ``FR02-concurrent-task-count`` (``task_count == "10" and int(task_count)
     >= 2`` — relaxed here to count >= 1 because this case is the 3-task
     happy path, not the 10-task concurrency case).
+
+    Coupled NFR: NFR-08 (cross-thread safety of the shared store lock under
+    ``run --all`` ThreadPoolExecutor dispatch).
 
     v2.13.0 rule 2 mandates function-scoped fixtures — this fixture is
     explicitly function-scoped, so concurrent test runs cannot share state.
@@ -432,6 +446,11 @@ def test_fr02_06_run_all_thread_safety(taskq_home: Path) -> None:
 
     Rule IDs: ``FR02-concurrent-task-count`` (``task_count == "10" and
     int(task_count) >= 2``).
+
+    Coupled NFR: NFR-03 (atomic write boundary under concurrent writers —
+    no half-written records; NFR-03 partial-write invariant), NFR-08
+    (cross-thread Lock — best-effort enhancement layered on top of NFR-03
+    atomic write).
     """
     command_x = "echo x"
     task_count = "10"
@@ -507,6 +526,9 @@ def test_fr02_07_shell_true_absent() -> None:
 
     Rule IDs: ``FR02-shell-true-scan-path`` (``scan_path == "src/taskq/"``).
 
+    Coupled NFR: NFR-02 (security invariant — ``shell=True`` is forbidden
+    anywhere in ``src/taskq/``; injection-blacklist is anchored here).
+
     Implementation note: ``re.search(r"shell\\s*=\\s*True", text)`` matches
     both ``shell=True`` (single space) and ``shell = True`` (padded) and
     ``shell  =  True`` (multi-space). The pattern is intentionally tight to
@@ -549,6 +571,11 @@ def test_fr02_08_duration_and_finished_at(taskq_home: Path) -> None:
     distinct invariant under test here is the result-schema shape
     (``duration_ms`` non-negative + ``finished_at`` ISO), which is its
     own AC line.
+
+    Coupled NFR: NFR-03 (atomic write of ``duration_ms`` / ``finished_at``
+    into tasks.json after terminal transition; NFR-10 schema-version
+    integrity depends on these fields being persisted atomically with
+    status).
 
     GREEN TODO
     ---------
