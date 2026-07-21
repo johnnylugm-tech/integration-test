@@ -50,7 +50,8 @@
         },
         "taskq.query",
         "taskq.redact",
-        "taskq.validation"
+        "taskq.validation",
+        "taskq"
       ],
       "allowed_dependencies": []
     }
