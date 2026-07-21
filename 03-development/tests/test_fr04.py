@@ -714,6 +714,8 @@ def test_fr04_05_cache_atomic_write(
     task_id = "abcdef05"
     mid_write_error = "oserror"
     assert mid_write_error == "oserror"  # spec predicate
+    # NFR-03: cache.json is the third atomic-write data file; a mid-write
+    # OSError must leave it as valid JSON (tmp + os.replace invariant).
 
     sig = _cache_signature(command)
 
@@ -846,6 +848,8 @@ def test_fr04_06_cache_thread_safety(
     cached_flag = "true"
     assert task_count == "10"  # spec predicate
     assert cached_flag == "true"
+    # NFR-08: cache.json shares the concurrency lock under `run --all`; 10
+    # concurrent writers must not corrupt the file or duplicate the entry.
 
     sig = _cache_signature(command_x)
 
