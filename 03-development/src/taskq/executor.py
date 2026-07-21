@@ -67,6 +67,29 @@ def _max_workers() -> int:
     return max(1, int(raw))
 
 
+def _build_result(
+    status: str,
+    exit_code: int | None,
+    stdout: str | None,
+    stderr: str | None,
+    start: float,
+) -> dict[str, Any]:
+    """Assemble a terminal-state result record with timing + tails.
+
+    Captures ``duration_ms`` (``int`` milliseconds since ``start``) and
+    ``finished_at`` (ISO-8601 timestamp) at a SINGLE instant so the two
+    fields stay consistent across records.
+    """
+    return {
+        "status": status,
+        "exit_code": exit_code,
+        "stdout_tail": _tail(stdout),
+        "stderr_tail": _tail(stderr),
+        "duration_ms": int((time.monotonic() - start) * 1000),
+        "finished_at": _iso_now(),
+    }
+
+
 def _execute(command: str) -> dict[str, Any]:
     """Run ``command`` and return the terminal result fields.
 
@@ -84,26 +107,21 @@ def _execute(command: str) -> dict[str, Any]:
             timeout=_timeout_seconds(),
         )
     except subprocess.TimeoutExpired as exc:
-        duration_ms = int((time.monotonic() - start) * 1000)
-        return {
-            "status": "timeout",
-            "exit_code": None,
-            "stdout_tail": _tail(exc.stdout if isinstance(exc.stdout, str) else None),
-            "stderr_tail": _tail(exc.stderr if isinstance(exc.stderr, str) else None),
-            "duration_ms": duration_ms,
-            "finished_at": _iso_now(),
-        }
+        return _build_result(
+            "timeout",
+            None,
+            exc.stdout if isinstance(exc.stdout, str) else None,
+            exc.stderr if isinstance(exc.stderr, str) else None,
+            start,
+        )
 
-    duration_ms = int((time.monotonic() - start) * 1000)
-    status = "done" if completed.returncode == 0 else "failed"
-    return {
-        "status": status,
-        "exit_code": completed.returncode,
-        "stdout_tail": _tail(completed.stdout),
-        "stderr_tail": _tail(completed.stderr),
-        "duration_ms": duration_ms,
-        "finished_at": _iso_now(),
-    }
+    return _build_result(
+        "done" if completed.returncode == 0 else "failed",
+        completed.returncode,
+        completed.stdout,
+        completed.stderr,
+        start,
+    )
 
 
 def run_task(
