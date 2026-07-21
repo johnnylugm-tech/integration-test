@@ -140,6 +140,23 @@ def _resolve_sleep(sleep_override: Callable[[float], None] | None) -> Callable[[
     return globals()["sleep"]
 
 
+def _replay_fields(hit: dict[str, Any]) -> dict[str, Any]:
+    """Map a cached entry to the fields merged into a record on cache hit [FR-04].
+
+    A fresh ``--cached`` replay must surface ``status=done`` (the only outcome
+    the cache stores per SPEC §3 FR-04), the cached exit code, both output
+    tails, and the ``cached: true`` marker so downstream readers can tell a
+    replay apart from a real execution.
+    """
+    return {
+        "status": "done",
+        "exit_code": hit.get("exit_code"),
+        "stdout_tail": hit.get("stdout_tail", ""),
+        "stderr_tail": hit.get("stderr_tail", ""),
+        "cached": True,
+    }
+
+
 def _build_result(
     status: str,
     exit_code: int | None,
@@ -295,15 +312,7 @@ def run_task(
             with lock:
                 tasks = load_tasks(tasks_file)
                 record = tasks.get(task_id, {})
-                record.update(
-                    {
-                        "status": "done",
-                        "exit_code": hit.get("exit_code"),
-                        "stdout_tail": hit.get("stdout_tail", ""),
-                        "stderr_tail": hit.get("stderr_tail", ""),
-                        "cached": True,
-                    }
-                )
+                record.update(_replay_fields(hit))
                 tasks[task_id] = record
                 atomic_write(tasks_file, tasks)
             return "done"

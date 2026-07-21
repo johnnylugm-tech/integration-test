@@ -125,27 +125,33 @@ class Cache:
                 pass
             raise
 
+    def _is_fresh(self, entry: dict[str, Any]) -> bool:
+        """Return True iff ``entry``'s ``cached_at`` parses AND is within TTL.
+
+        [FR-04] The TTL predicate is the sole freshness gate for a cache hit:
+        both a missing / unparseable ``cached_at`` and an age past
+        ``$TASKQ_CACHE_TTL`` are treated as a cache miss.
+        """
+        cached_at = _cached_at_epoch(entry.get("cached_at", ""))
+        if cached_at is None:
+            return False
+        age = datetime.now(timezone.utc).timestamp() - cached_at
+        return age <= _cache_ttl()
+
     def lookup(self, sig: str) -> dict[str, Any] | None:
         """Return the cached result for ``sig`` if fresh, else ``None`` [FR-04].
 
-        A hit requires the entry to exist AND ``now - cached_at`` to be within
-        ``$TASKQ_CACHE_TTL`` seconds. Missing files, absent signatures,
-        unparseable ``cached_at`` values, and expired entries all yield
-        ``None`` (a cache miss), so ``run --cached`` falls through to a normal
-        execution.
+        A hit requires the entry to exist AND pass :meth:`_is_fresh`. Missing
+        files, absent signatures, malformed ``entries``, non-dict entries, and
+        stale or unparseable ``cached_at`` values all yield ``None`` (a cache
+        miss), so ``run --cached`` falls through to a normal execution.
         """
         data = self._read()
-        entries = data.get("entries", {})
+        entries = data.get("entries")
         if not isinstance(entries, dict):
             return None
         entry = entries.get(sig)
-        if not isinstance(entry, dict):
-            return None
-        cached_at = _cached_at_epoch(entry.get("cached_at", ""))
-        if cached_at is None:
-            return None
-        age = datetime.now(timezone.utc).timestamp() - cached_at
-        if age > _cache_ttl():
+        if not isinstance(entry, dict) or not self._is_fresh(entry):
             return None
         return entry
 
