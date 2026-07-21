@@ -75,7 +75,7 @@ def _atomic_write_json(path: Path, data: dict) -> None:
     exit code without corrupting on-disk state.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path = path.with_name(path.name + ".tmp")
     tmp_path.write_text(json.dumps(data, indent=2, sort_keys=True))
     try:
         os.replace(tmp_path, path)
@@ -125,9 +125,9 @@ def submit_command(argv: Sequence[str]) -> int:
     name = args.name
     tasks_file = _tasks_path()
 
+    tasks = _load_tasks(tasks_file)
     if name:
-        existing_tasks = _load_tasks(tasks_file)
-        for record in existing_tasks.values():
+        for record in tasks.values():
             if record.get("name") == name and record.get("status") in _ACTIVE_STATUSES:
                 print(
                     f"error: name {name!r} already in use by an active task",
@@ -143,7 +143,6 @@ def submit_command(argv: Sequence[str]) -> int:
         "created_at": _iso_now(),
     }
 
-    tasks = _load_tasks(tasks_file)
     tasks[task_id] = new_record
     try:
         _atomic_write_json(tasks_file, tasks)
