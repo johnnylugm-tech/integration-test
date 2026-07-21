@@ -117,9 +117,9 @@
   "rounds_used": 1,
   "crg_review_context": {
     "status": "ok",
-    "summary": "Review context for 10 changed file(s):\n  - Risk: low\n  - 0 impacted nodes in 0 files",
+    "summary": "Review context for 29 changed file(s):\n  - Risk: low\n  - 0 impacted nodes in 0 files",
     "risk": "low",
-    "changed_file_count": 10,
+    "changed_file_count": 29,
     "impacted_file_count": 0,
     "key_entities": [],
     "test_gaps": 0,
@@ -131,7 +131,7 @@
   },
   "crg_impact_radius": {
     "status": "ok",
-    "summary": "Blast radius for 10 changed file(s):\n  - 0 nodes directly changed\n  - 0 nodes impacted (within 2 hops)\n  - 0 additional files affected",
+    "summary": "Blast radius for 29 changed file(s):\n  - 0 nodes directly changed\n  - 0 nodes impacted (within 2 hops)\n  - 0 additional files affected",
     "risk": "low",
     "impacted_file_count": 0,
     "key_entities": [],
