@@ -883,3 +883,291 @@ def test_fr05_07_exit_code_map(
             "subprocess exit-1 corruption row must write a stderr message "
             "(SPEC §7 內部錯誤 → exit 1 + stderr)"
         )
+
+
+# ---------------------------------------------------------------------------
+# In-process coverage tests — FR-05 CLI integration surface.
+#
+# Subprocess-only tests CANNOT raise coverage on ``cli.py`` (GATE1 note: the
+# CLI entry-point module is in a child interpreter, so pytest-cov never
+# touches it). These in-process tests fill the coverage gap by calling
+# ``cli.main`` directly inside the pytest process.
+# ---------------------------------------------------------------------------
+
+
+def test_fr05_08_submit_happy_in_process(taskq_home: Path) -> None:
+    """In-process ``submit "echo hi"`` covers ``_iso_now`` (line 49) +
+    most of ``submit_command`` body (lines 159-191)."""
+    stdout_buf = io.StringIO()
+    with contextlib.redirect_stdout(stdout_buf):
+        rc = cli.main(["submit", "echo hi"])
+    assert rc == 0, f"in-process submit must exit 0, got {rc}"
+    out = stdout_buf.getvalue().strip()
+    # The submitted task id (8 hex chars) is printed to stdout.
+    assert len(out) == 8, (
+        f"in-process submit stdout must be an 8-hex id, got {out!r}"
+    )
+    int(out, 16)  # must be valid hex
+
+
+def test_fr05_09_submit_json_in_process(taskq_home: Path) -> None:
+    """In-process ``submit --json "echo hi"`` covers the JSON-output branch
+    (lines 187-188)."""
+    stdout_buf = io.StringIO()
+    with contextlib.redirect_stdout(stdout_buf):
+        rc = cli.main(["submit", "--json", "echo hi"])
+    assert rc == 0, f"in-process submit --json must exit 0, got {rc}"
+    out = stdout_buf.getvalue().strip()
+    payload = json_lib.loads(out)
+    assert payload.get("status") == "pending"
+    assert "id" in payload and len(payload["id"]) == 8
+
+
+def test_fr05_10_submit_length_too_long(taskq_home: Path) -> None:
+    """In-process ``submit <1001-char command>`` covers length validation
+    (lines 129-133)."""
+    long_command = "x" * 1001
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buf):
+        rc = cli.main(["submit", long_command])
+    assert rc == 2, (
+        f"in-process submit (too-long) must exit 2, got {rc}"
+    )
+    assert "exceeds maximum" in stderr_buf.getvalue(), (
+        f"in-process length-validation must surface 'exceeds maximum', "
+        f"got stderr={stderr_buf.getvalue()!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "forbidden_char",
+    [";", "&", "$", ">", "<", "`", "|"],
+    ids=["semicolon", "ampersand", "dollar", "redirect-gt", "redirect-lt",
+         "backtick", "pipe"],
+)
+def test_fr05_11_submit_injection_chars(
+    taskq_home: Path, forbidden_char: str
+) -> None:
+    """In-process ``submit`` with each blacklist char → exit 2 (covers
+    lines 134-137 — the injection-char validation branch)."""
+    command = f"echo hi{forbidden_char}evil"
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buf):
+        rc = cli.main(["submit", command])
+    assert rc == 2, (
+        f"in-process submit (injection char {forbidden_char!r}) must exit 2, "
+        f"got {rc}"
+    )
+    assert "forbidden character" in stderr_buf.getvalue(), (
+        f"in-process injection validation must surface "
+        f"'forbidden character', got stderr={stderr_buf.getvalue()!r}"
+    )
+
+
+def test_fr05_12_submit_name_duplicate(taskq_home: Path) -> None:
+    """In-process ``submit --name <dup>`` covers the name-duplicate check
+    (lines 163-170)."""
+    _seed_tasks(
+        taskq_home,
+        {
+            "abcdef01": {
+                "command": "echo hi",
+                "name": "dup-name-1",
+                "status": "pending",
+                "created_at": "2026-07-18T00:00:00+00:00",
+            },
+        },
+    )
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buf):
+        rc = cli.main(["submit", "--name", "dup-name-1", "echo bye"])
+    assert rc == 2, (
+        f"in-process submit (duplicate name) must exit 2, got {rc}"
+    )
+    assert "already in use" in stderr_buf.getvalue(), (
+        f"in-process name-duplicate check must surface 'already in use', "
+        f"got stderr={stderr_buf.getvalue()!r}"
+    )
+
+
+def test_fr05_13_run_all_in_process(taskq_home: Path) -> None:
+    """In-process ``run --all`` covers the ``run --all`` branch
+    (lines 229-233)."""
+    _seed_tasks(
+        taskq_home,
+        {
+            "abcdef01": {
+                "command": "true",
+                "name": "",
+                "status": "pending",
+                "created_at": "2026-07-18T00:00:00+00:00",
+            },
+            "abcdef02": {
+                "command": "true",
+                "name": "",
+                "status": "pending",
+                "created_at": "2026-07-18T00:00:01+00:00",
+            },
+        },
+    )
+    rc = cli.main(["run", "--all"])
+    assert rc == 0, f"in-process run --all must exit 0, got {rc}"
+
+
+def test_fr05_14_run_no_task_id(taskq_home: Path) -> None:
+    """In-process ``run`` with no task id and no ``--all`` covers the
+    missing-task-id branch (lines 235-237)."""
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buf):
+        rc = cli.main(["run"])
+    assert rc == 2, (
+        f"in-process run (no task id) must exit 2, got {rc}"
+    )
+    assert "requires a task id" in stderr_buf.getvalue(), (
+        f"in-process run (no task id) must surface 'requires a task id', "
+        f"got stderr={stderr_buf.getvalue()!r}"
+    )
+
+
+def test_fr05_15_list_json_in_process(taskq_home: Path) -> None:
+    """In-process ``list --json`` covers the JSON-list branch (line 318)."""
+    _seed_tasks(
+        taskq_home,
+        {
+            "abcdef01": {
+                "command": "echo a",
+                "name": "",
+                "status": "pending",
+                "created_at": "2026-07-18T00:00:00+00:00",
+            },
+        },
+    )
+    stdout_buf = io.StringIO()
+    with contextlib.redirect_stdout(stdout_buf):
+        rc = cli.main(["list", "--json"])
+    assert rc == 0, f"in-process list --json must exit 0, got {rc}"
+    out = stdout_buf.getvalue().strip()
+    payload = json_lib.loads(out)
+    assert isinstance(payload, list)
+    assert any(row.get("id") == "abcdef01" for row in payload)
+
+
+def test_fr05_16_main_empty_argv(taskq_home: Path) -> None:
+    """In-process ``cli.main([])`` covers the empty-argv branch
+    (lines 367-370)."""
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buf):
+        rc = cli.main([])
+    assert rc == 2, f"in-process cli.main([]) must exit 2, got {rc}"
+    assert "no command given" in stderr_buf.getvalue(), (
+        f"in-process cli.main([]) must surface 'no command given', "
+        f"got stderr={stderr_buf.getvalue()!r}"
+    )
+
+
+def test_fr05_17_main_unknown_command(taskq_home: Path) -> None:
+    """In-process ``cli.main(["unknown"])`` covers the unknown-subcommand
+    branch (lines 372-374)."""
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buf):
+        rc = cli.main(["unknown"])
+    assert rc == 2, (
+        f"in-process cli.main(['unknown']) must exit 2, got {rc}"
+    )
+    assert "unknown command" in stderr_buf.getvalue(), (
+        f"in-process cli.main(['unknown']) must surface 'unknown command', "
+        f"got stderr={stderr_buf.getvalue()!r}"
+    )
+
+
+def test_fr05_18_atomic_write_oserror(
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In-process: monkeypatch ``os.replace`` (and ``Path.unlink``) to
+    raise ``OSError`` so the atomic-write cleanup path (lines 116-122) is
+    exercised end-to-end. The CLI's outer ``OSError`` handler at lines
+    183-185 maps the failure to ``return 1``."""
+    tasks_file = taskq_home / "tasks.json"
+    tasks_file.write_text("{}")
+
+    def fake_replace(src, dst, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise OSError("disk full simulated by test")
+
+    def fake_unlink(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise OSError("permission denied simulated by test")
+
+    monkeypatch.setattr(os, "replace", fake_replace)
+    monkeypatch.setattr(Path, "unlink", fake_unlink)
+
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buf):
+        rc = cli.main(["submit", "echo hi"])
+    assert rc == 1, (
+        f"in-process submit (atomic-write OSError) must exit 1, got {rc}"
+    )
+    # Submit catches the OSError and prints 'failed to persist task'.
+    assert "failed to persist" in stderr_buf.getvalue(), (
+        f"in-process atomic-write OSError must surface 'failed to persist', "
+        f"got stderr={stderr_buf.getvalue()!r}"
+    )
+
+
+def test_fr05_19_load_tasks_missing_file(taskq_home: Path) -> None:
+    """In-process: ``submit`` with NO ``tasks.json`` on disk exercises
+    ``_load_tasks`` line 91 (``return {}`` when the file is missing)."""
+    tasks_file = taskq_home / "tasks.json"
+    assert not tasks_file.exists()
+
+    stdout_buf = io.StringIO()
+    with contextlib.redirect_stdout(stdout_buf):
+        rc = cli.main(["submit", "echo hi"])
+    assert rc == 0, (
+        f"in-process submit (missing tasks.json) must exit 0, got {rc}"
+    )
+    out = stdout_buf.getvalue().strip()
+    assert len(out) == 8
+    # After submit, tasks.json should now exist with exactly one record.
+    assert tasks_file.exists()
+    loaded = json_lib.loads(tasks_file.read_text())
+    assert len(loaded) == 1
+
+
+def test_fr05_20_load_tasks_invalid_json_lenient(
+    taskq_home: Path,
+) -> None:
+    """In-process: ``submit`` with a corrupt (non-JSON) ``tasks.json``
+    exercises ``_load_tasks`` line 99 (lenient ``return {}`` on
+    ``JSONDecodeError`` — the write-side FR-01 path uses ``strict=False``)."""
+    tasks_file = taskq_home / "tasks.json"
+    tasks_file.write_text("{this is not valid json")
+
+    stdout_buf = io.StringIO()
+    with contextlib.redirect_stdout(stdout_buf):
+        rc = cli.main(["submit", "echo hi"])
+    assert rc == 0, (
+        f"in-process submit (corrupt tasks.json, lenient loader) must "
+        f"exit 0, got {rc}"
+    )
+    out = stdout_buf.getvalue().strip()
+    assert len(out) == 8
+    # Submit overwrote the corrupt file with a fresh, valid mapping.
+    loaded = json_lib.loads(tasks_file.read_text())
+    assert len(loaded) == 1
+
+
+def test_fr05_21_main_default_argv_from_sys_argv(
+    taskq_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In-process ``cli.main()`` with ``argv=None`` exercises the
+    ``if argv is None: argv = sys.argv[1:]`` fallback (line 367)."""
+    # Pin sys.argv so the test does NOT consume pytest's own argv
+    # (which contains options like ``-q`` that would confuse the CLI).
+    monkeypatch.setattr(sys, "argv", ["taskq"])
+    stderr_buf = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buf):
+        rc = cli.main()
+    assert rc == 2, f"in-process cli.main() (default argv) must exit 2, got {rc}"
+    assert "no command given" in stderr_buf.getvalue(), (
+        f"in-process cli.main() default-argv path must surface "
+        f"'no command given', got stderr={stderr_buf.getvalue()!r}"
+    )
