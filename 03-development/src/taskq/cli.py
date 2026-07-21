@@ -23,7 +23,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 from taskq import breaker as breaker_mod
 from taskq import cache as cache_mod
@@ -60,24 +60,13 @@ def _tasks_path() -> Path:
     return _taskq_home() / "tasks.json"
 
 
-def _load_tasks(path: Path) -> dict[str, dict]:
-    """Load tasks.json; return empty dict if missing or corrupt."""
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError:
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 class _CorruptStoreError(Exception):
     """[FR-05] Raised when ``tasks.json`` holds invalid JSON.
 
     SPEC §7 maps ``其他內部錯誤`` (internal error) → exit 1: a corrupt store
     must surface the failure (NFR-03 forbids a silent rebuild), so the strict
     loader raises this instead of swallowing the ``JSONDecodeError`` the way
-    the lenient :func:`_load_tasks` does for the write-side FR-01 path.
+    the lenient loader does for the write-side FR-01 path.
 
     Citations:
       SPEC §3 FR-05 / §7 (exit-code map — internal error → exit 1 + stderr).
@@ -85,12 +74,14 @@ class _CorruptStoreError(Exception):
     """
 
 
-def _load_tasks_strict(path: Path) -> dict[str, dict]:
-    """[FR-05] Load tasks.json, raising ``_CorruptStoreError`` on bad JSON.
+def _load_tasks(path: Path, *, strict: bool = False) -> dict[str, dict]:
+    """Load ``tasks.json``; a missing file is always a legitimate empty store.
 
-    A missing file is a legitimate empty store (``{}``); only invalid JSON is
-    an internal error. Used by the read-side subcommands (``status`` / ``list``
-    / ``run``) so corruption maps to exit 1 rather than a silent empty view.
+    ``strict=False`` (the default — write-side FR-01 path) returns ``{}`` on
+    invalid JSON so a corruption never blocks a submit. ``strict=True``
+    (read-side FR-05 subcommands ``status`` / ``list`` / ``run``) raises
+    :class:`_CorruptStoreError` so corruption maps to exit 1 instead of a
+    silent empty view (NFR-03).
 
     Citations:
       SPEC §3 FR-05 / §7 (unknown / internal error exit-code map — lines
@@ -101,9 +92,11 @@ def _load_tasks_strict(path: Path) -> dict[str, dict]:
     try:
         data = json.loads(path.read_text())
     except json.JSONDecodeError as exc:
-        raise _CorruptStoreError(
-            f"corrupt task store {path}: {exc}"
-        ) from exc
+        if strict:
+            raise _CorruptStoreError(
+                f"corrupt task store {path}: {exc}"
+            ) from exc
+        return {}
     return data if isinstance(data, dict) else {}
 
 
@@ -229,7 +222,7 @@ def run_command(argv: Sequence[str]) -> int:
 
     tasks_file = _tasks_path()
     # [FR-05] Surface a corrupt store as exit 1 (SPEC §7) before any run.
-    _load_tasks_strict(tasks_file)
+    _load_tasks(tasks_file, strict=True)
     lock = threading.Lock()
     cache = cache_mod.Cache(_cache_path())
 
@@ -283,7 +276,7 @@ def status_command(argv: Sequence[str]) -> int:
     args = parser.parse_args(list(argv))
     task_id = args.task_id[0]
 
-    tasks = _load_tasks_strict(_tasks_path())
+    tasks = _load_tasks(_tasks_path(), strict=True)
     record = tasks.get(task_id)
     if record is None:
         print(f"unknown task: {task_id}", file=sys.stderr)
@@ -314,7 +307,7 @@ def list_command(argv: Sequence[str]) -> int:
     parser.add_argument("--status", default=None)
     args = parser.parse_args(list(argv))
 
-    tasks = _load_tasks_strict(_tasks_path())
+    tasks = _load_tasks(_tasks_path(), strict=True)
     rows = [
         {"id": task_id, **record}
         for task_id, record in tasks.items()
@@ -348,6 +341,17 @@ def clear_command(argv: Sequence[str]) -> int:
     return 0
 
 
+# Subcommand dispatch table — keeps :func:`main` a flat lookup instead of a
+# 5-arm if/elif chain. Adding a new subcommand is a single dict entry.
+_SUBCOMMANDS: dict[str, "Callable[[Sequence[str]], int]"] = {
+    "submit": submit_command,
+    "run": run_command,
+    "status": status_command,
+    "list": list_command,
+    "clear": clear_command,
+}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Top-level CLI dispatcher.
 
@@ -364,20 +368,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not argv:
         print("error: no command given", file=sys.stderr)
         return 2
-    subcommand = argv[0]
+    handler = _SUBCOMMANDS.get(argv[0])
+    if handler is None:
+        print(f"error: unknown command {argv[0]!r}", file=sys.stderr)
+        return 2
     try:
-        if subcommand == "submit":
-            return submit_command(argv[1:])
-        if subcommand == "run":
-            return run_command(argv[1:])
-        if subcommand == "status":
-            return status_command(argv[1:])
-        if subcommand == "list":
-            return list_command(argv[1:])
-        if subcommand == "clear":
-            return clear_command(argv[1:])
+        return handler(argv[1:])
     except _CorruptStoreError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(f"error: unknown command {subcommand!r}", file=sys.stderr)
-    return 2
