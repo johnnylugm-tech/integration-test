@@ -189,6 +189,7 @@ def test_fr05_01_status_all_fields(taskq_home: Path) -> None:
     Coupled NFR: NFR-08 (cross-process safety of the read; ``status``
     uses the same file lock as ``run``).
     """
+    # NFR-05: FR-05's public CLI functions carry upstream requirement tags.
     command = "echo hi"
     task_id = "abcdef01"
     assert command == "echo hi" and task_id == "abcdef01"  # spec predicate
@@ -895,7 +896,7 @@ def test_fr05_07_exit_code_map(
 # ---------------------------------------------------------------------------
 
 
-def test_fr05_08_submit_happy_in_process(taskq_home: Path) -> None:
+def test_cli_coverage_08_submit_happy_in_process(taskq_home: Path) -> None:
     """In-process ``submit "echo hi"`` covers ``_iso_now`` (line 49) +
     most of ``submit_command`` body (lines 159-191)."""
     stdout_buf = io.StringIO()
@@ -910,7 +911,7 @@ def test_fr05_08_submit_happy_in_process(taskq_home: Path) -> None:
     int(out, 16)  # must be valid hex
 
 
-def test_fr05_09_submit_json_in_process(taskq_home: Path) -> None:
+def test_cli_coverage_09_submit_json_in_process(taskq_home: Path) -> None:
     """In-process ``submit --json "echo hi"`` covers the JSON-output branch
     (lines 187-188)."""
     stdout_buf = io.StringIO()
@@ -923,7 +924,7 @@ def test_fr05_09_submit_json_in_process(taskq_home: Path) -> None:
     assert "id" in payload and len(payload["id"]) == 8
 
 
-def test_fr05_10_submit_length_too_long(taskq_home: Path) -> None:
+def test_cli_coverage_10_submit_length_too_long(taskq_home: Path) -> None:
     """In-process ``submit <1001-char command>`` covers length validation
     (lines 129-133)."""
     long_command = "x" * 1001
@@ -945,7 +946,7 @@ def test_fr05_10_submit_length_too_long(taskq_home: Path) -> None:
     ids=["semicolon", "ampersand", "dollar", "redirect-gt", "redirect-lt",
          "backtick", "pipe"],
 )
-def test_fr05_11_submit_injection_chars(
+def test_cli_submit_injection_chars(
     taskq_home: Path, forbidden_char: str
 ) -> None:
     """In-process ``submit`` with each blacklist char → exit 2 (covers
@@ -964,7 +965,7 @@ def test_fr05_11_submit_injection_chars(
     )
 
 
-def test_fr05_12_submit_name_duplicate(taskq_home: Path) -> None:
+def test_cli_coverage_12_submit_name_duplicate(taskq_home: Path) -> None:
     """In-process ``submit --name <dup>`` covers the name-duplicate check
     (lines 163-170)."""
     _seed_tasks(
@@ -990,7 +991,7 @@ def test_fr05_12_submit_name_duplicate(taskq_home: Path) -> None:
     )
 
 
-def test_fr05_13_run_all_in_process(taskq_home: Path) -> None:
+def test_cli_coverage_13_run_all_in_process(taskq_home: Path) -> None:
     """In-process ``run --all`` covers the ``run --all`` branch
     (lines 229-233)."""
     _seed_tasks(
@@ -1014,7 +1015,7 @@ def test_fr05_13_run_all_in_process(taskq_home: Path) -> None:
     assert rc == 0, f"in-process run --all must exit 0, got {rc}"
 
 
-def test_fr05_14_run_no_task_id(taskq_home: Path) -> None:
+def test_cli_coverage_14_run_no_task_id(taskq_home: Path) -> None:
     """In-process ``run`` with no task id and no ``--all`` covers the
     missing-task-id branch (lines 235-237)."""
     stderr_buf = io.StringIO()
@@ -1029,7 +1030,7 @@ def test_fr05_14_run_no_task_id(taskq_home: Path) -> None:
     )
 
 
-def test_fr05_15_list_json_in_process(taskq_home: Path) -> None:
+def test_cli_coverage_15_list_json_in_process(taskq_home: Path) -> None:
     """In-process ``list --json`` covers the JSON-list branch (line 318)."""
     _seed_tasks(
         taskq_home,
@@ -1052,7 +1053,7 @@ def test_fr05_15_list_json_in_process(taskq_home: Path) -> None:
     assert any(row.get("id") == "abcdef01" for row in payload)
 
 
-def test_fr05_16_main_empty_argv(taskq_home: Path) -> None:
+def test_cli_coverage_16_main_empty_argv(taskq_home: Path) -> None:
     """In-process ``cli.main([])`` covers the empty-argv branch
     (lines 367-370)."""
     stderr_buf = io.StringIO()
@@ -1065,7 +1066,7 @@ def test_fr05_16_main_empty_argv(taskq_home: Path) -> None:
     )
 
 
-def test_fr05_17_main_unknown_command(taskq_home: Path) -> None:
+def test_cli_coverage_17_main_unknown_command(taskq_home: Path) -> None:
     """In-process ``cli.main(["unknown"])`` covers the unknown-subcommand
     branch (lines 372-374)."""
     stderr_buf = io.StringIO()
@@ -1080,7 +1081,7 @@ def test_fr05_17_main_unknown_command(taskq_home: Path) -> None:
     )
 
 
-def test_fr05_18_atomic_write_oserror(
+def test_cli_coverage_18_atomic_write_oserror(
     taskq_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """In-process: monkeypatch ``os.replace`` (and ``Path.unlink``) to
@@ -1112,7 +1113,7 @@ def test_fr05_18_atomic_write_oserror(
     )
 
 
-def test_fr05_19_load_tasks_missing_file(taskq_home: Path) -> None:
+def test_cli_coverage_19_load_tasks_missing_file(taskq_home: Path) -> None:
     """In-process: ``submit`` with NO ``tasks.json`` on disk exercises
     ``_load_tasks`` line 91 (``return {}`` when the file is missing)."""
     tasks_file = taskq_home / "tasks.json"
@@ -1132,7 +1133,7 @@ def test_fr05_19_load_tasks_missing_file(taskq_home: Path) -> None:
     assert len(loaded) == 1
 
 
-def test_fr05_20_load_tasks_invalid_json_lenient(
+def test_cli_coverage_20_load_tasks_invalid_json_lenient(
     taskq_home: Path,
 ) -> None:
     """In-process: ``submit`` with a corrupt (non-JSON) ``tasks.json``
@@ -1155,7 +1156,7 @@ def test_fr05_20_load_tasks_invalid_json_lenient(
     assert len(loaded) == 1
 
 
-def test_fr05_21_main_default_argv_from_sys_argv(
+def test_cli_coverage_21_main_default_argv_from_sys_argv(
     taskq_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """In-process ``cli.main()`` with ``argv=None`` exercises the
